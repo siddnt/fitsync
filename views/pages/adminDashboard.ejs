@@ -1,0 +1,452 @@
+<%- include('../partials/header') %>
+
+<main>
+  <div class="container my-5">
+    <div class="dashboard-welcome">
+      <h2 class="mb-4">
+        <i class="fas fa-chart-line me-2"></i>Hello, <%= locals.userName %>!
+      </h2>
+      <p class="lead mb-4">Welcome to the admin dashboard. Monitor and manage your gym operations from here.</p>
+    </div>
+    <div class="row mb-4">
+      <div class="col-lg-8">
+        <p class="lead text-white">Manage your gym facility, users, and system settings.</p>
+      </div>
+    </div>
+    
+    <div class="row g-4">
+      <!-- Quick Stats -->
+      <div class="col-12 mb-4">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4" ><i class="fas fa-chart-line me-2"></i>Overview</h4>
+          <div class="row text-center">
+            <div class="col-md-3 mb-3">
+              <a href="/admin/users" class="text-decoration-none">
+                <div class="stat-card-improved">
+                  <div class="stat-icon">
+                    <i class="fas fa-users text-primary"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-value"><%= locals.stats?.userCount || 0 %></div>
+                    <div class="stat-label">Members</div>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <a href="/admin/trainers" class="text-decoration-none">
+                <div class="stat-card-improved">
+                  <div class="stat-icon">
+                    <i class="fas fa-user-tie text-warning"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-value"><%= locals.stats?.trainerCount || 0 %></div>
+                    <div class="stat-label">Trainers</div>
+                    <% if (locals.stats?.pendingTrainerCount > 0) { %>
+                      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        <%= locals.stats.pendingTrainerCount %>
+                        <span class="visually-hidden">pending trainers</span>
+                      </span>
+                    <% } %>
+                  </div>
+                </div>
+              </a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <a href="/admin/sessions" class="text-decoration-none">
+              <div class="stat-card-improved">
+                <div class="stat-icon">
+                  <i class="fas fa-calendar-check text-success"></i>
+                </div>
+                <div class="stat-info">
+                  <div class="stat-value"><%= locals.stats?.bookingCount || 0 %></div>
+                  <div class="stat-label">Sessions</div>
+                </div>
+              </div>
+              </a>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="stat-card-improved">
+                <div class="stat-icon">
+                  <i class="fas fa-clipboard-list text-info"></i>
+                </div>
+                <div class="stat-info">
+                  <div class="stat-value">3</div>
+                  <div class="stat-label">Courses</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Recent Registrations -->
+      <div class="dashboard-section mb-4">
+        <div class="section-header mb-3">
+          <h3><i class="fas fa-user-plus me-2"></i>Recent Registrations</h3>
+        </div>
+        
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Registered</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (locals.recentUsers && locals.recentUsers.length > 0) { %>
+                <% locals.recentUsers.forEach(user => { %>
+                  <tr>
+                    <td><%= user.name %></td>
+                    <td><%= user.email %></td>
+                    <td>
+                      <span class="badge <%= user.role === 'trainer' ? 'bg-warning text-dark' : 'bg-info' %>">
+                        <%= user.role === 'admin' ? 'Admin' : user.role === 'trainer' ? 'Trainer' : 'Member' %>
+                      </span>
+                    </td>
+                    <td><%= new Date(user.createdAt).toLocaleDateString() %></td>
+                    <td>
+                      <% if (user.status === 'active') { %>
+                        <span class="badge bg-success">Active</span>
+                      <% } else if (user.status === 'pending') { %>
+                        <span class="badge bg-warning text-dark">Pending</span>
+                      <% } else { %>
+                        <span class="badge bg-secondary">Inactive</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="btn-group btn-group-sm">
+                        <% if (user.role === 'trainer' && user.status === 'pending') { %>
+                          <a href="/admin/trainers/approve/<%= user._id %>" class="btn btn-success" title="Approve">
+                            <i class="fas fa-check"></i>
+                          </a>
+                          <a href="/admin/trainers/reject/<%= user._id %>" class="btn btn-danger" title="Reject">
+                            <i class="fas fa-times"></i>
+                          </a>
+                        <% } %>
+                        <a href="<%= user.role === 'trainer' ? '/admin/trainers' : '/admin/users' %>" class="btn btn-info" title="View All">
+                          <i class="fas fa-eye"></i>
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                <% }); %>
+              <% } else { %>
+                <tr>
+                  <td colspan="6" class="text-center">No recent registrations found</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Activity Log -->
+      <div class="col-lg-6">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4"><i class="fas fa-history me-2"></i>Recent Activity</h4>
+          <div class="activity-log">
+            <% if (locals.recentActivities && locals.recentActivities.length > 0) { %>
+              <% locals.recentActivities.forEach(activity => { %>
+                <div class="activity-item bg-dark">
+                  <div class="activity-icon">
+                    <% if (activity.activityType === 'registration') { %>
+                      <i class="fas fa-user-plus <%= activity.role === 'trainer' ? 'text-warning' : 'text-info' %>"></i>
+                    <% } else if (activity.activityType === 'enrollment') { %>
+                      <i class="fas fa-calendar-check text-success"></i>
+                    <% } else if (activity.activityType === 'review') { %>
+                      <i class="fas fa-star text-warning"></i>
+                    <% } else if (activity.activityType === 'gallery') { %>
+                      <i class="fas fa-image text-primary"></i>
+                    <% } %>
+                  </div>
+                  <div class="activity-details">
+                    <p class="mb-0 text-white">
+                      <strong><%= activity.name %></strong> 
+                      <% if (activity.activityType === 'registration') { %>
+                        registered as a new <%= activity.role === 'admin' ? 'admin' : activity.role === 'trainer' ? 'trainer' : 'member' %>
+                      <% } else if (activity.activityType === 'enrollment') { %>
+                        enrolled in course "<%= activity.courseName %>"
+                      <% } else if (activity.activityType === 'review') { %>
+                        posted a <%= activity.rating %>-star review for "<%= activity.courseName %>"
+                      <% } else if (activity.activityType === 'gallery') { %>
+                        uploaded "<%= activity.title %>" to the gallery
+                      <% } %>
+                    </p>
+                    <small class="text-secondary">
+                      <%= new Date(activity.enrolledAt).toLocaleDateString() %> at <%= new Date(activity.enrolledAt).toLocaleTimeString() %>
+                      <% if (activity.status === 'pending') { %>
+                        <span class="badge bg-warning text-dark">pending</span>
+                      <% } %>
+                    </small>
+                  </div>
+                </div>
+              <% }); %>
+            <% } else { %>
+              <div class="activity-item bg-dark">
+                <div class="activity-icon">
+                  <i class="fas fa-history text-info"></i>
+                </div>
+                <div class="activity-details">
+                  <p class="mb-0 text-white">
+                    No recent activity found
+                  </p>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Recent Messages -->
+      <div class="col-lg-6">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4"><i class="fas fa-envelope me-2"></i>Recent Messages</h4>
+          <div class="activity-log">
+            <% if (locals.recentMessages && locals.recentMessages.length > 0) { %>
+              <% locals.recentMessages.slice(0, 3).forEach(message => { %>
+                <div class="activity-item bg-dark">
+                  <div class="activity-icon">
+                    <i class="fas fa-envelope text-info"></i>
+              </div>
+              <div class="activity-details">
+                <p class="mb-0 text-white">
+                      <strong><%= message.name %></strong> sent a message: 
+                      <%= message.message.length > 50 ? message.message.substring(0, 50) + '...' : message.message %>
+                </p>
+                <small class="text-secondary">
+                      <%= new Date(message.createdAt).toLocaleDateString() %> at <%= new Date(message.createdAt).toLocaleTimeString() %>
+                      <span class="badge <%= message.status === 'new' ? 'bg-danger' : message.status === 'read' ? 'bg-warning' : 'bg-success' %>">
+                        <%= message.status %>
+                      </span>
+                </small>
+              </div>
+            </div>
+              <% }); %>
+            <% } else { %>
+            <div class="activity-item bg-dark">
+              <div class="activity-icon">
+                  <i class="fas fa-envelope text-info"></i>
+              </div>
+              <div class="activity-details">
+                <p class="mb-0 text-white">
+                    No messages found
+                </p>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Revenue Section -->
+      <div class="col-12">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4"><i class="fas fa-dollar-sign me-2"></i>Revenue</h4>
+          
+          <!-- Course Revenue -->
+          <h5 class="mb-3" ><i class="fas fa-graduation-cap me-2" ></i>Course Revenue</h5>
+          <div class="row mb-5">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="courseRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-courses">
+                <!-- Course revenue items will be dynamically populated by JavaScript -->
+              </ul>
+            </div>
+          </div>
+          
+          <!-- Shop Revenue -->
+          <h5 class="mb-3"><i class="fas fa-shopping-cart me-2"></i>Shop Revenue</h5>
+          <div class="row mb-5">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="shopRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-shop">
+                <!-- Shop revenue items will be dynamically populated by JavaScript -->
+              </ul>
+            </div>
+          </div>
+          
+          <!-- Total Revenue -->
+          <h5 class="mb-3"><i class="fas fa-chart-pie me-2"></i>Cumulative Revenue</h5>
+          <div class="row">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="totalRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-total">
+                <!-- Total revenue items will be dynamically populated by JavaScript -->
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  Course Revenue
+                  <span class="badge bg-success" id="course-revenue-total">₹0</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  Shop Revenue
+                  <span class="badge bg-warning" id="shop-revenue-total">₹0</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">
+                  Total Revenue
+                  <span class="badge bg-danger" id="total-revenue">₹0</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+
+      <!-- Analytics: Sales trends, demographics, overlaps -->
+      <div class="col-12">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4"><i class="fas fa-chart-area me-2"></i>Analytics</h4>
+
+          <!-- Combined Sales Line (weekly + monthly toggle) -->
+          <div class="mb-5">
+            <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+              <h5 class="mb-0"><i class="fas fa-line-chart me-2"></i>Sales Trends</h5>
+              <div class="btn-group btn-group-sm" role="group" aria-label="Range toggle">
+                <button class="btn btn-outline-light active" id="toggle-weekly">Weekly</button>
+                <button class="btn btn-outline-light" id="toggle-monthly">Monthly</button>
+              </div>
+              <div class="d-flex align-items-center gap-2 ms-auto">
+                <span class="badge bg-success" id="total-course-badge" title="Total Course Revenue">₹0</span>
+                <span class="badge bg-warning text-dark" id="total-shop-badge" title="Total Shop Revenue">₹0</span>
+                <span class="badge bg-danger" id="total-all-badge" title="Total Revenue">₹0</span>
+              </div>
+            </div>
+            <div style="height: 320px; position: relative;">
+              <canvas id="salesLineChart"></canvas>
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <!-- Gender Ratio -->
+            <div class="col-md-4">
+              <h5 class="mb-3"><i class="fas fa-venus-mars me-2"></i>Gender Ratio</h5>
+              <div style="height: 260px; position: relative;">
+                <canvas id="genderChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Age Histogram -->
+            <div class="col-md-4">
+              <h5 class="mb-3"><i class="fas fa-user-clock me-2"></i>Age Distribution</h5>
+              <div style="height: 260px; position: relative;">
+                <canvas id="ageHistogram"></canvas>
+              </div>
+            </div>
+
+            <!-- Trainer Course Overlaps (Venn) -->
+            <div class="col-md-4">
+              <h5 class="mb-3"><i class="fas fa-project-diagram me-2"></i>Trainer Course Overlaps</h5>
+              <div id="trainerVennContainer" style="height: 260px; position: relative;"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Load Chart.js before admin.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Minimal venn.js for overlaps (uses d3) -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/venn.js@0.2.20/build/venn.min.js"></script>
+<script src="/js/admin.js"></script>
+
+<style>
+  /* Additional styles for admin dashboard */
+  .stat-card-improved {
+    background-color: #414141;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+  }
+  
+  .stat-card-improved:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(229, 9, 20, 0.3);
+    background-color: #8f9052;
+  }
+  
+  .stat-icon {
+    font-size: 2.5rem;
+    margin-right: 1rem;
+  }
+  
+  .stat-info {
+    text-align: left;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1;
+  }
+  
+  .stat-label {
+    font-size: 1rem;
+    color: var(--light-text);
+    opacity: 0.8;
+  }
+  
+  .user-icon, .activity-icon {
+    font-size: 1.75rem;
+    margin-right: 1rem;
+  }
+  
+  .registration-card {
+    background-color: #2a2a2a;
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+    height: 100%;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  }
+  
+  .registration-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(229, 9, 20, 0.2);
+    background-color: #333;
+  }
+  
+  .text-primary {
+    color: #007bff !important;
+  }
+  
+  .text-success {
+    color: #28a745 !important;
+  }
+  
+  .text-warning {
+    color: #ffc107 !important;
+  }
+  
+  .text-info {
+    color: #17a2b8 !important;
+  }
+</style>
+
+<%- include('../partials/footer') %>

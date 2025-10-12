@@ -1,0 +1,152 @@
+<%- include('../partials/header') %>
+
+<main>
+  <div class="container my-5">
+    <% if (locals.flashMessage) { %>
+      <div class="alert alert-<%= flashType %> alert-dismissible fade show" role="alert">
+        <i class="fas <%= flashType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle' %> me-2"></i><%= flashMessage %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+    
+    <div class="dashboard-welcome">
+      <h2 class="mb-4">
+        <i class="fas fa-calendar-check me-2" ></i>Weekly Sessions
+      </h2>
+      <p class="lead mb-4">Manage all scheduled sessions between trainers and trainees for the current week.</p>
+    </div>
+    
+    <div class="dashboard-panel">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="text-danger mb-0"><i class="fas fa-calendar-alt me-2"></i>Sessions</h4>
+        <div class="session-count bg-success px-3 py-1 rounded">
+          <span class="fw-bold">Total: <%= totalSessions %> sessions</span>
+        </div>
+      </div>
+      
+      <!-- Filter Controls -->
+      <div class="mb-4">
+        <form id="sessionFilterForm" action="/admin/sessions" method="GET" class="row g-3">
+          <div class="col-md-2">
+            <label for="dayFilter" class="form-label text-white">Day</label>
+            <select class="form-select" id="dayFilter" name="day">
+              <option value="">All Days</option>
+              <option value="monday" <%= filters.day === 'monday' ? 'selected' : '' %>>Monday</option>
+              <option value="tuesday" <%= filters.day === 'tuesday' ? 'selected' : '' %>>Tuesday</option>
+              <option value="wednesday" <%= filters.day === 'wednesday' ? 'selected' : '' %>>Wednesday</option>
+              <option value="thursday" <%= filters.day === 'thursday' ? 'selected' : '' %>>Thursday</option>
+              <option value="friday" <%= filters.day === 'friday' ? 'selected' : '' %>>Friday</option>
+              <option value="saturday" <%= filters.day === 'saturday' ? 'selected' : '' %>>Saturday</option>
+              <option value="sunday" <%= filters.day === 'sunday' ? 'selected' : '' %>>Sunday</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label for="trainerFilter" class="form-label text-white">Trainer</label>
+            <select class="form-select" id="trainerFilter" name="trainer">
+              <option value="">All Trainers</option>
+              <% if (locals.trainers && locals.trainers.length > 0) { %>
+                <% locals.trainers.forEach(trainer => { %>
+                  <option value="<%= trainer._id %>" <%= filters.trainer === trainer._id.toString() ? 'selected' : '' %>><%= trainer.name %></option>
+                <% }); %>
+              <% } %>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label for="traineeFilter" class="form-label text-white">Trainee</label>
+            <select class="form-select" id="traineeFilter" name="trainee">
+              <option value="">All Trainees</option>
+              <% if (locals.trainees && locals.trainees.length > 0) { %>
+                <% locals.trainees.forEach(trainee => { %>
+                  <option value="<%= trainee._id %>" <%= filters.trainee === trainee._id.toString() ? 'selected' : '' %>><%= trainee.name %></option>
+                <% }); %>
+              <% } %>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label for="courseFilter" class="form-label text-white">Course</label>
+            <select class="form-select" id="courseFilter" name="course">
+              <option value="">All Courses</option>
+              <option value="yoga" <%= filters.course === 'yoga' ? 'selected' : '' %>>Yoga</option>
+              <option value="zumba" <%= filters.course === 'zumba' ? 'selected' : '' %>>Zumba</option>
+              <option value="strength training" <%= filters.course === 'strength training' ? 'selected' : '' %>>Strength Training</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label for="sortBy" class="form-label text-white">Sort By</label>
+            <select class="form-select" id="sortBy" name="sort">
+              <option value="day" <%= filters.sort === 'day' ? 'selected' : '' %>>Day</option>
+              <option value="trainer" <%= filters.sort === 'trainer' ? 'selected' : '' %>>Trainer</option>
+              <option value="trainee" <%= filters.sort === 'trainee' ? 'selected' : '' %>>Trainee</option>
+              <option value="course" <%= filters.sort === 'course' ? 'selected' : '' %>>Course</option>
+              <option value="time" <%= filters.sort === 'time' ? 'selected' : '' %>>Time</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="d-grid gap-2 w-100">
+              <button type="submit" class="btn btn-primary">Apply</button>
+              <a href="/admin/sessions" class="btn btn-secondary">Reset</a>
+            </div>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Sessions Table -->
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle">
+          <thead>
+            <tr>
+              <th>S.No.</th>
+              <th>Trainer</th>
+              <th>Trainee</th>
+              <th>Course</th>
+              <th>Day</th>
+              <th>Date</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (locals.sessions && locals.sessions.length > 0) { %>
+              <% sessions.forEach((session, index) => { %>
+                <tr>
+                  <td><%= index + 1 %></td>
+                  <td><%= session.trainerName %></td>
+                  <td><%= session.userName %></td>
+                  <td>
+                    <% 
+                      let badgeClass = "bg-info";
+                      if (session.courseName.includes('yoga')) {
+                        badgeClass = "bg-success";
+                      } else if (session.courseName.includes('zumba')) {
+                        badgeClass = "bg-warning text-dark";
+                      } else if (session.courseName.includes('strength')) {
+                        badgeClass = "bg-danger";
+                      }
+                    %>
+                    <span class="badge <%= badgeClass %>">
+                      <%= session.courseName.charAt(0).toUpperCase() + session.courseName.slice(1) %>
+                    </span>
+                  </td>
+                  <td><%= session.day.charAt(0).toUpperCase() + session.day.slice(1) %></td>
+                  <td><%= session.date %></td>
+                  <td><%= session.startTime %> - <%= session.endTime %></td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="7" class="text-center">No sessions scheduled for this week</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add any client-side JavaScript here if needed
+  });
+</script>
+
+<%- include('../partials/footer') %> 

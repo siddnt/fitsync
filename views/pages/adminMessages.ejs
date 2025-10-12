@@ -1,0 +1,137 @@
+<%- include('../partials/header') %>
+<style>
+  .modal-backdrop {
+    pointer-events: none;
+  }
+</style>
+<main>
+  <div class="container my-5">
+    <% if (locals.flashMessage) { %>
+      <div class="alert alert-<%= flashType %> alert-dismissible fade show" role="alert">
+        <i class="fas <%= flashType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle' %> me-2"></i><%= flashMessage %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+
+    <div class="dashboard-welcome">
+      <h2 class="mb-4">
+        <i class="fas fa-envelope me-2"></i>Contact Messages
+      </h2>
+      <p class="lead mb-4">Manage messages sent through the contact form.</p>
+    </div>
+
+    <div class="dashboard-panel">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Message</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (messages && messages.length > 0) { %>
+              <% messages.forEach(message => { %>
+                <tr>
+                  <td>
+                    <span class="badge <%= message.status === 'new' ? 'bg-danger' : message.status === 'read' ? 'bg-warning' : 'bg-success' %>">
+                      <%= message.status %>
+                    </span>
+                  </td>
+                  <td><%= message.name %></td>
+                  <td><a href="mailto:<%= message.email %>" class="text-info"><%= message.email %></a></td>
+                  <td>
+                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#messageModal<%= message._id %>">
+                      Read Message
+                    </button>
+                  </td>
+                  <td><%= new Date(message.createdAt).toLocaleDateString() %></td>
+                  <td>
+                    <div class="btn-group">
+                      <a href="/admin/messages/<%= message._id %>/read" class="btn btn-sm btn-warning <%= message.status !== 'new' ? 'disabled' : '' %>" title="Mark as Read">
+                        <i class="fas fa-book-reader"></i>
+                      </a>
+                      <a href="/admin/messages/<%= message._id %>/responded" class="btn btn-sm btn-success <%= message.status === 'responded' ? 'disabled' : '' %>" title="Mark as Responded">
+                        <i class="fas fa-envelope-open-text"></i>
+                      </a>
+                      <a href="mailto:<%= message.email %>" class="btn btn-sm btn-info" title="Reply">
+                        <i class="fas fa-reply"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="6" class="text-center">No messages found</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Render modals outside the table -->
+    <% messages && messages.forEach(message => { %>
+      <div class="modal fade" id="messageModal<%= message._id %>" tabindex="-1" aria-labelledby="messageModalLabel<%= message._id %>" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+              <h5 class="modal-title" id="messageModalLabel<%= message._id %>">Message from <%= message.name %></h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <p><strong>From:</strong> <%= message.name %> (<a href="mailto:<%= message.email %>" class="text-info"><%= message.email %></a>)</p>
+              <p><strong>Sent:</strong> <%= new Date(message.createdAt).toLocaleString() %></p>
+              <p><strong>Status:</strong>
+                <span class="badge <%= message.status === 'new' ? 'bg-danger' : message.status === 'read' ? 'bg-warning' : 'bg-success' %>">
+                  <%= message.status %>
+                </span>
+              </p>
+              <hr>
+              <div class="message-content p-3 bg-secondary bg-opacity-25 rounded">
+                <%= message.message %>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <a href="/admin/messages/<%= message._id %>/read" class="btn btn-warning <%= message.status !== 'new' ? 'disabled' : '' %>">
+                Mark as Read
+              </a>
+              <a href="/admin/messages/<%= message._id %>/responded" class="btn btn-success <%= message.status === 'responded' ? 'disabled' : '' %>">
+                Mark as Responded
+              </a>
+              <a href="mailto:<%= message.email %>" class="btn btn-info">
+                <i class="fas fa-reply me-2"></i>Reply
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% }); %>
+  </div>
+</main>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const modals = document.querySelectorAll('.modal');
+  
+    modals.forEach(modal => {
+      modal.addEventListener('hidden.bs.modal', function () {
+        // Clean up modal-open and backdrop
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+  
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+      });
+    });
+  });
+  </script>
+  
+
+<%- include('../partials/footer') %>

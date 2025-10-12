@@ -1,0 +1,143 @@
+<%- include('../partials/header') %>
+
+<main>
+  <div class="container my-5">
+    <h1 class="mb-4">Trainer Management</h1>
+    
+    <% if (typeof message !== 'undefined' && message) { %>
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= message %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    <% } %>
+    
+    <div class="card">
+      <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+        <h3 class="mb-0"><i class="fas fa-users me-2"></i>All Trainers</h3>
+        <a href="/admin/dashboard" class="btn btn-outline-light">
+          <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+        </a>
+      </div>
+      <div class="card-body">
+        <!-- Filter/Search -->
+        <div class="row mb-4">
+          <div class="col-md-6">
+            <div class="input-group">
+              <input type="text" id="trainerSearch" class="form-control" placeholder="Search by name or email">
+              <button class="btn btn-outline-secondary" type="button">
+                <i class="fas fa-search"></i>
+              </button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <select id="statusFilter" class="form-select">
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending Approval</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Trainers Table -->
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Registration Date</th>
+                <th scope="col">Courses Teaching</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (trainers && trainers.length > 0) { %>
+                <% trainers.forEach(trainer => { %>
+                  <tr class="trainer-row" data-status="<%= trainer.status %>">
+                    <td><%= trainer.name %></td>
+                    <td><%= trainer.email %></td>
+                    <td><%= new Date(trainer.createdAt).toLocaleDateString() %></td>
+                    <td>
+                      <% if (trainer.status !== 'active') { %>
+                        <span class="badge <%= trainer.status === 'pending' ? 'bg-warning text-dark' : 'bg-danger' %>">
+                          <%= trainer.status === 'pending' ? 'Pending Approval' : 'Rejected' %>
+                        </span>
+                      <% } else if (trainer.trainerCourses && trainer.trainerCourses.length) { %>
+                        <% trainer.trainerCourses.filter(course => course.status === 'active').forEach(teachingCourse => { %>
+                          <div class="mb-1">
+                            <span class="badge bg-success"><%= teachingCourse.course && teachingCourse.course.name || 'Course' %></span>
+                          </div>
+                        <% }); %>
+                      <% } else { %>
+                        <span class="badge bg-secondary">No Courses</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <% if (trainer.status === 'pending') { %>
+                          <a href="/admin/trainers/approve/<%= trainer._id %>" class="btn btn-sm btn-success" onclick="return confirm('Are you sure you want to approve this trainer?')">
+                            <i class="fas fa-check me-1"></i>Approve
+                          </a>
+                          <a href="/admin/trainers/reject/<%= trainer._id %>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to reject this trainer?')">
+                            <i class="fas fa-times me-1"></i>Reject
+                          </a>
+                        <% } else if (trainer.status === 'active' || trainer.status === 'rejected') { %>
+                          <a href="/admin/trainers/delete/<%= trainer._id %>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this trainer? This action cannot be undone.')">
+                            <i class="fas fa-trash me-1"></i>Delete
+                          </a>
+                        <% } %>
+                      </div>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr>
+                  <td colspan="5" class="text-center">No trainers found</td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // Search functionality
+  document.getElementById('trainerSearch').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const rows = document.querySelectorAll('.trainer-row');
+    
+    rows.forEach(row => {
+      const name = row.cells[0].textContent.toLowerCase();
+      const email = row.cells[1].textContent.toLowerCase();
+      
+      if (name.includes(searchTerm) || email.includes(searchTerm)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+  
+  // Filter by status
+  document.getElementById('statusFilter').addEventListener('change', function() {
+    const filterValue = this.value;
+    const rows = document.querySelectorAll('.trainer-row');
+    
+    rows.forEach(row => {
+      const status = row.getAttribute('data-status');
+      
+      if (filterValue === 'all' || status === filterValue) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+<script src="/js/admin.js"></script>
+<%- include('../partials/footer') %>
