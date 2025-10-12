@@ -1,0 +1,151 @@
+<%- include('../partials/header') %>
+
+<main>
+  <div class="container my-5">
+    <div class="row">
+      <div class="col-lg-8">
+        <h1 class="mb-4">Book Your Session</h1>
+        
+        <div class="card mb-4">
+          <div class="card-header bg-danger text-white">
+            <h3 class="mb-0"><%= plan.title %></h3>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <% if (plan.image) { %>
+              <div class="col-md-4 mb-3">
+                <img src="<%= plan.image %>" alt="<%= plan.title %>" class="img-fluid rounded">
+              </div>
+              <div class="col-md-8">
+              <% } else { %>
+              <div class="col-12">
+              <% } %>
+                <h4><i class="fas fa-info-circle me-2"></i>Program Details</h4>
+                <p><%= plan.description %></p>
+                <div class="row">
+                  <div class="col-md-6">
+                    <p><strong>Category:</strong> <%= plan.category %></p>
+                    <p><strong>Duration:</strong> <%= plan.duration %></p>
+                  </div>
+                  <div class="col-md-6">
+                    <p><strong>Sessions:</strong> <%= plan.sessions %> sessions</p>
+                    <p><strong>Price:</strong> $<%= plan.price.toFixed(2) %></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header bg-dark text-white">
+            <h3 class="mb-0">Schedule Your First Session</h3>
+          </div>
+          <div class="card-body">
+            <form action="/user/book" method="POST" id="bookingForm">
+              <input type="hidden" name="planId" value="<%= plan._id %>">
+              
+              <div class="mb-3">
+                <label for="trainer" class="form-label"><i class="fas fa-user-tie me-2"></i>Select a Trainer</label>
+                <select class="form-select" id="trainer" name="trainerId" required>
+                  <option value="" selected disabled>Choose a trainer...</option>
+                  <% trainers.forEach(trainer => { %>
+                    <option value="<%= trainer._id %>"><%= trainer.name %></option>
+                  <% }); %>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="date" class="form-label"><i class="fas fa-calendar-alt me-2"></i>Select Date</label>
+                <input type="date" class="form-control" id="date" name="date" required min="<%= new Date().toISOString().split('T')[0] %>">
+              </div>
+              
+              <div class="mb-3">
+                <label for="time" class="form-label"><i class="fas fa-clock me-2"></i>Select Time</label>
+                <select class="form-select" id="time" name="time" required>
+                  <option value="" selected disabled>Choose a time slot...</option>
+                  <!-- Time slots dynamically populated based on trainer availability -->
+                </select>
+              </div>
+              
+              <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="termsCheck" required>
+                <label class="form-check-label" for="termsCheck">
+                  I agree to the <a href="#" class="text-danger" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a>
+                </label>
+              </div>
+              
+              <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-danger btn-lg" id="bookButton">
+                  <i class="fas fa-calendar-check me-2"></i>Book Now
+                </button>
+                <a href="/user/plans" class="btn btn-outline-light">
+                  <i class="fas fa-arrow-left me-2"></i>Back to Courses
+                </a>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-lg-4 mt-4 mt-lg-0">
+        <div class="card sticky-top" style="top: 20px;">
+          <div class="card-header bg-dark text-white">
+            <h3 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Your Selection</h3>
+          </div>
+          <div class="card-body">
+            <h5><%= plan.title %></h5>
+            <p class="text-muted"><%= plan.category %></p>
+            <hr>
+            <div class="d-flex justify-content-between">
+              <span>Program Price:</span>
+              <span>$<%= plan.price.toFixed(2) %></span>
+            </div>
+            <div class="d-flex justify-content-between mt-2">
+              <span>Number of Sessions:</span>
+              <span><%= plan.sessions %></span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between fw-bold">
+              <span>Total:</span>
+              <span>$<%= plan.price.toFixed(2) %></span>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+              <i class="fas fa-info-circle me-2"></i>Your first session will be scheduled based on your selection. Subsequent sessions will be arranged with your trainer.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Terms and Conditions Modal -->
+  <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content bg-dark text-light">
+        <div class="modal-header">
+          <h5 class="modal-title" id="termsModalLabel">Terms & Conditions</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <h6>Booking Agreement</h6>
+          <p>By booking a session, you agree to attend at the specified date and time. Cancellations must be made at least 24 hours in advance.</p>
+          
+          <h6>Refund Policy</h6>
+          <p>No refunds are provided for missed sessions. In case of emergency, sessions can be rescheduled at the trainer's discretion.</p>
+          
+          <h6>Health Disclaimer</h6>
+          <p>You confirm that you have no known medical conditions that would prevent you from safely participating in the activities. Consult with your physician before beginning any exercise program.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-danger" id="agreeButton" data-bs-dismiss="modal">I Agree</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/js/booking.js"></script>
+<%- include('../partials/footer') %>
