@@ -1,0 +1,141 @@
+import mongoose from "mongoose";
+
+// Order Item Schema (for products within an order)
+const orderItemSchema = new mongoose.Schema({
+    product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true
+    },
+    name: {
+        type: String,
+        required: true
+    },
+    quantity: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    price: {
+        type: Number,
+        required: true
+    },
+    image: {
+        type: String
+    }
+});
+
+// Address Schema
+const addressSchema = new mongoose.Schema({
+    firstName: {
+        type: String,
+        required: true
+    },
+    lastName: {
+        type: String,
+        required: true
+    },
+    email: {
+        type: String,
+        required: true
+    },
+    phone: {
+        type: String,
+        required: true
+    },
+    address: {
+        type: String,
+        required: true
+    },
+    city: {
+        type: String,
+        required: true
+    },
+    state: {
+        type: String,
+        required: true
+    },
+    zipCode: {
+        type: String,
+        required: true
+    }
+});
+
+// Order Schema
+const orderSchema = new mongoose.Schema(
+    {
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        orderItems: [orderItemSchema],
+        shippingAddress: addressSchema,
+        paymentMethod: {
+            type: String,
+            required: true,
+            default: "Cash on Delivery"
+        },
+        subtotal: {
+            type: Number,
+            required: true
+        },
+        tax: {
+            type: Number,
+            required: true,
+            default: 0
+        },
+        shippingCost: {
+            type: Number,
+            required: true,
+            default: 0
+        },
+        total: {
+            type: Number,
+            required: true
+        },
+        status: {
+            type: String,
+            required: true,
+            enum: ["Processing", "Shipped", "Delivered", "Cancelled"],
+            default: "Processing"
+        },
+        orderNumber: {
+            type: String,
+            required: false,
+            unique: true
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+// Comment out the pre-save hook since we're now manually generating orderNumber in the controller
+/*
+orderSchema.pre("save", async function(next) {
+    try {
+        // Only generate if this is a new order
+        if (this.isNew) {
+            // Get current date
+            const date = new Date();
+            const year = date.getFullYear().toString().slice(-2);
+            const month = (date.getMonth() + 1).toString().padStart(2, "0");
+            const day = date.getDate().toString().padStart(2, "0");
+            
+            // Generate a random 4-digit number
+            const randomDigits = Math.floor(1000 + Math.random() * 9000);
+            
+            // Create order number in format: FS-YYMMDD-XXXX (e.g., FS-230501-4832)
+            this.orderNumber = `FS-${year}${month}${day}-${randomDigits}`;
+        }
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+*/
+
+const Order = mongoose.model("Order", orderSchema);
+
+export default Order; 
