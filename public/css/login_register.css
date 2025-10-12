@@ -1,0 +1,38 @@
+main {
+  background: url("/images/login_register/login_register.jpg") no-repeat fixed;
+  background-position: center;
+  background-size: cover;
+}
+.card {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #fff;
+}
+.form-control, .form-select {
+  background-color: #333;
+  color: #fff;
+  border: 1px solid #444;
+}
+.form-control:focus, .form-select:focus {
+  border-color: #dc3545;
+  box-shadow: none;
+}
+.login-container , .register-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.login-form , .register-form {
+  flex: 1;
+  max-width: 550px;
+  max-height: 700px;
+}
+.login-image , .register-image {
+  flex: 1;
+  display: none;
+}
+@media (min-width: 768px) {
+  .login-image {
+    display: block;
+  }
+}
