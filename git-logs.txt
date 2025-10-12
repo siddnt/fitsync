@@ -1,0 +1,55 @@
+1265236 - SAIHARSHA P - Adding stripe configuration file - Sun Oct 12 21:11:01 2025 +0530
+1aced98 - SAIHARSHA P - Adding product js files - Sun Oct 12 21:07:06 2025 +0530
+ad87b1b - SAIHARSHA P - Adding controller of gallery - Sun Oct 12 21:04:42 2025 +0530
+eca8994 - SAIHARSHA P - Adding middleware of error - Sun Oct 12 21:01:39 2025 +0530
+31b8e1f - SAIHARSHA P - Adding route of order - Sun Oct 12 20:58:40 2025 +0530
+187256c - SAIHARSHA P - Adding route of shop - Sun Oct 12 20:56:05 2025 +0530
+d4e9ba2 - SAIHARSHA P - Adding route of gallery - Sun Oct 12 20:51:34 2025 +0530
+2003175 - SAIHARSHA P - Adding route of cart - Sun Oct 12 20:50:10 2025 +0530
+73b4821 - SAIHARSHA P - Adding models of plan and product - Sun Oct 12 20:43:14 2025 +0530
+985ef86 - SAIHARSHA P - Adding schema of order - Sun Oct 12 20:41:29 2025 +0530
+8c374d7 - SAIHARSHA P - Adding schema of payment session - Sun Oct 12 20:36:08 2025 +0530
+47970ca - SAIHARSHA P - Adding schema of cart - Sun Oct 12 20:13:03 2025 +0530
+9c6dab9 - SAIHARSHA P - Adding schema of gallery - Sun Oct 12 20:11:20 2025 +0530
+521535d - Pushp Garg - initiallising reviews - Sun Oct 12 20:11:02 2025 +0530
+d7f972c - Siddhant Chouksey - adding user and trainer dashboard - Sun Oct 12 20:09:13 2025 +0530
+3cf2084 - SAIHARSHA P - Adding logic of cart - Sun Oct 12 20:07:20 2025 +0530
+7f2c586 - Siddhant Chouksey - adding pending trainer pages - Sun Oct 12 20:06:29 2025 +0530
+25a0407 - Siddhant Chouksey - adding admin related pages - Sun Oct 12 20:05:17 2025 +0530
+62dfd79 - SAIHARSHA P - Adding fileupload feature - Sun Oct 12 20:03:19 2025 +0530
+2b96ba0 - SAIHARSHA P - Adding logic of order - Sun Oct 12 19:58:22 2025 +0530
+b0993ad - Siddhant Chouksey - trainer functionalities - Sun Oct 12 19:58:01 2025 +0530
+0b0f2e0 - Siddhant Chouksey - adding user controller - Sun Oct 12 19:56:02 2025 +0530
+1770ecd - Siddhant Chouksey - adding admin functionalities - Sun Oct 12 19:54:02 2025 +0530
+745f783 - SAIHARSHA P - Adding payment route - Sun Oct 12 19:53:41 2025 +0530
+3c25cf0 - ALLABOYINA VAMSI KRISHNA - css for login and register - Sun Oct 12 19:50:48 2025 +0530
+b296b18 - Pushp Garg - completing the booking functionality - Sun Oct 12 19:48:40 2025 +0530
+0fe54dc - ALLABOYINA VAMSI KRISHNA - writing controller for auth - Sun Oct 12 19:47:49 2025 +0530
+4a4bb74 - SAIHARSHA P - Adding payment logic - Sun Oct 12 19:46:59 2025 +0530
+b0fcbe7 - Pushp Garg - uploading assets for courses page - Sun Oct 12 19:45:02 2025 +0530
+db37b03 - Siddhant Chouksey - initialising db connection using mongodb - Sun Oct 12 19:44:59 2025 +0530
+df6a8a7 - SAIHARSHA P - Adding checkoutCancelled page - Sun Oct 12 19:41:38 2025 +0530
+7d18d13 - Pushp Garg - initialing the courses - Sun Oct 12 19:39:52 2025 +0530
+ae7b89b - Siddhant Chouksey - setting up multer for file uploads - Sun Oct 12 19:38:35 2025 +0530
+5dc8eca - Pushp Garg - setuping all the routes for courses and reviews - Sun Oct 12 19:37:27 2025 +0530
+9205cce - Pushp Garg - adding all the core functions for courses and booking page - Sun Oct 12 19:34:45 2025 +0530
+128fa19 - Pushp Garg - adding configuration for the different courses - Sun Oct 12 19:32:56 2025 +0530
+b80a66b - SAIHARSHA P - Adding checkoutSuccess page - Sun Oct 12 19:32:15 2025 +0530
+ebe6015 - Pushp Garg - adding functionality to review courses - Sun Oct 12 19:28:27 2025 +0530
+4f4f082 - Siddhant Chouksey - adding utility files - Sun Oct 12 19:28:19 2025 +0530
+e8d77a8 - SAIHARSHA P - Adding checkout page - Sun Oct 12 19:25:29 2025 +0530
+bd79647 - Siddhant Chouksey - adding authentication middleware - Sun Oct 12 19:25:04 2025 +0530
+7d773cb - Pushp Garg - uploading courses models - Sun Oct 12 19:24:01 2025 +0530
+bcee884 - Pushp Garg - adding booking model - Sun Oct 12 19:23:16 2025 +0530
+3580968 - SAIHARSHA P - Adding checkout page - Sun Oct 12 19:22:53 2025 +0530
+489f8ca - Siddhant Chouksey - adding user model - Sun Oct 12 19:18:50 2025 +0530
+fad7b2b - SAIHARSHA P - Product listing / marketplace page — displays products, add-to-cart, buy-now and wishlist actions. - Sun Oct 12 19:16:55 2025 +0530
+e62c0f9 - Pushp Garg - uploading page showing courses details - Sun Oct 12 19:12:58 2025 +0530
+0305d69 - SAIHARSHA P - adding css file of gallery - Sun Oct 12 19:12:14 2025 +0530
+105f9ea - ALLABOYINA VAMSI KRISHNA - adding login and register pages - ejs files - Sun Oct 12 19:10:22 2025 +0530
+a98f135 - Pushp Garg - adding course confirmation - Sun Oct 12 19:09:45 2025 +0530
+c7c8fe0 - SAIHARSHA P - Add files via upload - Sun Oct 12 19:08:58 2025 +0530
+768308e - ALLABOYINA VAMSI KRISHNA - adding partials - Sun Oct 12 19:07:52 2025 +0530
+594207a - Pushp Garg - adding details about booking - Sun Oct 12 19:07:50 2025 +0530
+7a58a7d - Pushpgarg - adding booking page - Sun Oct 12 19:00:45 2025 +0530
+216c9f6 - Siddhant Chouksey - initialising the project structure - Sun Oct 12 18:51:44 2025 +0530
