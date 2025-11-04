@@ -1,31 +1,23 @@
 import { Router } from "express";
 import { getGalleryPage, uploadImage, deleteImage } from "../controllers/gallery.controller.js";
-import { upload } from "../utils/fileUpload.js";
+import { upload } from "../middlewares/multer.middleware.js";
+import { requireSessionRole, isAuthenticated } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
 // Middleware to check if user is logged in
-const isLoggedIn = (req, res, next) => {
-    if (!req.session || !req.session.userId) {
-        if (req.headers['accept'] === 'application/json' || 
-            req.headers['content-type'] === 'application/json' ||
-            req.headers['x-requested-with'] === 'XMLHttpRequest') {
-            return res.status(401).json({
-                success: false,
-                message: "You must be logged in to perform this action"
-            });
-        }
-        return res.redirect("/auth/login?returnTo=/gallery");
-    }
-    next();
-};
+// Use shared session-based guard from auth middleware
+const isLoggedIn = requireSessionRole();
 
 // Public routes
 router.get("/", getGalleryPage);
 
 // Protected routes
+// For HTML form submissions, redirect to login when not logged in
 router.post("/upload", isLoggedIn, upload.single("image"), uploadImage);
-router.delete("/:imageId", isLoggedIn, deleteImage);
-router.get("/delete/:imageId", isLoggedIn, deleteImage); // For non-JS form submissions
+// For API/AJAX deletion, return 401 JSON when not authenticated
+router.delete("/:imageId", isAuthenticated, deleteImage);
+// For non-JS form submissions (HTML), use session guard with redirect
+router.get("/delete/:imageId", isLoggedIn, deleteImage);
 
 export default router; 

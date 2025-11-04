@@ -151,87 +151,87 @@ export const createReview = asyncHandler(async (req, res) => {
     return res.redirect(`/user/dashboard?success=Review submitted successfully`);
 });
 
-// Update review
-export const updateReview = asyncHandler(async (req, res) => {
-    const { reviewId } = req.params;
-    const { rating, comment } = req.body;
-    const userId = req.session.userId;
+// // Update review
+// export const updateReview = asyncHandler(async (req, res) => {
+//     const { reviewId } = req.params;
+//     const { rating, comment } = req.body;
+//     const userId = req.session.userId;
     
-    // Validate inputs
-    if (!rating && !comment) {
-        throw new ApiError(400, "Rating or comment must be provided");
-    }
+//     // Validate inputs
+//     if (!rating && !comment) {
+//         throw new ApiError(400, "Rating or comment must be provided");
+//     }
     
-    // Validate rating if provided
-    if (rating && (rating < 1 || rating > 5)) {
-        throw new ApiError(400, "Rating must be between 1 and 5");
-    }
+//     // Validate rating if provided
+//     if (rating && (rating < 1 || rating > 5)) {
+//         throw new ApiError(400, "Rating must be between 1 and 5");
+//     }
     
-    // Get review
-    const review = await Review.findById(reviewId);
-    if (!review) {
-        throw new ApiError(404, "Review not found");
-    }
+//     // Get review
+//     const review = await Review.findById(reviewId);
+//     if (!review) {
+//         throw new ApiError(404, "Review not found");
+//     }
     
-    // Check if user owns this review
-    if (review.user.toString() !== userId) {
-        throw new ApiError(403, "You can only update your own reviews");
-    }
+//     // Check if user owns this review
+//     if (review.user.toString() !== userId) {
+//         throw new ApiError(403, "You can only update your own reviews");
+//     }
     
-    // Update review
-    if (rating) review.rating = parseInt(rating);
-    if (comment) review.comment = comment;
+//     // Update review
+//     if (rating) review.rating = parseInt(rating);
+//     if (comment) review.comment = comment;
     
-    await review.save();
+//     await review.save();
     
-    // Check if this is an API request
-    const isApiRequest = req.headers['accept'] === 'application/json' || 
-                         req.headers['content-type'] === 'application/json' ||
-                         req.headers['x-requested-with'] === 'XMLHttpRequest';
+//     // Check if this is an API request
+//     const isApiRequest = req.headers['accept'] === 'application/json' || 
+//                          req.headers['content-type'] === 'application/json' ||
+//                          req.headers['x-requested-with'] === 'XMLHttpRequest';
     
-    if (isApiRequest) {
-        return res.status(200).json(
-            new ApiResponse(200, review, "Review updated successfully")
-        );
-    }
+//     if (isApiRequest) {
+//         return res.status(200).json(
+//             new ApiResponse(200, review, "Review updated successfully")
+//         );
+//     }
     
-    // Handle form submission
-    return res.redirect(`/user/dashboard?success=Review updated successfully`);
-});
+//     // Handle form submission
+//     return res.redirect(`/user/dashboard?success=Review updated successfully`);
+// });
 
-// Delete review
-export const deleteReview = asyncHandler(async (req, res) => {
-    const { reviewId } = req.params;
-    const userId = req.session.userId;
+// // Delete review
+// export const deleteReview = asyncHandler(async (req, res) => {
+//     const { reviewId } = req.params;
+//     const userId = req.session.userId;
     
-    // Get review
-    const review = await Review.findById(reviewId);
-    if (!review) {
-        throw new ApiError(404, "Review not found");
-    }
+//     // Get review
+//     const review = await Review.findById(reviewId);
+//     if (!review) {
+//         throw new ApiError(404, "Review not found");
+//     }
     
-    // Check if user owns this review
-    if (review.user.toString() !== userId) {
-        throw new ApiError(403, "You can only delete your own reviews");
-    }
+//     // Check if user owns this review
+//     if (review.user.toString() !== userId) {
+//         throw new ApiError(403, "You can only delete your own reviews");
+//     }
     
-    // Delete review
-    await review.remove();
+//     // Delete review
+//     await review.remove();
     
-    // Check if this is an API request
-    const isApiRequest = req.headers['accept'] === 'application/json' || 
-                         req.headers['content-type'] === 'application/json' ||
-                         req.headers['x-requested-with'] === 'XMLHttpRequest';
+//     // Check if this is an API request
+//     const isApiRequest = req.headers['accept'] === 'application/json' || 
+//                          req.headers['content-type'] === 'application/json' ||
+//                          req.headers['x-requested-with'] === 'XMLHttpRequest';
     
-    if (isApiRequest) {
-        return res.status(200).json(
-            new ApiResponse(200, {}, "Review deleted successfully")
-        );
-    }
+//     if (isApiRequest) {
+//         return res.status(200).json(
+//             new ApiResponse(200, {}, "Review deleted successfully")
+//         );
+//     }
     
-    // Handle form submission
-    return res.redirect(`/user/dashboard?success=Review deleted successfully`);
-});
+//     // Handle form submission
+//     return res.redirect(`/user/dashboard?success=Review deleted successfully`);
+// });
 
 // Get user reviews (for user dashboard)
 export const getUserReviews = asyncHandler(async (req, res) => {

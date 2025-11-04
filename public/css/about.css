@@ -1,0 +1,137 @@
+/* About Us Page Styling */
+.about-us-section {
+  background-color: #1a1a1a;
+  color: #ffffff;
+  padding: 60px 0;
+}
+
+.about-us-section h1 {
+  font-size: 2.5rem;
+  margin-bottom: 30px;
+}
+
+.about-us-section p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.about-us-section .img-fluid {
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.about-us-section .img-fluid:hover {
+  transform: scale(1.02);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.2);
+}
+
+.about-us-section .card {
+  background-color: #2a2a2a;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.about-us-section .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.2);
+}
+
+.about-us-section .card-title {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+.about-us-section .card-text {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Equal height for mission, vision, values cards */
+.about-us-section .card-equal {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.about-us-section .card-equal .card-body {
+  flex-grow: 1;
+}
+
+.about-us-section .card-equal .card-body h5 {
+  transition: color 0.3s ease;
+}
+
+.about-us-section .card-equal:hover .card-body h5 {
+  color: #e50914;
+}
+
+/* Meet Our Trainers Section */
+.meet-trainers-section {
+  background-color: #1a1a1a;
+  color: #ffffff;
+  padding: 60px 0;
+}
+
+.meet-trainers-section h2 {
+  font-size: 2rem;
+  margin-bottom: 30px;
+}
+
+.meet-trainers-section .card {
+  background-color: #2a2a2a;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.meet-trainers-section .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.2);
+}
+
+.meet-trainers-section .card-title {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+.meet-trainers-section .card-text {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.meet-trainers-section .card-img-top {
+  border-radius: 10px 10px 0 0;
+  object-fit: cover;
+  height: 450px;
+  transition: transform 0.3s ease;
+}
+
+/* Hover Effects */
+.meet-trainers-section .card:hover .card-img-top {
+  transform: scale(1.05);
+}
+
+/* Add some animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.meet-trainers-section .card {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.img-fluid {
+  border-radius: 10px 10px 0 0;
+  object-fit: cover;
+  height: 450px;
+  transition: transform 0.3s ease;
+}

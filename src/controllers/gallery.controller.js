@@ -130,7 +130,6 @@ async function canUserUpload(userId) {
             enrollment.status === "active" && 
             new Date(enrollment.endDate) >= new Date()
         );
-        
         return hasActiveEnrollment || false;
     }
     

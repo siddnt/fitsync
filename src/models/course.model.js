@@ -106,54 +106,54 @@ function timeToMinutes(timeString) {
     return hours * 60 + minutes;
 }
 
-// Static method to check for conflicts between courses
-courseSchema.statics.hasScheduleConflict = async function() {
-    const courses = await this.find({});
+// // Static method to check for conflicts between courses
+// courseSchema.statics.hasScheduleConflict = async function() {
+//     const courses = await this.find({});
     
-    // Create a map to store all scheduled sessions by day and time
-    const scheduleMap = {};
+//     // Create a map to store all scheduled sessions by day and time
+//     const scheduleMap = {};
     
-    for (const course of courses) {
-        for (const session of course.schedule) {
-            const key = `${session.day}`;
-            if (!scheduleMap[key]) {
-                scheduleMap[key] = [];
-            }
+//     for (const course of courses) {
+//         for (const session of course.schedule) {
+//             const key = `${session.day}`;
+//             if (!scheduleMap[key]) {
+//                 scheduleMap[key] = [];
+//             }
             
-            // Convert time strings to minutes for comparison
-            const startMinutes = timeToMinutes(session.startTime);
-            const endMinutes = timeToMinutes(session.endTime);
+//             // Convert time strings to minutes for comparison
+//             const startMinutes = timeToMinutes(session.startTime);
+//             const endMinutes = timeToMinutes(session.endTime);
             
-            // Check if this session overlaps with any existing session on the same day
-            const conflict = scheduleMap[key].some(existingSession => {
-                if (existingSession.courseId.equals(course._id)) {
-                    return false; // Skip same course
-                }
+//             // Check if this session overlaps with any existing session on the same day
+//             const conflict = scheduleMap[key].some(existingSession => {
+//                 if (existingSession.courseId.equals(course._id)) {
+//                     return false; // Skip same course
+//                 }
                 
-                const existingStart = timeToMinutes(existingSession.startTime);
-                const existingEnd = timeToMinutes(existingSession.endTime);
+//                 const existingStart = timeToMinutes(existingSession.startTime);
+//                 const existingEnd = timeToMinutes(existingSession.endTime);
                 
-                return (
-                    (startMinutes >= existingStart && startMinutes < existingEnd) ||
-                    (endMinutes > existingStart && endMinutes <= existingEnd) ||
-                    (startMinutes <= existingStart && endMinutes >= existingEnd)
-                );
-            });
+//                 return (
+//                     (startMinutes >= existingStart && startMinutes < existingEnd) ||
+//                     (endMinutes > existingStart && endMinutes <= existingEnd) ||
+//                     (startMinutes <= existingStart && endMinutes >= existingEnd)
+//                 );
+//             });
             
-            if (conflict) {
-                return true;
-            }
+//             if (conflict) {
+//                 return true;
+//             }
             
-            scheduleMap[key].push({
-                courseId: course._id,
-                startTime: session.startTime,
-                endTime: session.endTime
-            });
-        }
-    }
+//             scheduleMap[key].push({
+//                 courseId: course._id,
+//                 startTime: session.startTime,
+//                 endTime: session.endTime
+//             });
+//         }
+//     }
     
-    return false;
-};
+//     return false;
+// };
 
 export const Course = mongoose.model("Course", courseSchema);
 export default Course; 

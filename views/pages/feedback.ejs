@@ -1,0 +1,59 @@
+<%- include('../partials/header') %>
+
+<main>
+  <div class="container my-5">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header bg-danger text-white text-center py-3">
+            <h3><i class="fas fa-comment-dots me-2"></i>Provide Feedback</h3>
+          </div>
+          <div class="card-body p-4">
+            <form id="feedbackForm" class="needs-validation" novalidate>
+              <div class="mb-4">
+                <label for="planId" class="form-label">Plan ID</label>
+                <input type="text" class="form-control" id="planId" name="planId" required>
+                <div class="invalid-feedback">
+                  Please provide a valid Plan ID.
+                </div>
+              </div>
+              <div class="mb-4">
+                <label for="feedback" class="form-label">Feedback</label>
+                <textarea class="form-control" id="feedback" name="feedback" rows="5" required></textarea>
+                <div class="invalid-feedback">
+                  Please provide your feedback.
+                </div>
+              </div>
+              <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Submit Feedback</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // Bootstrap validation
+  (function () {
+    'use strict'
+    var forms = document.querySelectorAll('.needs-validation')
+    Array.prototype.slice.call(forms)
+      .forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+          if (!form.checkValidity()) {
+            event.preventDefault()
+            event.stopPropagation()
+          } else {
+            event.preventDefault();
+            alert('Your feedback has been submitted successfully!');
+          }
+          form.classList.add('was-validated')
+        }, false)
+      })
+  })()
+</script>
+
+<%- include('../partials/footer') %>

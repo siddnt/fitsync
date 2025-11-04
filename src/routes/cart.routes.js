@@ -5,8 +5,10 @@ import {
     removeFromCart,
     updateCartQuantity
 } from "../controllers/cart.controller.js";
-import { isAuthenticated } from "../middleware/auth.middleware.js";
+import { isAuthenticated } from "../middlewares/auth.middleware.js";
 import Cart from "../models/cart.model.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import Product from "../models/product.model.js";
 import { createOrder } from "../controllers/order.controller.js";
@@ -192,31 +194,11 @@ router.post("/buy-now/:productId", isAuthenticated, asyncHandler(async (req, res
 
 // Cart page route
 router.get("/", isAuthenticated, async (req, res) => {
-    try {
-        const cart = await Cart.findOne({ user: req.session.userId })
-            .populate({
-                path: 'items.product',
-                select: 'name description price image stock category'
-            });
-        
-        res.render('pages/cart', {
-            title: "My Cart - FitSync",
-            cart: cart || { items: [], total: 0 },
-            isLoggedIn: true,
-            userId: req.session.userId,
-            userRole: req.session.userRole
-        });
-    } catch (error) {
-        console.error('Error fetching cart page:', error);
-        res.status(500).render('pages/error', {
-            title: "Error - FitSync",
-            message: 'Error loading cart page',
-            statusCode: 500,
-            isLoggedIn: !!req.session.userId,
-            userId: req.session.userId,
-            userRole: req.session.userRole
-        });
-    }
+    // Serve static HTML that will fetch cart data via /api
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const htmlPath = path.join(__dirname, "../../views/pages/cart.html");
+    res.sendFile(htmlPath);
 });
 
 // Checkout page route

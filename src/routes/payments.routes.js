@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { isAuthenticated } from "../middleware/auth.middleware.js";
+import { isAuthenticated } from "../middlewares/auth.middleware.js";
 import {
   createCourseCheckoutSession,
   createShopCheckoutSession,

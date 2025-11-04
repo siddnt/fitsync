@@ -6,7 +6,6 @@ import Plan from "../models/plan.model.js";
 import Booking from "../models/booking.model.js";
 import Contact from "../models/contact.model.js";
 import { Course } from "../models/course.model.js";
-import { getRevenueStatistics } from "../services/revenue.service.js";
 import mongoose from "mongoose";
 import Review from "../models/review.model.js";
 import Gallery from "../models/gallery.model.js";
@@ -279,196 +278,196 @@ export const getUsers = asyncHandler(async (req, res) => {
     });
 });
 
-// Get user details
-export const getUserDetails = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
+// // Get user details
+// export const getUserDetails = asyncHandler(async (req, res) => {
+//     const { userId } = req.params;
     
-    // Get user
-    const user = await User.findById(userId);
+//     // Get user
+//     const user = await User.findById(userId);
     
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+//     if (!user) {
+//         throw new ApiError(404, "User not found");
+//     }
     
-    // Get user's plans if they're a trainer
-    let plans = [];
-    if (user.role === "trainer") {
-        plans = await Plan.find({ creator: userId });
-    }
+//     // Get user's plans if they're a trainer
+//     let plans = [];
+//     if (user.role === "trainer") {
+//         plans = await Plan.find({ creator: userId });
+//     }
     
-    // Get user's bookings
-    const bookings = await Booking.find({
-        $or: [
-            { user: userId },
-            { trainer: userId }
-        ]
-    })
-    .populate("user", "name")
-    .populate("trainer", "name")
-    .sort({ startTime: -1 });
+//     // Get user's bookings
+//     const bookings = await Booking.find({
+//         $or: [
+//             { user: userId },
+//             { trainer: userId }
+//         ]
+//     })
+//     .populate("user", "name")
+//     .populate("trainer", "name")
+//     .sort({ startTime: -1 });
     
-    res.render("pages/editProfile", {
-        title: `${user.name} - FitSync Admin`,
-        user,
-        plans,
-        bookings,
-        isAdmin: true,
-        isLoggedIn: true,
-        userRole: req.session.userRole,
-        userId: req.session.userId,
-    });
-});
+//     res.render("pages/editProfile", {
+//         title: `${user.name} - FitSync Admin`,
+//         user,
+//         plans,
+//         bookings,
+//         isAdmin: true,
+//         isLoggedIn: true,
+//         userRole: req.session.userRole,
+//         userId: req.session.userId,
+//     });
+// });
 
-// Update user status
-export const updateUserStatus = asyncHandler(async (req, res) => {
-    const { userId } = req.params;
-    const { status } = req.body;
+// // Update user status
+// export const updateUserStatus = asyncHandler(async (req, res) => {
+//     const { userId } = req.params;
+//     const { status } = req.body;
     
-    // Find user
-    const user = await User.findById(userId);
+//     // Find user
+//     const user = await User.findById(userId);
     
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+//     if (!user) {
+//         throw new ApiError(404, "User not found");
+//     }
     
-    // Update status
-    user.status = status;
-    await user.save();
+//     // Update status
+//     user.status = status;
+//     await user.save();
     
-    // Handle API or form submission
-    if (req.headers['content-type'] === 'application/json') {
-        return res.status(200).json(
-            new ApiResponse(200, user, "User status updated successfully")
-        );
-    } else {
-        return res.redirect(`/admin/users/${userId}?success=User status updated successfully`);
-    }
-});
+//     // Handle API or form submission
+//     if (req.headers['content-type'] === 'application/json') {
+//         return res.status(200).json(
+//             new ApiResponse(200, user, "User status updated successfully")
+//         );
+//     } else {
+//         return res.redirect(`/admin/users/${userId}?success=User status updated successfully`);
+//     }
+// });
 
-// Get plans list
-export const getPlans = asyncHandler(async (req, res) => {
-    const { category, level, creator, isActive, sort, page = 1, limit = 10 } = req.query;
+// // Get plans list
+// export const getPlans = asyncHandler(async (req, res) => {
+//     const { category, level, creator, isActive, sort, page = 1, limit = 10 } = req.query;
     
-    // Build query
-    const query = {};
-    if (category) query.category = category;
-    if (level) query.level = level;
-    if (creator) query.creator = creator;
-    if (isActive !== undefined) query.isActive = isActive === 'true';
+//     // Build query
+//     const query = {};
+//     if (category) query.category = category;
+//     if (level) query.level = level;
+//     if (creator) query.creator = creator;
+//     if (isActive !== undefined) query.isActive = isActive === 'true';
     
-    // Count total plans
-    const totalPlans = await Plan.countDocuments(query);
+//     // Count total plans
+//     const totalPlans = await Plan.countDocuments(query);
     
-    // Sort options
-    let sortOption = { createdAt: -1 }; // Default sort
-    if (sort === "title") sortOption = { title: 1 };
-    if (sort === "price-asc") sortOption = { price: 1 };
-    if (sort === "price-desc") sortOption = { price: -1 };
-    if (sort === "popular") sortOption = { enrollmentCount: -1 };
+//     // Sort options
+//     let sortOption = { createdAt: -1 }; // Default sort
+//     if (sort === "title") sortOption = { title: 1 };
+//     if (sort === "price-asc") sortOption = { price: 1 };
+//     if (sort === "price-desc") sortOption = { price: -1 };
+//     if (sort === "popular") sortOption = { enrollmentCount: -1 };
     
-    // Pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+//     // Pagination
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Get plans
-    const plans = await Plan.find(query)
-        .populate("creator", "name")
-        .sort(sortOption)
-        .skip(skip)
-        .limit(parseInt(limit));
+//     // Get plans
+//     const plans = await Plan.find(query)
+//         .populate("creator", "name")
+//         .sort(sortOption)
+//         .skip(skip)
+//         .limit(parseInt(limit));
     
-    // Get categories and levels for filters
-    const categories = await Plan.distinct("category");
-    const levels = await Plan.distinct("level");
+//     // Get categories and levels for filters
+//     const categories = await Plan.distinct("category");
+//     const levels = await Plan.distinct("level");
     
-    // Get trainers for filter
-    const trainers = await User.find({ role: "trainer" })
-        .select("name")
-        .sort({ name: 1 });
+//     // Get trainers for filter
+//     const trainers = await User.find({ role: "trainer" })
+//         .select("name")
+//         .sort({ name: 1 });
     
-    res.render("pages/courses", {
-        title: "Manage Plans - FitSync",
-        plans,
-        categories,
-        levels,
-        trainers,
-        pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            totalPages: Math.ceil(totalPlans / parseInt(limit)),
-            totalPlans
-        },
-        filters: { category, level, creator, isActive, sort },
-        isAdmin: true,
-        isLoggedIn: true,
-        userRole: req.session.userRole,
-        userId: req.session.userId,
-    });
-});
+//     res.render("pages/courses", {
+//         title: "Manage Plans - FitSync",
+//         plans,
+//         categories,
+//         levels,
+//         trainers,
+//         pagination: {
+//             page: parseInt(page),
+//             limit: parseInt(limit),
+//             totalPages: Math.ceil(totalPlans / parseInt(limit)),
+//             totalPlans
+//         },
+//         filters: { category, level, creator, isActive, sort },
+//         isAdmin: true,
+//         isLoggedIn: true,
+//         userRole: req.session.userRole,
+//         userId: req.session.userId,
+//     });
+// });
 
-// Get bookings list
-export const getBookings = asyncHandler(async (req, res) => {
-    const { status, user, trainer, startDate, endDate, sort, page = 1, limit = 10 } = req.query;
+// // Get bookings list
+// export const getBookings = asyncHandler(async (req, res) => {
+//     const { status, user, trainer, startDate, endDate, sort, page = 1, limit = 10 } = req.query;
     
-    // Build query
-    const query = {};
-    if (status) query.status = status;
-    if (user) query.user = user;
-    if (trainer) query.trainer = trainer;
+//     // Build query
+//     const query = {};
+//     if (status) query.status = status;
+//     if (user) query.user = user;
+//     if (trainer) query.trainer = trainer;
     
-    // Date range filter
-    if (startDate || endDate) {
-        query.startTime = {};
-        if (startDate) query.startTime.$gte = new Date(startDate);
-        if (endDate) query.startTime.$lte = new Date(endDate);
-    }
+//     // Date range filter
+//     if (startDate || endDate) {
+//         query.startTime = {};
+//         if (startDate) query.startTime.$gte = new Date(startDate);
+//         if (endDate) query.startTime.$lte = new Date(endDate);
+//     }
     
-    // Count total bookings
-    const totalBookings = await Booking.countDocuments(query);
+//     // Count total bookings
+//     const totalBookings = await Booking.countDocuments(query);
     
-    // Sort options
-    let sortOption = { startTime: -1 }; // Default sort
-    if (sort === "date-asc") sortOption = { startTime: 1 };
-    if (sort === "date-desc") sortOption = { startTime: -1 };
-    if (sort === "status") sortOption = { status: 1 };
+//     // Sort options
+//     let sortOption = { startTime: -1 }; // Default sort
+//     if (sort === "date-asc") sortOption = { startTime: 1 };
+//     if (sort === "date-desc") sortOption = { startTime: -1 };
+//     if (sort === "status") sortOption = { status: 1 };
     
-    // Pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+//     // Pagination
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Get bookings
-    const bookings = await Booking.find(query)
-        .populate("user", "name")
-        .populate("trainer", "name")
-        .sort(sortOption)
-        .skip(skip)
-        .limit(parseInt(limit));
+//     // Get bookings
+//     const bookings = await Booking.find(query)
+//         .populate("user", "name")
+//         .populate("trainer", "name")
+//         .sort(sortOption)
+//         .skip(skip)
+//         .limit(parseInt(limit));
     
-    // Get users and trainers for filters
-    const users = await User.find({ role: "user" })
-        .select("name")
-        .sort({ name: 1 });
+//     // Get users and trainers for filters
+//     const users = await User.find({ role: "user" })
+//         .select("name")
+//         .sort({ name: 1 });
         
-    const trainers = await User.find({ role: "trainer" })
-        .select("name")
-        .sort({ name: 1 });
+//     const trainers = await User.find({ role: "trainer" })
+//         .select("name")
+//         .sort({ name: 1 });
     
-    res.render("pages/adminBookings", {
-        title: "Manage Bookings - FitSync",
-        bookings,
-        users,
-        trainers,
-        pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            totalPages: Math.ceil(totalBookings / parseInt(limit)),
-            totalBookings
-        },
-        filters: { status, user, trainer, startDate, endDate, sort },
-        isAdmin: true,
-        isLoggedIn: true,
-        userRole: req.session.userRole,
-        userId: req.session.userId,
-    });
-});
+//     res.render("pages/adminBookings", {
+//         title: "Manage Bookings - FitSync",
+//         bookings,
+//         users,
+//         trainers,
+//         pagination: {
+//             page: parseInt(page),
+//             limit: parseInt(limit),
+//             totalPages: Math.ceil(totalBookings / parseInt(limit)),
+//             totalBookings
+//         },
+//         filters: { status, user, trainer, startDate, endDate, sort },
+//         isAdmin: true,
+//         isLoggedIn: true,
+//         userRole: req.session.userRole,
+//         userId: req.session.userId,
+//     });
+// });
 
 // Approve trainer
 export const approveTrainer = asyncHandler(async (req, res) => {
@@ -506,27 +505,27 @@ export const rejectTrainer = asyncHandler(async (req, res) => {
     return res.redirect("/admin/dashboard?message=Trainer rejected");
 });
 
-// Toggle trainer status (active/inactive)
-export const toggleTrainerStatus = asyncHandler(async (req, res) => {
-    const { trainerId } = req.params;
+// // Toggle trainer status (active/inactive)
+// export const toggleTrainerStatus = asyncHandler(async (req, res) => {
+//     const { trainerId } = req.params;
     
-    // Find trainer
-    const trainer = await User.findById(trainerId);
+//     // Find trainer
+//     const trainer = await User.findById(trainerId);
     
-    if (!trainer || trainer.role !== "trainer") {
-        throw new ApiError(404, "Trainer not found");
-    }
+//     if (!trainer || trainer.role !== "trainer") {
+//         throw new ApiError(404, "Trainer not found");
+//     }
     
-    // Toggle status
-    trainer.status = trainer.status === "active" ? "inactive" : "active";
-    await trainer.save();
+//     // Toggle status
+//     trainer.status = trainer.status === "active" ? "inactive" : "active";
+//     await trainer.save();
     
-    const message = trainer.status === "active" 
-        ? "Trainer activated successfully" 
-        : "Trainer deactivated successfully";
+//     const message = trainer.status === "active" 
+//         ? "Trainer activated successfully" 
+//         : "Trainer deactivated successfully";
     
-    return res.redirect("/admin/dashboard?message=" + message);
-});
+//     return res.redirect("/admin/dashboard?message=" + message);
+// });
 
 // Get trainers list
 export const getTrainers = asyncHandler(async (req, res) => {

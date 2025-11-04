@@ -7,7 +7,11 @@ import Booking from "../models/booking.model.js";
 
 // Get trainer dashboard
 export const getDashboard = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
+    const trainerId = req.session?.userId;
+    if (!trainerId) {
+        // Session guard should normally prevent this for HTML requests
+        return res.redirect("/auth/login");
+    }
     
     // Get trainer details
     const trainer = await User.findById(trainerId);
@@ -16,7 +20,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Access denied");
     }
     
-    // Get trainer's weekly schedule
+    // Get trainer's weekly schedule 
     const schedule = await trainer.getWeeklySchedule();
     
     // Prepare weekly schedule in a tabular format
@@ -45,7 +49,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
     Object.entries(schedule).forEach(([day, sessions]) => {
         sessions.forEach(session => {
             allSessions.push({
-                ...session,
+                ...session, // spread operator to include session details
                 day
             });
         });
@@ -72,7 +76,12 @@ export const getDashboard = asyncHandler(async (req, res) => {
     });
     
     // Get trainer's clients
-    const clients = await trainer.getTrainerClients();
+    let clients = [];
+    try {
+        clients = await trainer.getTrainerClients();
+    } catch (e) {
+        clients = [];
+    }
     
     // Get upcoming bookings
     const upcomingBookings = await Booking.find({
@@ -215,242 +224,242 @@ export const uploadProfilePicture = asyncHandler(async (req, res) => {
 });
 
 // Get trainer's plans
-export const getPlans = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
+// export const getPlans = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
     
-    // Get plans
-    const plans = await Plan.find({ creator: trainerId })
-        .sort({ createdAt: -1 });
+//     // Get plans
+//     const plans = await Plan.find({ creator: trainerId })
+//         .sort({ createdAt: -1 });
     
-    res.render("pages/courses", {
-        title: "My Fitness Plans - FitSync",
-        plans,
-        isTrainer: true
-    });
-});
+//     res.render("pages/courses", {
+//         title: "My Fitness Plans - FitSync",
+//         plans,
+//         isTrainer: true
+//     });
+// });
 
 // Create new plan
-export const createPlan = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
-    const {
-        title,
-        description,
-        price,
-        duration,
-        durationUnit,
-        level,
-        category,
-        workouts = []
-    } = req.body;
+// export const createPlan = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
+//     const {
+//         title,
+//         description,
+//         price,
+//         duration,
+//         durationUnit,
+//         level,
+//         category,
+//         workouts = []
+//     } = req.body;
     
-    // Validation
-    if (!title || !description || price === undefined || !duration || !category) {
-        throw new ApiError(400, "Required fields are missing");
-    }
+//     // Validation
+//     if (!title || !description || price === undefined || !duration || !category) {
+//         throw new ApiError(400, "Required fields are missing");
+//     }
     
-    // Create plan
-    const plan = await Plan.create({
-        title,
-        description,
-        price: Number(price),
-        duration: {
-            value: Number(duration),
-            unit: durationUnit || "months"
-        },
-        level: level || "all",
-        category,
-        creator: trainerId,
-        workouts: workouts || []
-    });
+//     // Create plan
+//     const plan = await Plan.create({
+//         title,
+//         description,
+//         price: Number(price),
+//         duration: {
+//             value: Number(duration),
+//             unit: durationUnit || "months"
+//         },
+//         level: level || "all",
+//         category,
+//         creator: trainerId,
+//         workouts: workouts || []
+//     });
     
-    // Handle API or form submission
-    if (req.headers['content-type'] === 'application/json') {
-        return res.status(201).json(
-            new ApiResponse(201, plan, "Plan created successfully")
-        );
-    } else {
-        return res.redirect("/trainer/plans");
-    }
-});
+//     // Handle API or form submission
+//     if (req.headers['content-type'] === 'application/json') {
+//         return res.status(201).json(
+//             new ApiResponse(201, plan, "Plan created successfully")
+//         );
+//     } else {
+//         return res.redirect("/trainer/plans");
+//     }
+// });
 
-// Get plan details
-export const getPlan = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
-    const { planId } = req.params;
+// // Get plan details
+// export const getPlan = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
+//     const { planId } = req.params;
     
-    // Get plan
-    const plan = await Plan.findOne({
-        _id: planId,
-        creator: trainerId
-    });
+//     // Get plan
+//     const plan = await Plan.findOne({
+//         _id: planId,
+//         creator: trainerId
+//     });
     
-    if (!plan) {
-        throw new ApiError(404, "Plan not found");
-    }
+//     if (!plan) {
+//         throw new ApiError(404, "Plan not found");
+//     }
     
-    res.render("pages/courses", {
-        title: `${plan.title} - FitSync`,
-        plan,
-        isTrainer: true
-    });
-});
+//     res.render("pages/courses", {
+//         title: `${plan.title} - FitSync`,
+//         plan,
+//         isTrainer: true
+//     });
+// });
 
-// Update plan
-export const updatePlan = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
-    const { planId } = req.params;
-    const {
-        title,
-        description,
-        price,
-        duration,
-        durationUnit,
-        level,
-        category,
-        isActive,
-        workouts = []
-    } = req.body;
+// // Update plan
+// export const updatePlan = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
+//     const { planId } = req.params;
+//     const {
+//         title,
+//         description,
+//         price,
+//         duration,
+//         durationUnit,
+//         level,
+//         category,
+//         isActive,
+//         workouts = []
+//     } = req.body;
     
-    // Get plan
-    const plan = await Plan.findOne({
-        _id: planId,
-        creator: trainerId
-    });
+//     // Get plan
+//     const plan = await Plan.findOne({
+//         _id: planId,
+//         creator: trainerId
+//     });
     
-    if (!plan) {
-        throw new ApiError(404, "Plan not found");
-    }
+//     if (!plan) {
+//         throw new ApiError(404, "Plan not found");
+//     }
     
-    // Update fields
-    if (title) plan.title = title;
-    if (description) plan.description = description;
-    if (price !== undefined) plan.price = Number(price);
-    if (duration) {
-        plan.duration.value = Number(duration);
-        if (durationUnit) plan.duration.unit = durationUnit;
-    }
-    if (level) plan.level = level;
-    if (category) plan.category = category;
-    if (isActive !== undefined) plan.isActive = isActive === 'true' || isActive === true;
-    if (workouts.length > 0) plan.workouts = workouts;
+//     // Update fields
+//     if (title) plan.title = title;
+//     if (description) plan.description = description;
+//     if (price !== undefined) plan.price = Number(price);
+//     if (duration) {
+//         plan.duration.value = Number(duration);
+//         if (durationUnit) plan.duration.unit = durationUnit;
+//     }
+//     if (level) plan.level = level;
+//     if (category) plan.category = category;
+//     if (isActive !== undefined) plan.isActive = isActive === 'true' || isActive === true;
+//     if (workouts.length > 0) plan.workouts = workouts;
     
-    // Save plan
-    await plan.save();
+//     // Save plan
+//     await plan.save();
     
-    // Handle API or form submission
-    if (req.headers['content-type'] === 'application/json') {
-        return res.status(200).json(
-            new ApiResponse(200, plan, "Plan updated successfully")
-        );
-    } else {
-        return res.redirect(`/trainer/plans/${planId}?success=Plan updated successfully`);
-    }
-});
+//     // Handle API or form submission
+//     if (req.headers['content-type'] === 'application/json') {
+//         return res.status(200).json(
+//             new ApiResponse(200, plan, "Plan updated successfully")
+//         );
+//     } else {
+//         return res.redirect(`/trainer/plans/${planId}?success=Plan updated successfully`);
+//     }
+// });
 
-// Delete plan
-export const deletePlan = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
-    const { planId } = req.params;
+// // Delete plan
+// export const deletePlan = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
+//     const { planId } = req.params;
     
-    // Get plan
-    const plan = await Plan.findOne({
-        _id: planId,
-        creator: trainerId
-    });
+//     // Get plan
+//     const plan = await Plan.findOne({
+//         _id: planId,
+//         creator: trainerId
+//     });
     
-    if (!plan) {
-        throw new ApiError(404, "Plan not found");
-    }
+//     if (!plan) {
+//         throw new ApiError(404, "Plan not found");
+//     }
     
-    // Check if anyone is enrolled
-    if (plan.enrollmentCount > 0) {
-        // Set to inactive instead of deleting
-        plan.isActive = false;
-        await plan.save();
-    } else {
-        // Delete plan if no enrollments
-        await Plan.findByIdAndDelete(planId);
-    }
+//     // Check if anyone is enrolled
+//     if (plan.enrollmentCount > 0) {
+//         // Set to inactive instead of deleting
+//         plan.isActive = false;
+//         await plan.save();
+//     } else {
+//         // Delete plan if no enrollments
+//         await Plan.findByIdAndDelete(planId);
+//     }
     
-    // Handle API or form submission
-    if (req.headers['content-type'] === 'application/json') {
-        return res.status(200).json(
-            new ApiResponse(200, {}, "Plan deleted successfully")
-        );
-    } else {
-        return res.redirect("/trainer/plans");
-    }
-});
+//     // Handle API or form submission
+//     if (req.headers['content-type'] === 'application/json') {
+//         return res.status(200).json(
+//             new ApiResponse(200, {}, "Plan deleted successfully")
+//         );
+//     } else {
+//         return res.redirect("/trainer/plans");
+//     }
+// });
 
-// Get trainer's bookings
-export const getBookings = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
+// // Get trainer's bookings
+// export const getBookings = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
     
-    // Get bookings
-    const bookings = await Booking.find({ trainer: trainerId })
-        .sort({ startTime: -1 })
-        .populate("user", "name profilePicture");
+//     // Get bookings
+//     const bookings = await Booking.find({ trainer: trainerId })
+//         .sort({ startTime: -1 })
+//         .populate("user", "name profilePicture");
     
-    // Separate upcoming and past bookings
-    const now = new Date();
-    const pendingBookings = bookings.filter(booking => 
-        booking.status === "pending"
-    );
+//     // Separate upcoming and past bookings
+//     const now = new Date();
+//     const pendingBookings = bookings.filter(booking => 
+//         booking.status === "pending"
+//     );
     
-    const upcomingBookings = bookings.filter(booking => 
-        new Date(booking.startTime) > now && 
-        booking.status === "confirmed"
-    );
+//     const upcomingBookings = bookings.filter(booking => 
+//         new Date(booking.startTime) > now && 
+//         booking.status === "confirmed"
+//     );
     
-    const pastBookings = bookings.filter(booking => 
-        new Date(booking.startTime) <= now || 
-        booking.status === "cancelled"
-    );
+//     const pastBookings = bookings.filter(booking => 
+//         new Date(booking.startTime) <= now || 
+//         booking.status === "cancelled"
+//     );
     
-    res.render("pages/trainer-bookings", {
-        title: "My Bookings - FitSync",
-        pendingBookings,
-        upcomingBookings,
-        pastBookings,
-        isTrainer: true,
-        isLoggedIn: true,
-        userRole: req.session.userRole,
-        userId: req.session.userId
-    });
-});
+//     res.render("pages/trainer-bookings", {
+//         title: "My Bookings - FitSync",
+//         pendingBookings,
+//         upcomingBookings,
+//         pastBookings,
+//         isTrainer: true,
+//         isLoggedIn: true,
+//         userRole: req.session.userRole,
+//         userId: req.session.userId
+//     });
+// });
 
-// Update booking status
-export const updateBookingStatus = asyncHandler(async (req, res) => {
-    const trainerId = req.session.userId;
-    const { bookingId } = req.params;
-    const { status, notes } = req.body;
+// // Update booking status
+// export const updateBookingStatus = asyncHandler(async (req, res) => {
+//     const trainerId = req.session.userId;
+//     const { bookingId } = req.params;
+//     const { status, notes } = req.body;
     
-    // Validate status
-    if (!status || !["pending", "confirmed", "cancelled", "completed"].includes(status)) {
-        throw new ApiError(400, "Invalid status");
-    }
+//     // Validate status
+//     if (!status || !["pending", "confirmed", "cancelled", "completed"].includes(status)) {
+//         throw new ApiError(400, "Invalid status");
+//     }
     
-    // Find booking
-    const booking = await Booking.findOne({
-        _id: bookingId,
-        trainer: trainerId
-    });
+//     // Find booking
+//     const booking = await Booking.findOne({
+//         _id: bookingId,
+//         trainer: trainerId
+//     });
     
-    if (!booking) {
-        throw new ApiError(404, "Booking not found");
-    }
+//     if (!booking) {
+//         throw new ApiError(404, "Booking not found");
+//     }
     
-    // Update booking
-    booking.status = status;
-    if (notes) booking.notes = notes;
-    await booking.save();
+//     // Update booking
+//     booking.status = status;
+//     if (notes) booking.notes = notes;
+//     await booking.save();
     
-    // Handle API or form submission
-    if (req.headers['content-type'] === 'application/json') {
-        return res.status(200).json(
-            new ApiResponse(200, { booking }, "Booking updated successfully")
-        );
-    } else {
-        return res.redirect("/trainer/bookings?success=Booking status updated successfully");
-    }
-}); 
+//     // Handle API or form submission
+//     if (req.headers['content-type'] === 'application/json') {
+//         return res.status(200).json(
+//             new ApiResponse(200, { booking }, "Booking updated successfully")
+//         );
+//     } else {
+//         return res.redirect("/trainer/bookings?success=Booking status updated successfully");
+//     }
+// }); 

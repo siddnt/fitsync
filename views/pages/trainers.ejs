@@ -1,0 +1,79 @@
+<%- include('../partials/header') %>
+
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Our Trainers</h1>
+    
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-body">
+                    <form method="GET" action="/trainers" class="d-flex flex-wrap">
+                        <div class="form-group me-3 mb-2">
+                            <label for="specialization">Specialization</label>
+                            <select class="form-control" id="specialization" name="specialization">
+                                <option value="">All Specializations</option>
+                                <% if (specializations && specializations.length > 0) { %>
+                                    <% specializations.forEach(spec => { %>
+                                        <option value="<%= spec %>" <%= filters.specialization === spec ? 'selected' : '' %>><%= spec %></option>
+                                    <% }); %>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="form-group me-3 mb-2">
+                            <label for="sort">Sort By</label>
+                            <select class="form-control" id="sort" name="sort">
+                                <option value="newest" <%= filters.sort === 'newest' ? 'selected' : '' %>>Newest</option>
+                                <option value="name" <%= filters.sort === 'name' ? 'selected' : '' %>>Name</option>
+                                <option value="popularity" <%= filters.sort === 'popularity' ? 'selected' : '' %>>Popularity</option>
+                            </select>
+                        </div>
+                        <div class="form-group d-flex align-items-end mb-2">
+                            <button type="submit" class="btn btn-primary">Filter</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Trainers List -->
+    <div class="row">
+        <% if (trainers && trainers.length > 0) { %>
+            <% trainers.forEach(trainer => { %>
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="text-center pt-3">
+                            <% if (trainer.profilePicture) { %>
+                                <img src="<%= trainer.profilePicture %>" class="rounded-circle img-fluid" style="width: 150px; height: 150px; object-fit: cover;">
+                            <% } else { %>
+                                <img src="/images/default-profile.png" class="rounded-circle img-fluid" style="width: 150px; height: 150px; object-fit: cover;">
+                            <% } %>
+                        </div>
+                        <div class="card-body text-center">
+                            <h5 class="card-title"><%= trainer.name %></h5>
+                            <% if (trainer.specializations && trainer.specializations.length > 0) { %>
+                                <p class="card-text">
+                                    <% trainer.specializations.forEach((spec, index) => { %>
+                                        <span class="badge bg-primary me-1"><%= spec %></span>
+                                    <% }); %>
+                                </p>
+                            <% } %>
+                            <p class="card-text"><%= trainer.bio ? trainer.bio.substring(0, 100) + (trainer.bio.length > 100 ? '...' : '') : 'No bio available' %></p>
+                            <a href="/trainers/<%= trainer._id %>" class="btn btn-outline-primary">View Profile</a>
+                            <% if (locals.isLoggedIn && locals.userRole === 'user') { %>
+                                <a href="/bookings/new?trainerId=<%= trainer._id %>" class="btn btn-primary mt-2">Book Session</a>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            <% }); %>
+        <% } else { %>
+            <div class="col-12 text-center">
+                <p>No trainers found matching your criteria.</p>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<%- include('../partials/footer') %> 

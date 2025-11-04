@@ -1,0 +1,125 @@
+.stat-card-improved {
+  position: relative;
+  background-color: #2a2a2a;
+  border-radius: 10px;
+  padding: 1.5rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.stat-card-improved:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.15);
+  background-color: #333;
+}
+
+/* Badge for pending notifications */
+.badge-notification {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+/* Trainer card styles */
+.trainer-card {
+  background-color: #2a2a2a;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  margin-bottom: 20px;
+}
+
+.trainer-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.15);
+}
+
+.trainer-card-header {
+  background-color: #333;
+  padding: 15px;
+  border-bottom: 1px solid #444;
+}
+
+.trainer-card-body {
+  padding: 20px;
+}
+
+.trainer-card-footer {
+  background-color: #333;
+  padding: 15px;
+  border-top: 1px solid #444;
+}
+
+/* Status badges */
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-active {
+  background-color: #28a745;
+  color: white;
+}
+
+.status-pending {
+  background-color: #ffc107;
+  color: black;
+}
+
+.status-rejected {
+  background-color: #dc3545;
+  color: white;
+}
+
+/* Table improvements */
+.table-dark {
+  background-color: #212121;
+  color: #f8f9fa;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table-dark thead th {
+  background-color: #333;
+  color: #e50914;
+  border-color: #444;
+}
+
+.table-dark tbody tr:hover {
+  background-color: #333;
+}
+
+/* Action buttons */
+.action-btns .btn {
+  margin-right: 5px;
+  border-radius: 5px;
+  transition: all 0.2s ease;
+}
+
+.action-btns .btn:hover {
+  transform: translateY(-2px);
+}
+
+/* Search and filter area */
+.admin-filters {
+  background-color: #2a2a2a;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}

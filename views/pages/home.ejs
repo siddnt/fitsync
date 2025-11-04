@@ -1,0 +1,226 @@
+<%- include('../partials/header') %>
+<style>
+  .explore-courses-btn {
+    font-size: 1.5rem;
+    background-color: var(--primary-color);
+    border: none;
+    transition: all 0.3s ease;
+  }
+
+  .explore-courses-btn:hover {
+    background-color: var(--hover-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(229, 9, 20, 0.4);
+  }
+</style>
+
+<main>
+  <!-- Hero Section -->
+  <section
+    class="hero-section text-center py-5"
+    style="
+      background:
+        linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.7)),
+        url(&quot;/images/home/top.jpg&quot;);
+      background-size: cover;
+      background-position: center;
+      min-height: 80vh;
+      display: flex;
+      align-items: center;
+    "
+  >
+    <div class="container py-5">
+      <h1 class="display-3 fw-bold mb-4">
+        Welcome to <span class="text-white">Fit</span
+        ><span class="text-danger">Sync</span>
+      </h1>
+      <p class="lead text-white mb-5">
+        Your ultimate solution for fitness tracking, personal training sessions,
+        and complete workout management
+      </p>
+      <div class="d-flex justify-content-center gap-3">
+        <% if (!locals.isLoggedIn) { %>
+          <a href="/auth/login" class="btn btn-danger btn-lg"
+            ><i class="fas fa-sign-in-alt me-2"></i>Get Started</a
+          >
+        <% } else { %>
+          <% if (locals.userRole === 'user') { %>
+            <a href="/user/dashboard" class="btn btn-danger btn-lg"
+              ><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a
+            >
+          <% } else if (locals.userRole === 'trainer') { %>
+            <a href="/trainer/dashboard" class="btn btn-danger btn-lg"
+              ><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a
+            >
+          <% } else if (locals.userRole === 'admin') { %>
+            <a href="/admin/dashboard" class="btn btn-danger btn-lg"
+              ><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a
+            >
+          <% } %>
+        <% } %>
+        <a href="#features" class="btn btn-outline-light btn-lg"
+          ><i class="fas fa-info-circle me-2"></i>Learn More</a
+        >
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features" class="py-5">
+    <div class="container">
+      <h2 class="text-center text-danger mb-5">Why Choose FitSync?</h2>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="card h-100 text-center p-4">
+            <div class="card-body">
+              <i
+                class="fas fa-calendar-check text-danger mb-3"
+                style="font-size: 3rem"
+              ></i>
+              <h3 class="card-title">Smart Scheduling</h3>
+              <p class="card-text text-light">
+                Book training sessions with your preferred trainers with just a
+                few clicks. Manage your fitness schedule effortlessly.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 text-center p-4">
+            <div class="card-body">
+              <i
+                class="fas fa-dumbbell text-danger mb-3"
+                style="font-size: 3rem"
+              ></i>
+              <h3 class="card-title">Personalized Workouts</h3>
+              <p class="card-text text-light">
+                Get customized workout plans designed specifically for your
+                fitness goals and experience level.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 text-center p-4">
+            <div class="card-body">
+              <i
+                class="fas fa-utensils text-danger mb-3"
+                style="font-size: 3rem"
+              ></i>
+              <h3 class="card-title">Nutrition Tracking</h3>
+              <p class="card-text text-light">
+                Monitor your daily calorie intake and maintain balanced
+                nutrition with our intelligent diet planning tools.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Highlighted Button Section - Only show for non-logged in users and members -->
+  <% if (!locals.isLoggedIn || (locals.isLoggedIn && locals.userRole === 'user')) { %>
+  <section class="py-5 text-center" style="background-color: var(--dark-bg)">
+    <div class="container">
+      <a
+        href="/plans"
+        class="btn btn-lg btn-danger px-5 py-3 explore-courses-btn"
+      >
+        <i class="fas fa-dumbbell me-2"></i>Explore Our Fitness Plans
+      </a>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- Testimonials -->
+  <section class="py-5 bg-dark">
+    <div class="container">
+      <h2 class="text-center text-danger mb-5">What Our Members Say</h2>
+      <div class="row">
+        <div class="col-md-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex mb-3">
+                <i class="fas fa-quote-left text-danger fa-2x me-2"></i>
+                <div>
+                  <p class="card-text text-light">
+                    FitSync completely transformed my approach to fitness. The
+                    personalized workout plans and trainer booking system are
+                    game changers!
+                  </p>
+                </div>
+              </div>
+              <p class="text-muted mb-0">- Pushp, Member since 2023</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex mb-3">
+                <i class="fas fa-quote-left text-danger fa-2x me-2"></i>
+                <div>
+                  <p class="card-text text-light">
+                    As a trainer, FitSync makes it easy to manage my schedule
+                    and connect with clients. The platform is intuitive and
+                    powerful!
+                  </p>
+                </div>
+              </div>
+              <p class="text-muted mb-0">- Harsha, Fitness Trainer</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex mb-3">
+                <i class="fas fa-quote-left text-danger fa-2x me-2"></i>
+                <div>
+                  <p class="card-text text-light">
+                    The nutrition tracking feature helped me to achieve my weight
+                    loss goals. I have lost 20 pounds in just 3 months of fitness plans using
+                    FitSync!
+                  </p>
+                </div>
+              </div>
+              <p class="text-muted mb-0">- Siddhant, Premium Member</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Call to Action -->
+  <section class="py-5 text-center">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <h2 class="text-danger mb-4">
+            Ready to transform your fitness journey?
+          </h2>
+          <p class="text-light mb-5">
+            Join thousands of members who have already improved their health and
+            fitness with FitSync.
+          </p>
+          <div class="d-grid gap-2 d-md-block">
+            <% if (!locals.isLoggedIn) { %>
+              <a href="/auth/register" class="btn btn-danger btn-lg me-md-2"
+                >Join Now <i class="fas fa-arrow-right ms-2"></i
+              ></a>
+            <% } else if (locals.isLoggedIn && locals.userRole === 'user') { %>
+              <a href="/user/dashboard" class="btn btn-danger btn-lg me-md-2"
+                >Go to Dashboard <i class="fas fa-tachometer-alt ms-2"></i
+              ></a>
+            <% } %>
+            <a href="/about" class="btn btn-outline-light btn-lg">Learn More</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<%- include('../partials/footer') %>

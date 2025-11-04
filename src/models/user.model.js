@@ -253,8 +253,9 @@ userSchema.methods.getWeeklySchedule = async function() {
             for (const registration of this.trainerCourses) {
                 if (registration.status === "active" && registration.course) {
                     const course = registration.course;
+                    const sessions = Array.isArray(course.schedule) ? course.schedule : [];
                     
-                    for (const session of course.schedule) {
+                    for (const session of sessions) {
                         schedule[session.day].push({
                             courseId: course._id,
                             courseName: course.name,
@@ -275,7 +276,8 @@ userSchema.methods.getWeeklySchedule = async function() {
                    enrollment.startDate <= now && enrollment.endDate >= now) {
                     const course = enrollment.course;
                     
-                    for (const session of course.schedule) {
+                    const sessions = Array.isArray(course.schedule) ? course.schedule : [];
+                    for (const session of sessions) {
                         schedule[session.day].push({
                             courseId: course._id,
                             courseName: course.name,
@@ -290,7 +292,7 @@ userSchema.methods.getWeeklySchedule = async function() {
             }
         }
         
-        // Sort each day's schedule by start time
+        // Sort each day's scheduleby start tim e
         for (const day in schedule) {
             schedule[day].sort((a, b) => {
                 const aTime = a.startTime.split(":").map(Number);
@@ -380,28 +382,38 @@ userSchema.methods.getTrainerClients = async function() {
         // Filter for active clients and format the data
         const now = new Date();
         const activeClients = this.trainerClients.filter(client => 
-            client.status === "active" && 
+            client && client.status === "active" && 
             client.startDate <= now && 
             client.endDate >= now
         );
         
-        return activeClients.map(client => ({
-            id: client.user._id,
-            name: client.user.name,
-            email: client.user.email,
-            profilePicture: client.user.profilePicture,
-            age: client.user.age,
-            gender: client.user.gender,
-            course: {
-                id: client.course._id,
-                name: client.course.name
-            },
-            enrolledAt: client.enrolledAt,
-            startDate: client.startDate,
-            endDate: client.endDate,
-            status: client.status,
-            remainingDays: Math.ceil((client.endDate - now) / (1000 * 60 * 60 * 24))
-        }));
+        // Map safely, skipping any entries with missing populated refs
+        return activeClients
+            .map(client => {
+                const user = client.user;
+                const course = client.course;
+                if (!user || !course) {
+                    return null; // skip broken reference
+                }
+                return {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    profilePicture: user.profilePicture,
+                    age: user.age,
+                    gender: user.gender,
+                    course: {
+                        id: course._id,
+                        name: course.name
+                    },
+                    enrolledAt: client.enrolledAt,
+                    startDate: client.startDate,
+                    endDate: client.endDate,
+                    status: client.status,
+                    remainingDays: Math.ceil((client.endDate - now) / (1000 * 60 * 60 * 24))
+                };
+            })
+            .filter(Boolean);
     } catch (error) {
         throw error;
     }

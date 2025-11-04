@@ -1,0 +1,140 @@
+<%- include('../partials/header') %>
+
+<div class="container my-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4 text-white">My Weekly Schedule</h1>
+            <p class="lead text-white">View your weekly fitness course schedule</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4 bg-dark">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-dark">
+                            <thead class="bg-primary text-white">
+                                <tr>
+                                    <th>No.</th>
+                                    <th>Day</th>
+                                    <th>Time</th>
+                                    <th>Course</th>
+                                    <th>Trainer</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-white">
+                                <% 
+                                // Define days order for sorting
+                                const dayOrder = {
+                                    "monday": 1,
+                                    "tuesday": 2,
+                                    "wednesday": 3,
+                                    "thursday": 4,
+                                    "friday": 5,
+                                    "saturday": 6,
+                                    "sunday": 7
+                                };
+                                
+                                // Helper function to format time for sorting
+                                function timeToMinutes(timeStr) {
+                                    const [hours, minutes] = timeStr.split(':').map(Number);
+                                    return hours * 60 + minutes;
+                                }
+                                
+                                // Helper function to capitalize first letter
+                                function capitalizeFirst(str) {
+                                    return str.charAt(0).toUpperCase() + str.slice(1);
+                                }
+                                
+                                // Helper function to format date
+                                function formatDate(date) {
+                                    if (!date) return '';
+                                    const d = new Date(date);
+                                    return d.toLocaleDateString();
+                                }
+                                
+                                // Calculate days remaining
+                                function daysRemaining(endDate) {
+                                    if (!endDate) return '';
+                                    const now = new Date();
+                                    const end = new Date(endDate);
+                                    const diffTime = end - now;
+                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    return diffDays > 0 ? diffDays : 0;
+                                }
+                                
+                                // Flatten schedule into an array of all events
+                                const allEvents = [];
+                                if (schedule) {
+                                    Object.entries(schedule).forEach(([day, events]) => {
+                                        events.forEach(event => {
+                                            allEvents.push({
+                                                ...event,
+                                                day
+                                            });
+                                        });
+                                    });
+                                }
+                                
+                                // Sort events by day first, then by start time
+                                const sortedEvents = allEvents.sort((a, b) => {
+                                    // First sort by day
+                                    const dayDiff = dayOrder[a.day] - dayOrder[b.day];
+                                    if (dayDiff !== 0) return dayDiff;
+                                    
+                                    // Then sort by time
+                                    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+                                });
+                                
+                                // Display events in numbered list
+                                sortedEvents.forEach((event, index) => { 
+                                %>
+                                <tr class="<%= event.role === 'trainer' ? 'table-warning text-dark' : '' %>">
+                                    <td><%= index + 1 %></td>
+                                    <td><%= capitalizeFirst(event.day) %></td>
+                                    <td><%= event.startTime %> - <%= event.endTime %></td>
+                                    <td>
+                                        <strong><%= event.courseName %></strong>
+                                        <% if (event.role === 'trainer') { %>
+                                            <span class="badge bg-warning text-dark">Teaching</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (event.role === 'trainee' && event.trainer) { %>
+                                            <%= event.trainer %>
+                                            <% if (event.enrollmentEnds) { %>
+                                                <br>
+                                                <small class="<%= daysRemaining(event.enrollmentEnds) < 7 ? 'text-danger' : 'text-white-50' %>">
+                                                    Expires: <%= formatDate(event.enrollmentEnds) %>
+                                                    (<%= daysRemaining(event.enrollmentEnds) %> days left)
+                                                </small>
+                                            <% } %>
+                                        <% } else { %>
+                                            -
+                                        <% } %>
+                                    </td>
+                                </tr>
+                                <% }); %>
+                                
+                                <% if (sortedEvents.length === 0) { %>
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">
+                                        <div class="alert alert-info mb-0">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            You don't have any scheduled classes yet. 
+                                            <a href="/courses" class="alert-link">Browse courses</a> to enroll.
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %> 

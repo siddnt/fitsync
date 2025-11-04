@@ -3,8 +3,8 @@ import {
     getCourseReviews,
     getTopCourseReviews,
     createReview,
-    updateReview,
-    deleteReview,
+    // updateReview,
+    // deleteReview,
     getUserReviews
 } from "../controllers/review.controller.js";
 
@@ -24,8 +24,8 @@ router.get("/course/:courseId/top", getTopCourseReviews);
 
 // Protected routes (require login)
 router.post("/create", isLoggedIn, createReview);
-router.put("/:reviewId", isLoggedIn, updateReview);
-router.delete("/:reviewId", isLoggedIn, deleteReview);
+// router.put("/:reviewId", isLoggedIn, updateReview);
+// router.delete("/:reviewId", isLoggedIn, deleteReview);
 router.get("/user", isLoggedIn, getUserReviews);
 
 export default router; 

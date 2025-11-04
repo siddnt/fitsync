@@ -146,6 +146,121 @@
         </div>
       </div>
       
+                    <!-- Analytics: Sales trends, demographics, overlaps -->
+              <div class="col-12">
+                <div class="dashboard-panel">
+                  <h4 class="text-danger mb-4"><i class="fas fa-chart-area me-2"></i>Analytics</h4>
+        
+                  <!-- Combined Sales Line (weekly + monthly toggle) -->
+                  <div class="mb-5">
+                    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                      <h5 class="mb-0"><i class="fas fa-line-chart me-2"></i>Sales Trends</h5>
+                      <div class="btn-group btn-group-sm" role="group" aria-label="Range toggle">
+                        <button class="btn btn-outline-light active" id="toggle-weekly">Weekly</button>
+                        <button class="btn btn-outline-light" id="toggle-monthly">Monthly</button>
+                      </div>
+                      <div class="d-flex align-items-center gap-2 ms-auto">
+                        <span class="badge bg-success" id="total-course-badge" title="Total Course Revenue">₹0</span>
+                        <span class="badge bg-warning text-dark" id="total-shop-badge" title="Total Shop Revenue">₹0</span>
+                        <span class="badge bg-danger" id="total-all-badge" title="Total Revenue">₹0</span>
+                      </div>
+                    </div>
+                    <div style="height: 320px; position: relative;">
+                      <canvas id="salesLineChart"></canvas>
+                    </div>
+                  </div>
+        
+                  <div class="row g-4">
+                    <!-- Gender Ratio -->
+                    <div class="col-md-4">
+                      <h5 class="mb-3"><i class="fas fa-venus-mars me-2"></i>Gender Ratio</h5>
+                      <div style="height: 260px; position: relative;">
+                        <canvas id="genderChart"></canvas>
+                      </div>
+                    </div>
+        
+                    <!-- Age Histogram -->
+                    <div class="col-md-4">
+                      <h5 class="mb-3"><i class="fas fa-user-clock me-2"></i>Age Distribution</h5>
+                      <div style="height: 260px; position: relative;">
+                        <canvas id="ageHistogram"></canvas>
+                      </div>
+                    </div>
+        
+                    <!-- Trainer Course Overlaps (Venn) -->
+                    <div class="col-md-4">
+                      <h5 class="mb-3"><i class="fas fa-project-diagram me-2"></i>Trainer Course Overlaps</h5>
+                      <div id="trainerVennContainer" style="height: 260px; position: relative;"></div>
+                    </div>
+                  </div>
+        
+                </div>
+              </div>
+                    <!-- Revenue Section -->
+      <div class="col-12">
+        <div class="dashboard-panel">
+          <h4 class="text-danger mb-4"><i class="fas fa-dollar-sign me-2"></i>Revenue</h4>
+          
+          <!-- Course Revenue -->
+          <h5 class="mb-3" ><i class="fas fa-graduation-cap me-2" ></i>Course Revenue</h5>
+          <div class="row mb-5">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="courseRevenueChart"></canvas>
+              </div>
+
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-courses">
+                <!-- Course revenue items will be dynamically populated by JavaScript -->
+              </ul>
+            </div>
+          </div>
+          
+          <!-- Shop Revenue -->
+          <h5 class="mb-3"><i class="fas fa-shopping-cart me-2"></i>Shop Revenue</h5>
+          <div class="row mb-5">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="shopRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-shop">
+                <!-- Shop revenue items will be dynamically populated by JavaScript -->
+              </ul>
+            </div>
+          </div>
+          
+          <!-- Total Revenue -->
+          <h5 class="mb-3"><i class="fas fa-chart-pie me-2"></i>Cumulative Revenue</h5>
+          <div class="row">
+            <div class="col-md-6">
+              <div style="height: 300px; position: relative;">
+                <canvas id="totalRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-group list-group-total">
+                <!-- Total revenue items will be dynamically populated by JavaScript -->
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  Course Revenue
+                  <span class="badge bg-success" id="course-revenue-total">₹0</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  Shop Revenue
+                  <span class="badge bg-warning" id="shop-revenue-total">₹0</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">
+                  Total Revenue
+                  <span class="badge bg-danger" id="total-revenue">₹0</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+        </div>
+      </div>
       <!-- Activity Log -->
       <div class="col-lg-6">
         <div class="dashboard-panel">
@@ -244,121 +359,8 @@
         </div>
       </div>
       
-      <!-- Revenue Section -->
-      <div class="col-12">
-        <div class="dashboard-panel">
-          <h4 class="text-danger mb-4"><i class="fas fa-dollar-sign me-2"></i>Revenue</h4>
-          
-          <!-- Course Revenue -->
-          <h5 class="mb-3" ><i class="fas fa-graduation-cap me-2" ></i>Course Revenue</h5>
-          <div class="row mb-5">
-            <div class="col-md-6">
-              <div style="height: 300px; position: relative;">
-                <canvas id="courseRevenueChart"></canvas>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <ul class="list-group list-group-courses">
-                <!-- Course revenue items will be dynamically populated by JavaScript -->
-              </ul>
-            </div>
-          </div>
-          
-          <!-- Shop Revenue -->
-          <h5 class="mb-3"><i class="fas fa-shopping-cart me-2"></i>Shop Revenue</h5>
-          <div class="row mb-5">
-            <div class="col-md-6">
-              <div style="height: 300px; position: relative;">
-                <canvas id="shopRevenueChart"></canvas>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <ul class="list-group list-group-shop">
-                <!-- Shop revenue items will be dynamically populated by JavaScript -->
-              </ul>
-            </div>
-          </div>
-          
-          <!-- Total Revenue -->
-          <h5 class="mb-3"><i class="fas fa-chart-pie me-2"></i>Cumulative Revenue</h5>
-          <div class="row">
-            <div class="col-md-6">
-              <div style="height: 300px; position: relative;">
-                <canvas id="totalRevenueChart"></canvas>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <ul class="list-group list-group-total">
-                <!-- Total revenue items will be dynamically populated by JavaScript -->
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                  Course Revenue
-                  <span class="badge bg-success" id="course-revenue-total">₹0</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                  Shop Revenue
-                  <span class="badge bg-warning" id="shop-revenue-total">₹0</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">
-                  Total Revenue
-                  <span class="badge bg-danger" id="total-revenue">₹0</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-          
-        </div>
-      </div>
 
-      <!-- Analytics: Sales trends, demographics, overlaps -->
-      <div class="col-12">
-        <div class="dashboard-panel">
-          <h4 class="text-danger mb-4"><i class="fas fa-chart-area me-2"></i>Analytics</h4>
 
-          <!-- Combined Sales Line (weekly + monthly toggle) -->
-          <div class="mb-5">
-            <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-              <h5 class="mb-0"><i class="fas fa-line-chart me-2"></i>Sales Trends</h5>
-              <div class="btn-group btn-group-sm" role="group" aria-label="Range toggle">
-                <button class="btn btn-outline-light active" id="toggle-weekly">Weekly</button>
-                <button class="btn btn-outline-light" id="toggle-monthly">Monthly</button>
-              </div>
-              <div class="d-flex align-items-center gap-2 ms-auto">
-                <span class="badge bg-success" id="total-course-badge" title="Total Course Revenue">₹0</span>
-                <span class="badge bg-warning text-dark" id="total-shop-badge" title="Total Shop Revenue">₹0</span>
-                <span class="badge bg-danger" id="total-all-badge" title="Total Revenue">₹0</span>
-              </div>
-            </div>
-            <div style="height: 320px; position: relative;">
-              <canvas id="salesLineChart"></canvas>
-            </div>
-          </div>
-
-          <div class="row g-4">
-            <!-- Gender Ratio -->
-            <div class="col-md-4">
-              <h5 class="mb-3"><i class="fas fa-venus-mars me-2"></i>Gender Ratio</h5>
-              <div style="height: 260px; position: relative;">
-                <canvas id="genderChart"></canvas>
-              </div>
-            </div>
-
-            <!-- Age Histogram -->
-            <div class="col-md-4">
-              <h5 class="mb-3"><i class="fas fa-user-clock me-2"></i>Age Distribution</h5>
-              <div style="height: 260px; position: relative;">
-                <canvas id="ageHistogram"></canvas>
-              </div>
-            </div>
-
-            <!-- Trainer Course Overlaps (Venn) -->
-            <div class="col-md-4">
-              <h5 class="mb-3"><i class="fas fa-project-diagram me-2"></i>Trainer Course Overlaps</h5>
-              <div id="trainerVennContainer" style="height: 260px; position: relative;"></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
     </div>
   </div>
 </main>

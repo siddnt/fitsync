@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { isAuthenticated } from "../middleware/auth.middleware.js";
+import { isAuthenticated } from "../middlewares/auth.middleware.js";
 import Product from "../models/product.model.js";
 import Cart from "../models/cart.model.js";
-import Wishlist from "../models/wishlist.model.js";
 
 const router = Router();
 
@@ -37,16 +36,13 @@ router.get("/", async (req, res) => {
         const products = await Product.find({ status: "available" });
         console.log("Shop products:", products); // Debug log
         let cart = null;
-        let wishlist = null;
         if (req.session.userId) {
             cart = await Cart.findOne({ user: req.session.userId }).populate('items.product');
-            wishlist = await Wishlist.findOne({ user: req.session.userId }).populate('items.product');
         }
         res.render('pages/shop', {
             title: "Shop - FitSync",
             products,
             cart,
-            wishlist,
             isLoggedIn: !!req.session.userId,
             userId: req.session.userId,
             userRole: req.session.userRole

@@ -1,0 +1,205 @@
+<%- include('../partials/header') %>
+
+<div class="container my-5">
+  <div class="row">
+    <div class="col-lg-8 mx-auto">
+      <div class="card bg-dark text-white">
+        <div class="card-header bg-danger text-white text-center">
+          <h2><i class="fas fa-chalkboard-teacher me-2"></i>Register to Teach Courses</h2>
+        </div>
+        <div class="card-body">
+          <p class="lead text-center mb-4">Select courses you would like to teach. You will follow the course's fixed weekly schedule.</p>
+          
+          <% if (courses && courses.length > 0) { %>
+            <div class="row">
+              <% courses.forEach(course => { 
+                const isRegistered = registeredCourses && registeredCourses[course._id.toString()];
+              %>
+                <div class="col-md-12 mb-4">
+                  <div class="card course-card bg-secondary text-white">
+                    <div class="card-body">
+                      <h4 class="card-title"><%= course.name.charAt(0).toUpperCase() + course.name.slice(1) %></h4>
+                      <p><%= course.description %></p>
+                      
+                      <!-- Course Schedule -->
+                      <h5 class="mt-4 mb-3">Weekly Schedule</h5>
+                      <div class="table-responsive">
+                        <table class="table table-dark table-bordered">
+                          <thead>
+                            <tr>
+                              <th>Day</th>
+                              <th>Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <% if (course.schedule && course.schedule.length > 0) { 
+                              // Sort schedule by day of the week
+                              const dayOrder = {
+                                monday: 1,
+                                tuesday: 2, 
+                                wednesday: 3,
+                                thursday: 4,
+                                friday: 5,
+                                saturday: 6,
+                                sunday: 7
+                              };
+                              
+                              const sortedSchedule = [...course.schedule].sort((a, b) => {
+                                return dayOrder[a.day] - dayOrder[b.day];
+                              });
+                            %>
+                              <% sortedSchedule.forEach(session => { %>
+                                <tr>
+                                  <td><%= session.day.charAt(0).toUpperCase() + session.day.slice(1) %></td>
+                                  <td><%= session.startTime %> - <%= session.endTime %></td>
+                                </tr>
+                              <% }); %>
+                            <% } else { %>
+                              <tr>
+                                <td colspan="2" class="text-center">No schedule available</td>
+                              </tr>
+                            <% } %>
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <!-- Registration Action -->
+                      <div class="mt-3 text-end">
+                        <% if (isRegistered) { %>
+                          <button class="btn btn-success" disabled>
+                            <i class="fas fa-check me-2"></i>Already Registered
+                          </button>
+                        <% } else { %>
+                          <button class="btn btn-danger register-course-btn" data-course-id="<%= course._id %>">
+                            <i class="fas fa-clipboard-check me-2"></i>Register as Trainer
+                          </button>
+                        <% } %>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          <% } else { %>
+            <div class="alert alert-warning">
+              <i class="fas fa-exclamation-circle me-2"></i>No courses available for registration at this time.
+            </div>
+          <% } %>
+          
+          <!-- My Registered Courses Section -->
+          <div class="mt-5">
+            <h3 class="mb-4 border-bottom pb-2"><i class="fas fa-clipboard-list me-2"></i>My Registered Courses</h3>
+            
+            <% if (trainer && trainer.trainerCourses && trainer.trainerCourses.length > 0) { 
+              const activeCourses = trainer.trainerCourses.filter(reg => reg.status === 'active' && reg.course);
+              if (activeCourses.length > 0) { 
+            %>
+              <div class="list-group">
+                <% activeCourses.forEach(registration => { %>
+                  <div class="list-group-item list-group-item-action bg-dark text-white">
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                      <h5 class="mb-1"><%= registration.course.name.charAt(0).toUpperCase() + registration.course.name.slice(1) %></h5>
+                      <small>Registered on <%= new Date(registration.registeredAt).toLocaleDateString() %></small>
+                    </div>
+                    <p class="mb-1"><%= registration.course.description %></p>
+                    
+                    <!-- Display schedule for this course -->
+                    <div class="small mt-2">
+                      <strong>Weekly Schedule:</strong>
+                      <% if (registration.course.schedule && registration.course.schedule.length > 0) { %>
+                        <% registration.course.schedule.forEach((session, idx) => { %>
+                          <%= session.day.charAt(0).toUpperCase() + session.day.slice(1) %>: <%= session.startTime %> - <%= session.endTime %>
+                          <%= idx < registration.course.schedule.length - 1 ? ' | ' : '' %>
+                        <% }); %>
+                      <% } else { %>
+                        No schedule available
+                      <% } %>
+                    </div>
+                  </div>
+                <% }); %>
+              </div>
+            <% } else { %>
+              <p class="text-muted">You are not currently registered to teach any courses.</p>
+            <% } } else { %>
+              <p class="text-muted">You are not currently registered to teach any courses.</p>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Handle trainer registration
+document.querySelectorAll('.register-course-btn').forEach(button => {
+  button.addEventListener('click', function(e) {
+    const courseId = this.getAttribute('data-course-id');
+    
+    if (!courseId) {
+      alert('Invalid course selected.');
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to register to teach this course? You will be responsible for following the fixed weekly schedule.')) {
+      return;
+    }
+
+    // Disable button to prevent multiple clicks
+    this.disabled = true;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+    
+    // Submit registration request
+    fetch(`/courses/api/courses/${courseId}/register-trainer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ courseId })
+    })
+    .then(response => {
+      // Check if the response is JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json().then(data => ({ status: response.status, data }));
+      } else {
+        return response.text().then(text => ({ status: response.status, text }));
+      }
+    })
+    .then(result => {
+      console.log('Registration response:', result);
+      
+      if (result.status === 200 && result.data && result.data.success) {
+        alert('Successfully registered to teach this course!');
+        window.location.reload();
+      } else {
+        // Re-enable button
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-clipboard-check me-2"></i>Register as Trainer';
+        
+        // Show error message
+        if (result.data && result.data.message) {
+          alert(result.data.message);
+        } else if (result.text) {
+          alert(`Failed to register: ${result.text}`);
+        } else {
+          alert('Failed to register. Please try again.');
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      
+      // Re-enable button
+      this.disabled = false;
+      this.innerHTML = '<i class="fas fa-clipboard-check me-2"></i>Register as Trainer';
+      
+      alert('An error occurred. Please try again later.');
+    });
+  });
+});
+</script>
+
+<%- include('../partials/footer') %> 
