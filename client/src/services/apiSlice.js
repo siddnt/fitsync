@@ -20,6 +20,7 @@ export const apiSlice = createApi({
     'User',
     'Gym',
     'GymList',
+    'GymMembership',
     'Subscription',
     'Trainer',
     'Marketplace',

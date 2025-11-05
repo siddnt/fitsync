@@ -5,8 +5,10 @@ import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetGymOwnerGymsQuery } from '../../../services/dashboardApi.js';
-import { useGetGymByIdQuery, useUpdateGymMutation } from '../../../services/gymsApi.js';
+import { useGetGymByIdQuery, useUpdateGymMutation, useCreateGymMutation } from '../../../services/gymsApi.js';
+import { useGetMonetisationOptionsQuery } from '../../../services/ownerApi.js';
 import GymEditForm from '../../../features/gyms/GymEditForm.jsx';
+import GymCreateForm from '../../../features/gyms/GymCreateForm.jsx';
 import { transformGymPayload } from '../../../features/gyms/helpers.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
@@ -14,6 +16,7 @@ import '../Dashboard.css';
 const GymOwnerGymsPage = () => {
   const dispatch = useDispatch();
   const [activeGymId, setActiveGymId] = useState(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const {
     data,
@@ -37,11 +40,19 @@ const GymOwnerGymsPage = () => {
   const activeGym = useMemo(() => gyms.find((gym) => gym.id === activeGymId), [gyms, activeGymId]);
 
   const {
+    data: monetisationResponse,
+    isFetching: isPlansFetching,
+  } = useGetMonetisationOptionsQuery();
+
+  const plans = monetisationResponse?.data?.listingPlans ?? [];
+
+  const {
     data: gymDetailsResponse,
     isFetching: isGymDetailsFetching,
   } = useGetGymByIdQuery(activeGymId, { skip: !activeGymId });
 
   const [updateGym] = useUpdateGymMutation();
+  const [createGym] = useCreateGymMutation();
 
   const formInitialValues = useMemo(() => {
     const details = gymDetailsResponse?.data?.gym;
@@ -73,12 +84,26 @@ const GymOwnerGymsPage = () => {
   }, [gymDetailsResponse]);
 
   const handleEditGym = (gymId) => {
+    setIsCreateOpen(false);
+    dispatch(resetForm('gymCreate'));
     setActiveGymId(gymId);
   };
 
   const handleCancelEdit = () => {
     setActiveGymId(null);
     dispatch(resetForm('gymEdit'));
+  };
+
+  const handleStartCreate = () => {
+    setActiveGymId(null);
+    dispatch(resetForm('gymEdit'));
+    dispatch(resetForm('gymCreate'));
+    setIsCreateOpen(true);
+  };
+
+  const handleCancelCreate = () => {
+    setIsCreateOpen(false);
+    dispatch(resetForm('gymCreate'));
   };
 
   const handleUpdateGym = async (values) => {
@@ -94,6 +119,37 @@ const GymOwnerGymsPage = () => {
       dispatch(resetForm('gymEdit'));
     } catch (error) {
       const message = error?.data?.message ?? 'Could not update gym details.';
+      throw new SubmissionError({ _error: message });
+    }
+  };
+
+  const handleCreateGym = async (values) => {
+    try {
+      const payload = transformGymPayload(values);
+      const planCode = values.planCode;
+      const paymentReference = values.paymentReference;
+      const autoRenew = Boolean(values.autoRenew);
+
+      const response = await createGym({
+        ...payload,
+        subscription: {
+          planCode,
+          paymentReference,
+          autoRenew,
+        },
+      }).unwrap();
+
+      const createdGym = response?.data?.gym;
+
+      await refetch();
+      dispatch(resetForm('gymCreate'));
+      setIsCreateOpen(false);
+
+      if (createdGym?.id) {
+        setActiveGymId(createdGym.id);
+      }
+    } catch (error) {
+      const message = error?.data?.message ?? 'Could not create gym.';
       throw new SubmissionError({ _error: message });
     }
   };
@@ -129,7 +185,14 @@ const GymOwnerGymsPage = () => {
 
   return (
     <div className="dashboard-grid">
-      <DashboardSection title="Registered gyms">
+      <DashboardSection
+        title="Registered gyms"
+        action={(
+          <button type="button" className="cta-button" onClick={handleStartCreate}>
+            Add gym
+          </button>
+        )}
+      >
         {gyms.length ? (
           <table className="dashboard-table">
             <thead>
@@ -177,6 +240,21 @@ const GymOwnerGymsPage = () => {
           <EmptyState message="All gyms are active and visible." />
         )}
       </DashboardSection>
+
+      {isCreateOpen ? (
+        <DashboardSection title="Add a new gym">
+          {isPlansFetching && !plans.length ? (
+            <SkeletonPanel lines={8} />
+          ) : (
+            <GymCreateForm
+              onSubmit={handleCreateGym}
+              onCancel={handleCancelCreate}
+              plans={plans}
+              isPlansLoading={isPlansFetching}
+            />
+          )}
+        </DashboardSection>
+      ) : null}
 
       {activeGym ? (
         <DashboardSection title={`Edit ${activeGym.name}`}>

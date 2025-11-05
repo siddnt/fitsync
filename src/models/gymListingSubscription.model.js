@@ -32,8 +32,8 @@ const gymListingSubscriptionSchema = new mongoose.Schema(
     },
     planCode: {
       type: String,
-      enum: ['basic', 'growth', 'scale'],
-      default: 'basic',
+      enum: ['listing-1m', 'listing-3m', 'listing-6m', 'listing-12m'],
+      default: 'listing-1m',
     },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'INR' },

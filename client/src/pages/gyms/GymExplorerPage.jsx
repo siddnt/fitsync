@@ -1,5 +1,13 @@
-import { useMemo, useState, useEffect } from 'react';
-import { useGetGymsQuery, useRecordImpressionMutation } from '../../services/gymsApi.js';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useSelector } from 'react-redux';
+import {
+  useGetGymsQuery,
+  useRecordImpressionMutation,
+  useGetMyGymMembershipQuery,
+  useJoinGymMutation,
+  useLeaveGymMutation,
+  useGetGymTrainersQuery,
+} from '../../services/gymsApi.js';
 import GymList from './components/GymList.jsx';
 import GymFilters from './components/GymFilters.jsx';
 import GymHighlight from './components/GymHighlight.jsx';
@@ -8,76 +16,93 @@ import './GymExplorerPage.css';
 const GymExplorerPage = () => {
   const [selectedGymId, setSelectedGymId] = useState(null);
   const [filters, setFilters] = useState({ search: '', city: '', amenities: [] });
-  const { data, isFetching } = useGetGymsQuery(filters);
+  const { data, isFetching, refetch } = useGetGymsQuery(filters);
   const [recordImpression] = useRecordImpressionMutation();
+  const [joinGym, { isLoading: isJoining }] = useJoinGymMutation();
+  const [leaveGym, { isLoading: isLeaving }] = useLeaveGymMutation();
+  const [actionError, setActionError] = useState(null);
 
-  const fallbackGyms = useMemo(
-    () => [
-      {
-        id: 'fallback-1',
-        name: 'Pulse Strength Studio',
-        owner: { name: 'Rhea Kapoor' },
-        city: 'Mumbai',
-        location: { address: 'Bandra West, Mumbai' },
-        pricing: { mrp: 3499, discounted: 2999 },
-        contact: { phone: '+91 98765 43210', email: 'pulse@fitsync.app' },
-        schedule: { days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], open: '06:00', close: '23:00' },
-        features: ['AC', 'Steam Room', 'Certified Trainers', 'Nutritionist'],
-        description: 'Premium strength and conditioning gym with curated group classes.',
-        reviews: [
-          { id: 'r1', authorName: 'Aditya', rating: 5, comment: 'Great trainers and ambience.' },
-          { id: 'r2', authorName: 'Kavya', rating: 4, comment: 'Loved the curated workout plans.' },
-        ],
-      },
-      {
-        id: 'fallback-2',
-        name: 'Urban Grind Fitness',
-        owner: { name: 'Neeraj Singh' },
-        city: 'Bengaluru',
-        location: { address: 'Indiranagar, Bengaluru' },
-        pricing: { mrp: 3199, discounted: 2799 },
-        contact: { phone: '+91 91234 56789', email: 'urbangrind@fitsync.app' },
-        schedule: { days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], open: '05:30', close: '22:30' },
-        features: ['Parking', 'Showers', 'Functional Zone'],
-        description: 'Functional training focussed gym with curated personal coaching.',
-        reviews: [
-          { id: 'r3', authorName: 'Nikhil', rating: 5, comment: 'Loved the functional training setup.' },
-        ],
-      },
-    ],
-    [],
+  const user = useSelector((state) => state.auth.user);
+  const userRole = user?.role ?? null;
+  const isAuthenticated = Boolean(user);
+  const canManageMembership = ['trainee', 'trainer'].includes(userRole);
+
+  const gyms = useMemo(
+    () => (Array.isArray(data?.data?.gyms) ? data.data.gyms : []),
+    [data?.data?.gyms],
   );
-
-  const gyms = useMemo(() => {
-    if (data?.gyms?.length) {
-      return data.gyms;
-    }
-
-    const { search, city, amenities } = filters;
-    return fallbackGyms.filter((gym) => {
-      const matchesSearch = search
-        ? gym.name.toLowerCase().includes(search.toLowerCase()) ||
-          gym.owner?.name?.toLowerCase().includes(search.toLowerCase())
-        : true;
-      const matchesCity = city ? gym.city?.toLowerCase().includes(city.toLowerCase()) : true;
-      const matchesAmenities = amenities.length
-        ? amenities.every((amenity) => gym.features?.includes(amenity))
-        : true;
-      return matchesSearch && matchesCity && matchesAmenities;
-    });
-  }, [data?.gyms, fallbackGyms, filters]);
 
   const selectedGym = useMemo(
     () => gyms.find((gym) => gym.id === selectedGymId) ?? gyms[0],
     [selectedGymId, gyms],
   );
 
+  const shouldFetchMembership = canManageMembership && Boolean(selectedGym?.id);
+
+  const {
+    data: membershipResponse,
+    isFetching: isMembershipFetching,
+    refetch: refetchMembership,
+  } = useGetMyGymMembershipQuery(selectedGym?.id, {
+    skip: !shouldFetchMembership,
+  });
+
+  const membership = useMemo(
+    () => membershipResponse?.data?.membership ?? null,
+    [membershipResponse?.data?.membership],
+  );
+
+  const { data: trainersResponse } = useGetGymTrainersQuery(selectedGym?.id, {
+    skip: !selectedGym?.id,
+  });
+
+  const trainers = useMemo(
+    () => (Array.isArray(trainersResponse?.data?.trainers) ? trainersResponse.data.trainers : []),
+    [trainersResponse?.data?.trainers],
+  );
+
   // Track impressions when a gym is viewed
   useEffect(() => {
-    if (selectedGym?.id && !selectedGym.id.startsWith('fallback')) {
+    if (selectedGym?.id) {
       recordImpression(selectedGym.id);
     }
   }, [selectedGym?.id, recordImpression]);
+
+  useEffect(() => {
+    setActionError(null);
+  }, [selectedGymId]);
+
+  const handleJoin = useCallback(async (payload) => {
+    if (!selectedGym?.id || !canManageMembership) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await joinGym({ gymId: selectedGym.id, ...payload }).unwrap();
+      await Promise.all([
+        refetch(),
+        shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      setActionError(error?.data?.message ?? 'Could not join the gym. Please try again.');
+    }
+  }, [selectedGym?.id, canManageMembership, joinGym, refetch, shouldFetchMembership, refetchMembership]);
+
+  const handleLeave = useCallback(async () => {
+    if (!selectedGym?.id || !membership?.id) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await leaveGym({ gymId: selectedGym.id, membershipId: membership.id }).unwrap();
+      await Promise.all([
+        refetch(),
+        shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      setActionError(error?.data?.message ?? 'Could not update your membership.');
+    }
+  }, [selectedGym?.id, membership?.id, leaveGym, refetch, shouldFetchMembership, refetchMembership]);
 
   return (
     <div className="gym-explorer">
@@ -91,7 +116,21 @@ const GymExplorerPage = () => {
         />
       </aside>
       <section className="gym-explorer__detail">
-        <GymHighlight gym={selectedGym} isLoading={isFetching} />
+        <GymHighlight
+          gym={selectedGym}
+          isLoading={isFetching}
+          membership={membership}
+          isMembershipLoading={isMembershipFetching && shouldFetchMembership}
+          canManageMembership={canManageMembership}
+          isAuthenticated={isAuthenticated}
+          onJoin={handleJoin}
+          onLeave={handleLeave}
+          isJoining={isJoining}
+          isLeaving={isLeaving}
+          actionError={actionError}
+          userRole={userRole}
+          trainers={trainers}
+        />
       </section>
     </div>
   );

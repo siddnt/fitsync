@@ -13,17 +13,63 @@ export const gymsApi = apiSlice.injectEndpoints({
         const suffix = queryString ? `?${queryString}` : '';
         return `/gyms${suffix}`;
       },
-      providesTags: (result) =>
-        result?.gyms
-          ? [
-              ...result.gyms.map(({ id }) => ({ type: 'Gym', id })),
-              { type: 'GymList', id: 'LIST' },
-            ]
-          : [{ type: 'GymList', id: 'LIST' }],
+      providesTags: (result) => {
+        const gyms = Array.isArray(result?.data?.gyms) ? result.data.gyms : [];
+
+        if (!gyms.length) {
+          return [{ type: 'GymList', id: 'LIST' }];
+        }
+
+        return [
+          ...gyms.map(({ id }) => ({ type: 'Gym', id })),
+          { type: 'GymList', id: 'LIST' },
+        ];
+      },
     }),
     getGymById: builder.query({
       query: (id) => `/gyms/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Gym', id }],
+    }),
+    createGym: builder.mutation({
+      query: (payload) => ({
+        url: '/gyms',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: [{ type: 'GymList', id: 'LIST' }, 'Dashboard', 'Analytics'],
+    }),
+    getMyGymMembership: builder.query({
+      query: (gymId) => `/gyms/${gymId}/memberships/me`,
+      providesTags: (_result, _error, gymId) => [{ type: 'GymMembership', id: gymId }],
+    }),
+    getGymTrainers: builder.query({
+      query: (gymId) => `/gyms/${gymId}/trainers`,
+      providesTags: (_result, _error, gymId) => [{ type: 'Gym', id: `${gymId}-trainers` }],
+    }),
+    joinGym: builder.mutation({
+      query: ({ gymId, ...payload }) => ({
+        url: `/gyms/${gymId}/memberships`,
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: (_result, _error, { gymId }) => [
+        { type: 'GymMembership', id: gymId },
+        { type: 'Gym', id: gymId },
+        { type: 'GymList', id: 'LIST' },
+        'Dashboard',
+      ],
+    }),
+    leaveGym: builder.mutation({
+      query: ({ gymId, membershipId }) => ({
+        url: `/gyms/${gymId}/memberships/${membershipId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_result, _error, { gymId }) => [
+        { type: 'GymMembership', id: gymId },
+        { type: 'Gym', id: gymId },
+        { type: 'GymList', id: 'LIST' },
+        'Dashboard',
+      ],
     }),
     recordImpression: builder.mutation({
       query: (id) => ({
@@ -54,6 +100,11 @@ export const gymsApi = apiSlice.injectEndpoints({
 export const {
   useGetGymsQuery,
   useGetGymByIdQuery,
+  useCreateGymMutation,
+  useGetMyGymMembershipQuery,
+  useGetGymTrainersQuery,
+  useJoinGymMutation,
+  useLeaveGymMutation,
   useRecordImpressionMutation,
   useUpdateGymMutation,
 } = gymsApi;

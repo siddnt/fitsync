@@ -1,13 +1,51 @@
 import { useParams } from 'react-router-dom';
-import { useEffect } from 'react';
-import { useGetGymByIdQuery, useRecordImpressionMutation } from '../../services/gymsApi.js';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSelector } from 'react-redux';
+import {
+  useGetGymByIdQuery,
+  useRecordImpressionMutation,
+  useGetMyGymMembershipQuery,
+  useJoinGymMutation,
+  useLeaveGymMutation,
+  useGetGymTrainersQuery,
+} from '../../services/gymsApi.js';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
+import GymMembershipActions from './components/GymMembershipActions.jsx';
 import './GymDetailsPage.css';
 
 const GymDetailsPage = () => {
   const { gymId } = useParams();
-  const { data, isLoading } = useGetGymByIdQuery(gymId, { skip: !gymId });
+  const { data, isLoading, refetch } = useGetGymByIdQuery(gymId, { skip: !gymId });
   const [recordImpression] = useRecordImpressionMutation();
+  const [joinGym, { isLoading: isJoining }] = useJoinGymMutation();
+  const [leaveGym, { isLoading: isLeaving }] = useLeaveGymMutation();
+  const [actionError, setActionError] = useState(null);
+
+  const user = useSelector((state) => state.auth.user);
+  const userRole = user?.role ?? null;
+  const isAuthenticated = Boolean(user);
+  const canManageMembership = ['trainee', 'trainer'].includes(userRole);
+
+  const gym = data?.data?.gym ?? null;
+  const shouldFetchMembership = canManageMembership && Boolean(gymId);
+
+  const {
+    data: membershipResponse,
+    isFetching: isMembershipFetching,
+    refetch: refetchMembership,
+  } = useGetMyGymMembershipQuery(gymId, { skip: !shouldFetchMembership });
+
+  const membership = useMemo(
+    () => membershipResponse?.data?.membership ?? null,
+    [membershipResponse?.data?.membership],
+  );
+
+  const { data: trainersResponse } = useGetGymTrainersQuery(gymId, { skip: !gymId });
+
+  const trainers = useMemo(
+    () => (Array.isArray(trainersResponse?.data?.trainers) ? trainersResponse.data.trainers : []),
+    [trainersResponse?.data?.trainers],
+  );
 
   useEffect(() => {
     if (gymId) {
@@ -15,19 +53,53 @@ const GymDetailsPage = () => {
     }
   }, [gymId, recordImpression]);
 
+  useEffect(() => {
+    setActionError(null);
+  }, [gymId]);
+
+  const handleJoin = useCallback(async (payload) => {
+    if (!gymId || !canManageMembership) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await joinGym({ gymId, ...payload }).unwrap();
+      await Promise.all([
+        refetch(),
+        shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      setActionError(error?.data?.message ?? 'Could not join the gym. Please try again.');
+    }
+  }, [gymId, canManageMembership, joinGym, refetch, shouldFetchMembership, refetchMembership]);
+
+  const handleLeave = useCallback(async () => {
+    if (!gymId || !membership?.id) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await leaveGym({ gymId, membershipId: membership.id }).unwrap();
+      await Promise.all([
+        refetch(),
+        shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      setActionError(error?.data?.message ?? 'Could not update your membership.');
+    }
+  }, [gymId, membership?.id, leaveGym, refetch, shouldFetchMembership, refetchMembership]);
+
   if (isLoading) {
     return <SkeletonPanel lines={18} />;
   }
 
-  if (!data?.gym) {
+  if (!gym) {
     return (
       <div className="gym-details__empty">
         <p>We could not find this gym. It might have been removed.</p>
       </div>
     );
   }
-
-  const { gym } = data;
 
   return (
     <div className="gym-details">
@@ -43,6 +115,22 @@ const GymDetailsPage = () => {
           )}
         </div>
       </header>
+
+      <GymMembershipActions
+        membership={membership}
+        isLoading={isMembershipFetching && shouldFetchMembership}
+        canManage={canManageMembership}
+        isAuthenticated={isAuthenticated}
+        onJoin={handleJoin}
+        onLeave={handleLeave}
+        isJoining={isJoining}
+        isLeaving={isLeaving}
+        error={actionError}
+        userRole={userRole}
+        trainers={trainers}
+        monthlyFee={gym.pricing?.discounted ?? gym.pricing?.mrp ?? null}
+        currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}
+      />
 
       <section className="gym-details__gallery">
         {gym.gallery?.length ? (

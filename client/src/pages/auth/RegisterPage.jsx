@@ -39,6 +39,7 @@ const RegisterPage = () => {
     resolver: yupResolver(schema),
     defaultValues: {
       role: preselectedRole && roles.includes(preselectedRole) ? preselectedRole : 'trainee',
+      amenities: [],
     },
   });
 
@@ -52,12 +53,7 @@ const RegisterPage = () => {
       const authPayload = apiResponse?.data ?? apiResponse;
 
       dispatch(authActions.authSuccess(authPayload));
-      const resolvedRole = authPayload?.user?.role ?? 'trainee';
-      if (resolvedRole === 'gym-owner') {
-        navigate('/dashboard/gym-owner/subscriptions?onboarding=1', { replace: true });
-      } else {
-        navigate(`/dashboard/${resolvedRole}`, { replace: true });
-      }
+      navigate(`/dashboard/${authPayload?.user?.role ?? 'trainee'}`);
     } catch (err) {
       dispatch(authActions.authFailure(err?.data?.message ?? 'Registration failed'));
     }
@@ -113,10 +109,11 @@ const RegisterPage = () => {
           </label>
         </div>
 
+
         {status === 'failed' && <p className="form-error">{error}</p>}
 
         <button type="submit" className="primary-button" disabled={isLoading}>
-          {isLoading ? 'Creating account...' : 'Create account'}
+          {isLoading ? 'Creating account…' : 'Create account'}
         </button>
 
         <p className="auth-card__switch">

@@ -316,7 +316,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
     GymMembership.find({ gym: { $in: gymIds }, status: 'active' })
       .sort({ createdAt: -1 })
       .limit(10)
-      .populate({ path: 'user', select: 'name email profilePicture' })
+      .populate({ path: 'trainee', select: 'name email profilePicture' })
       .populate({ path: 'gym', select: 'name' })
       .lean(),
   ]);
@@ -367,12 +367,12 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
 
   const recentMembers = recentJoiners.map((membership) => ({
     id: membership._id,
-    user: membership.user
+    user: membership.trainee
       ? {
-          id: membership.user._id,
-          name: membership.user.name,
-          email: membership.user.email,
-          profilePicture: membership.user.profilePicture,
+          id: membership.trainee._id,
+          name: membership.trainee.name,
+          email: membership.trainee.email,
+          profilePicture: membership.trainee.profilePicture,
         }
       : null,
     gym: membership.gym ? { id: membership.gym._id, name: membership.gym.name } : null,

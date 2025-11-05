@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
+import GymListingSubscription from '../../models/gymListingSubscription.model.js';
+import Revenue from '../../models/revenue.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { resolveListingPlan } from '../../config/monetisation.config.js';
 
 const normalizeLocationInput = (location) => {
   if (!location) {
@@ -186,13 +189,31 @@ export const createGym = asyncHandler(async (req, res) => {
     schedule,
     gallery,
     sponsorship,
+    subscription,
   } = req.body;
 
   if (!name || !location?.city) {
     throw new ApiError(400, 'Gym name and city are required');
   }
 
+  const planCode = subscription?.planCode ?? req.body?.planCode;
+  const paymentReference = subscription?.paymentReference ?? req.body?.paymentReference;
+  const autoRenew = subscription?.autoRenew ?? req.body?.autoRenew ?? false;
+  const plan = resolveListingPlan(planCode);
+
+  if (!plan) {
+    throw new ApiError(400, 'Select a valid listing plan to register your gym.');
+  }
+
+  if (!paymentReference) {
+    throw new ApiError(400, 'Payment reference is required to activate the listing.');
+  }
+
   const sanitizedLocation = normalizeLocationInput(location) ?? {};
+
+  const now = new Date();
+  const periodEnd = new Date(now);
+  periodEnd.setMonth(periodEnd.getMonth() + plan.durationMonths);
 
   const gym = await Gym.create({
     owner: req.user._id,
@@ -208,9 +229,55 @@ export const createGym = asyncHandler(async (req, res) => {
     sponsorship,
     status: 'active',
     isPublished: true,
-    approvedAt: new Date(),
+    approvedAt: now,
     lastUpdatedBy: req.user._id,
   });
+
+  try {
+    await GymListingSubscription.create({
+      gym: gym._id,
+      owner: req.user._id,
+      planCode: plan.planCode,
+      amount: plan.amount,
+      currency: plan.currency,
+      periodStart: now,
+      periodEnd,
+      status: 'active',
+      autoRenew: Boolean(autoRenew),
+      invoices: [
+        {
+          amount: plan.amount,
+          currency: plan.currency,
+          paidOn: now,
+          paymentReference,
+          status: 'paid',
+        },
+      ],
+      metadata: new Map([
+        ['planLabel', plan.label],
+        ['durationMonths', String(plan.durationMonths)],
+      ]),
+      createdBy: req.user._id,
+    });
+
+    await Revenue.create({
+      amount: plan.amount,
+      user: req.user._id,
+      type: 'listing',
+      description: `${plan.label} activation for ${name}`,
+      metadata: new Map([
+        ['gymId', String(gym._id)],
+        ['planCode', plan.planCode],
+        ['paymentReference', paymentReference],
+      ]),
+    });
+  } catch (error) {
+    await Promise.all([
+      Gym.findByIdAndDelete(gym._id),
+      GymListingSubscription.deleteMany({ gym: gym._id }),
+    ]);
+    throw error;
+  }
 
   const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
 

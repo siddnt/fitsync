@@ -1,7 +1,22 @@
 import PropTypes from 'prop-types';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import GymMembershipActions from './GymMembershipActions.jsx';
 
-const GymHighlight = ({ gym, isLoading }) => {
+const GymHighlight = ({
+  gym,
+  isLoading,
+  membership,
+  isMembershipLoading,
+  canManageMembership,
+  isAuthenticated,
+  onJoin,
+  onLeave,
+  isJoining,
+  isLeaving,
+  actionError,
+  userRole,
+  trainers,
+}) => {
   if (isLoading && !gym) {
     return <SkeletonPanel lines={12} />;
   }
@@ -9,7 +24,7 @@ const GymHighlight = ({ gym, isLoading }) => {
   if (!gym) {
     return (
       <div className="gym-highlight gym-highlight--empty">
-        <p>Select a gym from the list to view its details.</p>
+        <p>No gyms are published yet. Check back soon or encourage owners to list their spaces.</p>
       </div>
     );
   }
@@ -37,6 +52,22 @@ const GymHighlight = ({ gym, isLoading }) => {
           )}
         </div>
       </header>
+
+      <GymMembershipActions
+        membership={membership}
+        isLoading={isMembershipLoading}
+        canManage={canManageMembership}
+        isAuthenticated={isAuthenticated}
+        onJoin={onJoin}
+        onLeave={onLeave}
+        isJoining={isJoining}
+        isLeaving={isLeaving}
+        error={actionError}
+        userRole={userRole}
+        trainers={trainers}
+        monthlyFee={gym.pricing?.discounted ?? gym.pricing?.mrp ?? null}
+        currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}
+      />
 
       <section className="gym-highlight__meta">
         <div>
@@ -128,11 +159,41 @@ GymHighlight.propTypes = {
     }),
   }),
   isLoading: PropTypes.bool,
+  membership: PropTypes.shape({
+    id: PropTypes.string,
+    status: PropTypes.string,
+  }),
+  isMembershipLoading: PropTypes.bool,
+  canManageMembership: PropTypes.bool,
+  isAuthenticated: PropTypes.bool,
+  onJoin: PropTypes.func,
+  onLeave: PropTypes.func,
+  isJoining: PropTypes.bool,
+  isLeaving: PropTypes.bool,
+  actionError: PropTypes.string,
+  userRole: PropTypes.string,
+  trainers: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      name: PropTypes.string.isRequired,
+    }),
+  ),
 };
 
 GymHighlight.defaultProps = {
   gym: null,
   isLoading: false,
+  membership: null,
+  isMembershipLoading: false,
+  canManageMembership: false,
+  isAuthenticated: false,
+  onJoin: undefined,
+  onLeave: undefined,
+  isJoining: false,
+  isLeaving: false,
+  actionError: null,
+  userRole: null,
+  trainers: [],
 };
 
 export default GymHighlight;

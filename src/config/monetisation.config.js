@@ -1,27 +1,35 @@
 export const LISTING_PLANS = {
-  basic: {
-    planCode: 'basic',
-    label: 'Basic Visibility',
-    amount: 4999,
+  'listing-1m': {
+    planCode: 'listing-1m',
+    label: 'Starter · 1 month',
+    amount: 30000,
     currency: 'INR',
     durationMonths: 1,
-    features: ['20 spotlight impressions', 'Marketplace listing', 'Email support'],
+    features: ['Single gym activation', 'Verified listing badge', 'Weekly performance snapshot'],
   },
-  growth: {
-    planCode: 'growth',
-    label: 'Growth Booster',
-    amount: 12999,
+  'listing-3m': {
+    planCode: 'listing-3m',
+    label: 'Growth · 3 months',
+    amount: 80000,
     currency: 'INR',
     durationMonths: 3,
-    features: ['Sponsored placement', 'Priority search ranking', 'Dedicated account manager'],
+    features: ['Priority placement', 'Monthly insights review', 'Onboarding success manager'],
   },
-  scale: {
-    planCode: 'scale',
-    label: 'Scale Elite',
-    amount: 44999,
+  'listing-6m': {
+    planCode: 'listing-6m',
+    label: 'Scale · 6 months',
+    amount: 150000,
+    currency: 'INR',
+    durationMonths: 6,
+    features: ['Homepage highlights', 'Campaign boost credits', 'Quarterly growth workshop'],
+  },
+  'listing-12m': {
+    planCode: 'listing-12m',
+    label: 'Dominance · 12 months',
+    amount: 250000,
     currency: 'INR',
     durationMonths: 12,
-    features: ['Homepage hero', 'Quarterly creative workshop', 'Conversion analytics deep dive'],
+    features: ['Always-on spotlight', 'Dedicated concierge team', 'Annual strategy audit'],
   },
 };
 
@@ -56,10 +64,16 @@ export const SPONSORSHIP_PACKAGES = {
 };
 
 export const resolveListingPlan = (code) => {
-  const plan = LISTING_PLANS[code];
+  if (!code) {
+    return null;
+  }
+
+  const plan = LISTING_PLANS[code] || Object.values(LISTING_PLANS).find((entry) => entry.planCode === code);
+
   if (!plan) {
     return null;
   }
+
   return { ...plan };
 };
 
