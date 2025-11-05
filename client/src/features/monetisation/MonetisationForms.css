@@ -1,0 +1,86 @@
+.monetisation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.plan-card input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+}
+
+.plan-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.plan-card__price {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.plan-card__features {
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.plan-card--selected {
+  border-color: var(--primary-color);
+  background: rgba(66, 135, 245, 0.16);
+}
+
+.form-error {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+}
+
+.form-success {
+  color: #51cf66;
+  font-size: 0.85rem;
+}
+
+.cta-button {
+  align-self: flex-start;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--primary-color);
+  color: #0d1117;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.cta-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cta-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}

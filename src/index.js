@@ -7,14 +7,6 @@ dotenv.config({
     path: "./.env"
 });
 
-// Import routes
-import authRoutes from "./routes/auth.routes.js";
-import userRoutes from "./routes/user.routes.js";
-import trainerRoutes from "./routes/trainer.routes.js";
-import profileRoutes from "./routes/profile.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
-import courseRoutes from "./routes/course.routes.js";
-import indexRoutes from "./routes/index.routes.js";
 
 // Uncaught exception handler
 process.on("uncaughtException", (err) => {
@@ -50,14 +42,6 @@ connectDB()
             });
         });
 
-        // API Routes
-        app.use("/", indexRoutes);
-        app.use("/auth", authRoutes);
-        app.use("/user", userRoutes);
-        app.use("/trainer", trainerRoutes);
-        app.use("/profile", profileRoutes);
-        app.use("/admin", adminRoutes);
-        app.use("/course", courseRoutes);
     })
     .catch((err) => {
         console.error("MONGODB connection FAILED 💥", err);

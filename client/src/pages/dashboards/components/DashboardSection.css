@@ -1,0 +1,18 @@
+.dashboard-section {
+  background: var(--surface-elevated-color);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.75rem;
+}
+
+.dashboard-section header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.dashboard-section__body {
+  color: var(--muted-text-color);
+}

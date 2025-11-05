@@ -1,7 +1,20 @@
 import mongoose from "mongoose";
 
 // Order Item Schema (for products within an order)
+export const ORDER_ITEM_STATUSES = [
+    "placed",
+    "processing",
+    "in-transit",
+    "out-for-delivery",
+    "delivered",
+    "cancelled"
+];
+
 const orderItemSchema = new mongoose.Schema({
+    seller: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+    },
     product: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Product",
@@ -22,6 +35,41 @@ const orderItemSchema = new mongoose.Schema({
     },
     image: {
         type: String
+    },
+    status: {
+        type: String,
+        enum: ORDER_ITEM_STATUSES,
+        default: "placed"
+    },
+    lastStatusAt: {
+        type: Date,
+        default: Date.now
+    },
+    statusHistory: [
+        {
+            status: {
+                type: String,
+                enum: ORDER_ITEM_STATUSES,
+                required: true
+            },
+            note: {
+                type: String,
+                trim: true,
+                maxlength: 280
+            },
+            updatedBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            },
+            updatedAt: {
+                type: Date,
+                default: Date.now
+            }
+        }
+    ],
+    payoutRecorded: {
+        type: Boolean,
+        default: false
     }
 });
 
@@ -68,6 +116,11 @@ const orderSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true
+        },
+        seller: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            index: true
         },
         orderItems: [orderItemSchema],
         shippingAddress: addressSchema,

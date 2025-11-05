@@ -6,7 +6,7 @@ To log in as an admin user:
 2. Login with:
    - Email: admin@fitsync.com
    - Password: admin123
-3. Visit http://localhost:3000/auth/login to log in
+3. Visit http://localhost:4000/auth/login to log in
 
 ## Overview
 FitSync is a comprehensive gym management system that facilitates interaction between gym members, trainers, and administrators. It allows users to browse and enroll in fitness plans, book sessions with trainers, and manage their fitness journey, all in one place.
@@ -57,7 +57,7 @@ FitSync is a comprehensive gym management system that facilitates interaction be
    ```
 
 6. Access the application
-   Open your browser and navigate to `http://localhost:3000`
+   Open your browser and navigate to `http://localhost:4000`
 
 ### Creating Admin User
 To create an admin user for accessing the admin dashboard:
@@ -75,7 +75,10 @@ To create an admin user for accessing the admin dashboard:
    - Email: admin@fitsync.com
    - Password: admin123
 
-3. Login at http://localhost:3000/auth/login with these credentials
+3. Login at http://localhost:4000/auth/login with these credentials
+
+### Legacy Data Cleanup
+- Run `npm run migrate:cleanup:legacy` after deploying to remove deprecated course-era fields from existing user documents. The script is idempotent but you should back up the `users` collection before executing it in production.
 
 ## Project Structure
 ```

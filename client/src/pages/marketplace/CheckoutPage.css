@@ -1,0 +1,229 @@
+.checkout-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.checkout-error {
+  background: rgba(255, 119, 119, 0.12);
+  border: 1px solid rgba(255, 119, 119, 0.35);
+  border-radius: 12px;
+  color: #ffb0b0;
+  padding: 1rem 1.25rem;
+}
+
+.checkout-layout {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+}
+
+.checkout-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: var(--surface-elevated-color);
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+  padding: 2rem;
+}
+
+.checkout-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-weight: 500;
+  color: var(--light-text-color);
+}
+
+.checkout-form input,
+.checkout-form select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: var(--light-text-color);
+  padding: 0.75rem 1rem;
+}
+
+.checkout-form__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.checkout-form button {
+  align-self: flex-start;
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border: none;
+  border-radius: 999px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.75rem 1.6rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 12px 24px rgba(229, 9, 20, 0.32);
+}
+
+.checkout-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.checkout-form button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(229, 9, 20, 0.4);
+}
+
+.checkout-summary {
+  align-self: flex-start;
+  background: var(--surface-elevated-color);
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.checkout-summary h2 {
+  margin: 0;
+}
+
+.checkout-summary ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.checkout-summary ul li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.checkout-summary ul li small {
+  color: var(--muted-text-color);
+  margin-left: 0.4rem;
+}
+
+.checkout-summary dl {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.checkout-summary dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted-text-color);
+}
+
+.checkout-summary dl dt {
+  font-weight: 500;
+}
+
+.checkout-summary dl dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--light-text-color);
+}
+
+.checkout-summary__total {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.8rem;
+  color: var(--light-text-color);
+}
+
+.checkout-success {
+  align-items: flex-start;
+  background: rgba(141, 255, 199, 0.08);
+  border: 1px solid rgba(141, 255, 199, 0.25);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.checkout-success__number {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.checkout-success__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.checkout-success__items li {
+  display: grid;
+  grid-template-columns: 2fr auto auto;
+  gap: 0.75rem;
+}
+
+.checkout-success__total {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  font-size: 1.1rem;
+}
+
+.checkout-success button {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border: none;
+  border-radius: 999px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.7rem 1.4rem;
+}
+
+.checkout-empty,
+.checkout-auth {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1.5rem;
+}
+
+.checkout-auth a,
+.checkout-empty a,
+.checkout-success button {
+  text-decoration: none;
+  box-shadow: 0 12px 24px rgba(229, 9, 20, 0.26);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.checkout-auth a:hover,
+.checkout-empty a:hover,
+.checkout-success button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 28px rgba(229, 9, 20, 0.34);
+}
+
+.checkout-auth a,
+.checkout-empty a {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-weight: 600;
+  padding: 0.65rem 1.3rem;
+}
+
+@media (max-width: 960px) {
+  .checkout-layout {
+    grid-template-columns: 1fr;
+  }
+}

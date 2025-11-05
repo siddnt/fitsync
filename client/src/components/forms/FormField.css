@@ -1,0 +1,52 @@
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.form-field__label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  padding: 0.65rem 0.75rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  color: #f8f9fa;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease;
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.form-field__checkbox,
+.form-field__radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #f8f9fa;
+}
+
+.form-field__error {
+  color: #ff6b6b;
+  font-size: 0.8rem;
+}
+
+.form-field--error input,
+.form-field--error textarea,
+.form-field--error select {
+  border-color: #ff6b6b;
+}

@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "nodemon --ignore 'node_modules/' src/index.js",
     "start": "node src/index.js",
-  "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
+    "client:dev": "npm run dev --prefix client",
+    "client:build": "npm run build --prefix client",
+  "client:preview": "npm run preview --prefix client",
+  "migrate:cleanup:legacy": "node src/scripts/removeLegacyCourseFields.js"
   },
   "author": "Sid",
   "license": "ISC",
@@ -19,16 +23,11 @@
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
-    "body-parser": "^1.20.3",
-    "colors": "^1.4.0",
-    "connect-flash": "^0.1.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "ejs": "^3.1.10",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
-    "express-session": "^1.18.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
     "multer": "^1.4.5-lts.1",

@@ -12,14 +12,14 @@ const bookingSchema = new mongoose.Schema(
             ref: "User",
             required: [true, "Trainer is required"]
         },
-        course: {
+        gym: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Course",
-            required: [true, "Course is required"]
+            ref: "Gym",
+            required: [true, "Gym is required"]
         },
-        courseName: {
+        gymName: {
             type: String,
-            required: [true, "Course name is required"]
+            required: [true, "Gym name is required"]
         },
         day: {
             type: String,
@@ -88,7 +88,7 @@ const bookingSchema = new mongoose.Schema(
 // Index for faster querying
 bookingSchema.index({ user: 1, trainer: 1, bookingDate: 1 });
 bookingSchema.index({ trainer: 1, bookingDate: 1 });
-bookingSchema.index({ course: 1, bookingDate: 1 });
+bookingSchema.index({ gym: 1, bookingDate: 1 });
 bookingSchema.index({ status: 1 });
 
 // Validate time format
@@ -116,68 +116,6 @@ function timeToMinutes(timeString) {
     const [hours, minutes] = timeString.split(":").map(Number);
     return hours * 60 + minutes;
 }
-
-// Static method to check if booking conflicts with trainer's schedule
-bookingSchema.statics.hasTrainerTimeConflict = async function(trainerId, day, startTime, endTime, excludeBookingId = null) {
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    
-    const query = {
-        trainer: trainerId,
-        day,
-        status: { $nin: ["cancelled"] }
-    };
-    
-    // Exclude current booking when updating
-    if (excludeBookingId) {
-        query._id = { $ne: excludeBookingId };
-    }
-    
-    const trainerBookings = await this.find(query);
-    
-    // Check for time conflicts
-    return trainerBookings.some(booking => {
-        const bookingStartMinutes = timeToMinutes(booking.startTime);
-        const bookingEndMinutes = timeToMinutes(booking.endTime);
-        
-        return (
-            (startMinutes >= bookingStartMinutes && startMinutes < bookingEndMinutes) ||
-            (endMinutes > bookingStartMinutes && endMinutes <= bookingEndMinutes) ||
-            (startMinutes <= bookingStartMinutes && endMinutes >= bookingEndMinutes)
-        );
-    });
-};
-
-// Static method to check if booking conflicts with user's schedule
-bookingSchema.statics.hasUserTimeConflict = async function(userId, day, startTime, endTime, excludeBookingId = null) {
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    
-    const query = {
-        user: userId,
-        day,
-        status: { $nin: ["cancelled"] }
-    };
-    
-    // Exclude current booking when updating
-    if (excludeBookingId) {
-        query._id = { $ne: excludeBookingId };
-    }
-    
-    const userBookings = await this.find(query);
-    
-    // Check for time conflicts
-    return userBookings.some(booking => {
-        const bookingStartMinutes = timeToMinutes(booking.startTime);
-        const bookingEndMinutes = timeToMinutes(booking.endTime);
-        
-        return (
-            (startMinutes >= bookingStartMinutes && startMinutes < bookingEndMinutes) ||
-            (endMinutes > bookingStartMinutes && endMinutes <= bookingEndMinutes) ||
-            (startMinutes <= bookingStartMinutes && endMinutes >= bookingEndMinutes)
-        );
-    });
-};
 
 export const Booking = mongoose.model("Booking", bookingSchema);
 export default Booking; 

@@ -1,0 +1,31 @@
+.skeleton-list,
+.skeleton-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.06) 100%);
+  border-radius: 999px;
+  height: 16px;
+  position: relative;
+  overflow: hidden;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+.skeleton--line {
+  height: 18px;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    transform: translateX(-20%);
+  }
+  50% {
+    transform: translateX(20%);
+  }
+  100% {
+    transform: translateX(-20%);
+  }
+}

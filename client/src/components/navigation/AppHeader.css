@@ -1,0 +1,131 @@
+.app-header {
+  align-items: center;
+  background: var(--surface-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+}
+
+.app-header__brand a {
+  color: var(--primary-color);
+  font-weight: 700;
+  letter-spacing: 0.12rem;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.app-header__nav {
+  align-items: center;
+  display: flex;
+  gap: 1.25rem;
+}
+
+.app-header__nav a {
+  color: var(--muted-text-color);
+  font-weight: 500;
+  position: relative;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.app-header__nav a.active,
+.app-header__nav a:hover {
+  color: var(--light-text-color);
+}
+
+.app-header__cart {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.app-header__cart-count {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 1.5rem;
+  padding: 0.15rem 0.55rem;
+  text-align: center;
+}
+
+.app-header__nav a::after {
+  background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+  border-radius: 999px;
+  bottom: -0.3rem;
+  content: '';
+  height: 3px;
+  left: 0;
+  position: absolute;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+  width: 100%;
+}
+
+.app-header__nav a.active::after,
+.app-header__nav a:hover::after {
+  transform: scaleX(1);
+}
+
+.app-header__cta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-header__cta > * {
+  flex-shrink: 0;
+}
+
+.app-header__button {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border-radius: 8px;
+  color: var(--light-text-color);
+  font-weight: 600;
+  padding: 0.6rem 1.4rem;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 20px rgba(229, 9, 20, 0.3);
+}
+
+.app-header__button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(255, 61, 71, 0.4);
+}
+
+.app-header__link {
+  color: var(--light-text-color);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-header__logout {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 600;
+  justify-content: center;
+  min-width: 92px;
+  padding: 0.45rem 1rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.app-header__logout:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-header__logout:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}

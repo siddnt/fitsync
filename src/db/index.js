@@ -12,10 +12,8 @@ const connectDB = async () => {
         }
         
         const connectionInstance = await mongoose.connect(process.env.MONGODB_URI, {
-    dbName: DB_NAME,
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-});
+            dbName: DB_NAME,
+        });
 
         console.log(`\nMongoDB connected !! DB HOST: ${connectionInstance.connection.host}`);
         
@@ -26,15 +24,17 @@ const connectDB = async () => {
         mongoose.connection.on('error', (err) => {
             console.error("MongoDB connection error:", err);
         });
-        
-        // If the connection is closed, try to reconnect
-        mongoose.connection.on('disconnected', () => {
-            console.log("MongoDB disconnected, trying to reconnect...");
-            dbInstance = null;
-            setTimeout(() => {
-                connectDB();
-            }, 5000); // Reconnect after 5 seconds
-        });
+
+        if (process.env.NODE_ENV !== 'test') {
+            // If the connection is closed, try to reconnect in non-test environments
+            mongoose.connection.on('disconnected', () => {
+                console.log("MongoDB disconnected, trying to reconnect...");
+                dbInstance = null;
+                setTimeout(() => {
+                    connectDB();
+                }, 5000); // Reconnect after 5 seconds
+            });
+        }
         
         return connectionInstance;
     } catch (error) {

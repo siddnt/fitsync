@@ -1,0 +1,35 @@
+.gym-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.gym-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.gym-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.ghost-button {
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #f8f9fa;
+  cursor: pointer;
+}
+
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
