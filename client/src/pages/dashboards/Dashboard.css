@@ -4,6 +4,19 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 
+.dashboard-message {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.dashboard-message--error {
+  color: #f87171;
+}
+
+.dashboard-message--success {
+  color: #4ade80;
+}
+
 .dashboard-grid--stacked {
   display: flex;
   flex-direction: column;
@@ -71,6 +84,19 @@
 
 .dashboard-table tbody tr:not(:last-child) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-table__meta {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.dashboard-table__note {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin: 0.25rem 0 0;
 }
 
 .empty-state {

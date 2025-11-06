@@ -50,7 +50,7 @@ const gymMembershipSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'paused', 'expired', 'cancelled'],
+      enum: ['pending', 'active', 'paused', 'expired', 'cancelled'],
       default: 'active',
     },
     autoRenew: { type: Boolean, default: true },

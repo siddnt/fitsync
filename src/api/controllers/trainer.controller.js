@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
+import GymMembership from '../../models/gymMembership.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -16,34 +17,109 @@ const toObjectId = (value, name) => {
   }
 };
 
+const resolveGymId = (assignment, membership) => {
+  if (assignment?.gym) {
+    return assignment.gym;
+  }
+  return membership?.gym ?? null;
+};
+
+const syncAssignmentForMembership = async ({ trainerId, traineeId, gymId }) => {
+  if (!gymId) {
+    throw new ApiError(422, 'Gym information is missing for this membership.');
+  }
+
+  let assignmentDoc = await TrainerAssignment.findOne({ trainer: trainerId, gym: gymId });
+
+  if (!assignmentDoc) {
+    assignmentDoc = new TrainerAssignment({
+      trainer: trainerId,
+      gym: gymId,
+      status: 'active',
+      trainees: [],
+    });
+  }
+
+  const traineeKey = String(traineeId);
+  let traineesChanged = false;
+  const existingIndex = assignmentDoc.trainees.findIndex(
+    (entry) => String(entry.trainee) === traineeKey,
+  );
+
+  if (existingIndex === -1) {
+    assignmentDoc.trainees.push({
+      trainee: traineeId,
+      status: 'active',
+      assignedAt: new Date(),
+      goals: [],
+    });
+    traineesChanged = true;
+  } else {
+    assignmentDoc.trainees[existingIndex].status = 'active';
+    assignmentDoc.trainees[existingIndex].assignedAt = new Date();
+    traineesChanged = true;
+  }
+
+  assignmentDoc.status = 'active';
+  if (traineesChanged && !assignmentDoc.isNew) {
+    assignmentDoc.markModified('trainees');
+  }
+  await assignmentDoc.save();
+
+  return assignmentDoc.toObject();
+};
+
 const findActiveAssignment = async (trainerId, traineeId) => {
-  const assignment = await TrainerAssignment.findOne({
+  const membership = await GymMembership.findOne({
     trainer: trainerId,
-    status: 'active',
-    'trainees.trainee': traineeId,
+    trainee: traineeId,
+    status: { $in: ['active', 'paused'] },
   })
-    .select('gym trainees')
+    .select('gym status startDate')
     .lean();
+
+  if (!membership) {
+    throw new ApiError(404, 'The trainee is not assigned to you.');
+  }
+
+  const assignment = await syncAssignmentForMembership({ trainerId, traineeId, gymId: membership.gym });
 
   if (!assignment) {
     throw new ApiError(404, 'The trainee is not assigned to you.');
   }
 
-  return assignment;
+  return { assignment, membership };
 };
 
 const ensureProgressDocument = async (trainerId, traineeId, gymId) => {
+  if (!gymId) {
+    throw new ApiError(422, 'Gym information could not be determined for this trainee.');
+  }
   const progress = await TrainerProgress.findOneAndUpdate(
     { trainer: trainerId, trainee: traineeId },
     {
+      $set: { gym: gymId },
       $setOnInsert: {
         trainer: trainerId,
         trainee: traineeId,
-        gym: gymId,
       },
     },
-    { new: true, upsert: true },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
   );
+
+  const ensureArray = (doc, field) => {
+    if (Array.isArray(doc[field])) {
+      return;
+    }
+    doc[field] = [];
+    doc.markModified(field);
+  };
+
+  ensureArray(progress, 'feedback');
+  ensureArray(progress, 'attendance');
+  ensureArray(progress, 'progressMetrics');
+  ensureArray(progress, 'dietPlans');
+
   return progress;
 };
 
@@ -56,25 +132,21 @@ export const logTraineeAttendance = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Attendance status must be present, absent, or late.');
   }
 
-  const assignment = await findActiveAssignment(trainerId, traineeId);
+  const { assignment, membership } = await findActiveAssignment(trainerId, traineeId);
   const attendanceRecord = {
     date: date ? new Date(date) : new Date(),
     status,
     notes,
   };
 
-  await TrainerProgress.findOneAndUpdate(
-    { trainer: trainerId, trainee: traineeId },
-    {
-      $setOnInsert: {
-        trainer: trainerId,
-        trainee: traineeId,
-        gym: assignment.gym,
-      },
-      $push: { attendance: attendanceRecord },
-    },
-    { upsert: true },
+  const progress = await ensureProgressDocument(
+    trainerId,
+    traineeId,
+    resolveGymId(assignment, membership),
   );
+  progress.attendance.push(attendanceRecord);
+  progress.markModified('attendance');
+  await progress.save();
 
   return res
     .status(201)
@@ -94,7 +166,7 @@ export const recordProgressMetric = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Metric value must be a number.');
   }
 
-  const assignment = await findActiveAssignment(trainerId, traineeId);
+  const { assignment, membership } = await findActiveAssignment(trainerId, traineeId);
   const metricEntry = {
     metric: metric.trim(),
     value: Number(value),
@@ -102,18 +174,14 @@ export const recordProgressMetric = asyncHandler(async (req, res) => {
     recordedAt: recordedAt ? new Date(recordedAt) : new Date(),
   };
 
-  await TrainerProgress.findOneAndUpdate(
-    { trainer: trainerId, trainee: traineeId },
-    {
-      $setOnInsert: {
-        trainer: trainerId,
-        trainee: traineeId,
-        gym: assignment.gym,
-      },
-      $push: { progressMetrics: metricEntry },
-    },
-    { upsert: true },
+  const progress = await ensureProgressDocument(
+    trainerId,
+    traineeId,
+    resolveGymId(assignment, membership),
   );
+  progress.progressMetrics.push(metricEntry);
+  progress.markModified('progressMetrics');
+  await progress.save();
 
   return res
     .status(201)
@@ -129,7 +197,7 @@ export const upsertDietPlan = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Week start date is required.');
   }
 
-  const assignment = await findActiveAssignment(trainerId, traineeId);
+  const { assignment, membership } = await findActiveAssignment(trainerId, traineeId);
   const planDate = new Date(weekOf);
   if (Number.isNaN(planDate.getTime())) {
     throw new ApiError(400, 'Week start date is invalid.');
@@ -152,32 +220,22 @@ export const upsertDietPlan = asyncHandler(async (req, res) => {
         .filter(Boolean)
     : [];
 
-  let progress = await TrainerProgress.findOne({ trainer: trainerId, trainee: traineeId });
+  const progress = await ensureProgressDocument(
+    trainerId,
+    traineeId,
+    resolveGymId(assignment, membership),
+  );
 
-  if (!progress) {
-    progress = await TrainerProgress.create({
-      trainer: trainerId,
-      trainee: traineeId,
-      gym: assignment.gym,
-      dietPlans: [
-        {
-          weekOf: planDate,
-          meals: normalizedMeals,
-          notes,
-        },
-      ],
-    });
-  } else {
-    progress.dietPlans = (progress.dietPlans || []).filter(
-      (plan) => new Date(plan.weekOf).toISOString() !== planDate.toISOString(),
-    );
-    progress.dietPlans.push({
-      weekOf: planDate,
-      meals: normalizedMeals,
-      notes,
-    });
-    await progress.save();
-  }
+  progress.dietPlans = (progress.dietPlans || []).filter(
+    (plan) => new Date(plan.weekOf).toISOString() !== planDate.toISOString(),
+  );
+  progress.dietPlans.push({
+    weekOf: planDate,
+    meals: normalizedMeals,
+    notes,
+  });
+  progress.markModified('dietPlans');
+  await progress.save();
 
   return res
     .status(200)
@@ -197,15 +255,20 @@ export const addTraineeFeedback = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Unsupported feedback category.');
   }
 
-  const assignment = await findActiveAssignment(trainerId, traineeId);
+  const { assignment, membership } = await findActiveAssignment(trainerId, traineeId);
   const feedbackEntry = {
     message: message.trim(),
     category,
     createdAt: new Date(),
   };
 
-  const progress = await ensureProgressDocument(trainerId, traineeId, assignment.gym);
+  const progress = await ensureProgressDocument(
+    trainerId,
+    traineeId,
+    resolveGymId(assignment, membership),
+  );
   progress.feedback.push(feedbackEntry);
+  progress.markModified('feedback');
   await progress.save();
 
   const savedEntry = progress.feedback[progress.feedback.length - 1];

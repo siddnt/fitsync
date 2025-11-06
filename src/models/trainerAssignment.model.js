@@ -38,9 +38,11 @@ const trainerAssignmentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive'],
-      default: 'active',
+      enum: ['pending', 'active', 'inactive'],
+      default: 'pending',
     },
+    requestedAt: { type: Date, default: Date.now },
+    approvedAt: { type: Date },
     notes: { type: String },
   },
   { timestamps: true },

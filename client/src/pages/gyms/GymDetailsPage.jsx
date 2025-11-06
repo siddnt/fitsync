@@ -33,7 +33,11 @@ const GymDetailsPage = () => {
     data: membershipResponse,
     isFetching: isMembershipFetching,
     refetch: refetchMembership,
-  } = useGetMyGymMembershipQuery(gymId, { skip: !shouldFetchMembership });
+  } = useGetMyGymMembershipQuery(gymId, {
+    skip: !shouldFetchMembership,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
 
   const membership = useMemo(
     () => membershipResponse?.data?.membership ?? null,
@@ -56,6 +60,18 @@ const GymDetailsPage = () => {
   useEffect(() => {
     setActionError(null);
   }, [gymId]);
+
+  useEffect(() => {
+    if (membership?.plan === 'trainer-access' && membership?.status === 'pending' && refetchMembership) {
+      const intervalId = setInterval(() => {
+        refetchMembership();
+      }, 15000);
+
+      return () => clearInterval(intervalId);
+    }
+
+    return undefined;
+  }, [membership?.plan, membership?.status, refetchMembership]);
 
   const handleJoin = useCallback(async (payload) => {
     if (!gymId || !canManageMembership) {

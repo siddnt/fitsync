@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import './GymMembershipActions.css';
 
@@ -31,6 +31,29 @@ const GymMembershipActions = ({
 
   const isTrainerAccount = userRole === 'trainer';
   const isTrainerMembership = isTrainerAccount && membership?.plan === 'trainer-access';
+  const trainerMembershipStatus = isTrainerMembership ? membership?.status ?? null : null;
+  const isTrainerPending = trainerMembershipStatus === 'pending';
+
+  const selectedTrainerDetails = useMemo(
+    () => trainers.find((trainer) => trainer.id === selectedTrainer),
+    [trainers, selectedTrainer],
+  );
+
+  const selectedTrainerGenderLabel = useMemo(() => {
+    if (!selectedTrainerDetails?.gender) {
+      return null;
+    }
+
+    const cleaned = selectedTrainerDetails.gender.replace(/-/g, ' ').trim();
+    if (!cleaned) {
+      return null;
+    }
+
+    return cleaned
+      .split(' ')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }, [selectedTrainerDetails?.gender]);
 
   const numericMonthlyFee = (() => {
     if (typeof monthlyFee === 'number' && Number.isFinite(monthlyFee)) {
@@ -82,6 +105,7 @@ const GymMembershipActions = ({
   const status = membership?.status;
   const hasActiveMembership = status === 'active' || status === 'paused';
   const canRejoin = !status || status === 'cancelled' || status === 'expired';
+  const showTrainerLeaveButton = isTrainerMembership && Boolean(membership?.id) && status && status !== 'cancelled' && status !== 'expired';
 
   const handleJoinClick = async () => {
     setLocalError(null);
@@ -125,7 +149,7 @@ const GymMembershipActions = ({
     if (isTrainerMembership) {
       const statusTone = ['cancelled', 'expired'].includes(status)
         ? status
-        : status === 'paused'
+        : status === 'paused' || status === 'pending'
           ? 'paused'
           : 'active';
       const statusLabelMap = {
@@ -133,6 +157,7 @@ const GymMembershipActions = ({
         paused: 'Trainer access paused',
         cancelled: 'Trainer access cancelled',
         expired: 'Trainer access expired',
+        pending: 'Trainer access pending approval',
       };
 
       return (
@@ -150,25 +175,29 @@ const GymMembershipActions = ({
     <div className="gym-membership-actions">
       <div className="gym-membership-actions__row">
         {renderStatus()}
-        {isTrainerAccount && hasActiveMembership ? (
+        {isTrainerAccount ? (
           <span className="gym-membership-actions__hint">
-            Trainees can now select you when joining this gym.
+            {isTrainerPending
+              ? 'Trainer request submitted. The gym owner will review and approve your listing.'
+              : hasActiveMembership
+                ? 'Trainees can now select you when joining this gym.'
+                : 'Link yourself to this gym to appear as an available trainer. Earnings split 50/50 with the gym owner once trainees select you.'}
           </span>
         ) : null}
       </div>
 
       {isTrainerAccount ? (
         <>
-          <p className="gym-membership-actions__hint">
-            {hasActiveMembership
-              ? 'Earnings split 50/50 with the gym owner for every trainee who picks you.'
-              : 'Link yourself to this gym to appear as an available trainer. Earnings split 50/50 with the gym owner once trainees select you.'}
-          </p>
-
           {localError ? <p className="gym-membership-actions__error">{localError}</p> : null}
           {error ? <p className="gym-membership-actions__error">{error}</p> : null}
 
-          {hasActiveMembership ? (
+          {!isTrainerPending ? (
+            <p className="gym-membership-actions__hint">
+              Earnings split 50/50 with the gym owner for every trainee who picks you.
+            </p>
+          ) : null}
+
+          {showTrainerLeaveButton ? (
             <div className="gym-membership-actions__buttons">
               <button
                 type="button"
@@ -176,7 +205,13 @@ const GymMembershipActions = ({
                 onClick={onLeave}
                 disabled={isLeaving}
               >
-                {isLeaving ? 'Leaving…' : 'Leave trainer roster'}
+                {isLeaving
+                  ? isTrainerPending
+                    ? 'Withdrawing…'
+                    : 'Leaving…'
+                  : isTrainerPending
+                    ? 'Withdraw request'
+                    : 'Leave trainer roster'}
               </button>
             </div>
           ) : null}
@@ -231,12 +266,17 @@ const GymMembershipActions = ({
                   {trainers.map((trainer) => {
                     const statusTag = trainer.status === 'pending' ? 'pending approval' : null;
                     const traineeTag = trainer.activeTrainees ? `${trainer.activeTrainees} trainees` : null;
-                    const details = [statusTag, traineeTag].filter(Boolean).join(' · ');
+                    const experienceTag = typeof trainer.experienceYears === 'number' && trainer.experienceYears > 0
+                      ? `${trainer.experienceYears} yrs exp`
+                      : null;
+                    const summary = [statusTag, experienceTag, traineeTag]
+                      .filter(Boolean)
+                      .join(' · ');
 
                     return (
                       <option key={trainer.id} value={trainer.id}>
                         {trainer.name}
-                        {details ? ` · ${details}` : ''}
+                        {summary ? ` · ${summary}` : ''}
                       </option>
                     );
                   })}
@@ -285,6 +325,61 @@ const GymMembershipActions = ({
                   {isJoining ? 'Joining…' : 'Join this gym'}
                 </button>
               </div>
+
+              {selectedTrainerDetails ? (
+                <div className="gym-membership-actions__trainer-card">
+                  <header className="gym-membership-actions__trainer-header">
+                    {selectedTrainerDetails.profilePicture ? (
+                      <img
+                        src={selectedTrainerDetails.profilePicture}
+                        alt={selectedTrainerDetails.name}
+                        className="gym-membership-actions__trainer-avatar"
+                      />
+                    ) : (
+                      <div className="gym-membership-actions__trainer-avatar gym-membership-actions__trainer-avatar--placeholder">
+                        {selectedTrainerDetails.name?.slice(0, 1) ?? 'T'}
+                      </div>
+                    )}
+                    <div>
+                      <strong>{selectedTrainerDetails.name}</strong>
+                      {selectedTrainerDetails.headline ? (
+                        <p className="gym-membership-actions__trainer-headline">{selectedTrainerDetails.headline}</p>
+                      ) : null}
+                      <div className="gym-membership-actions__trainer-tags">
+                        {typeof selectedTrainerDetails.experienceYears === 'number' && selectedTrainerDetails.experienceYears > 0 ? (
+                          <span>{selectedTrainerDetails.experienceYears} yrs experience</span>
+                        ) : null}
+                        {typeof selectedTrainerDetails.age === 'number' && selectedTrainerDetails.age > 0 ? (
+                          <span>{selectedTrainerDetails.age} yrs old</span>
+                        ) : null}
+                        {typeof selectedTrainerDetails.height === 'number' && selectedTrainerDetails.height > 0 ? (
+                          <span>{selectedTrainerDetails.height} cm</span>
+                        ) : null}
+                        {selectedTrainerGenderLabel ? <span>{selectedTrainerGenderLabel}</span> : null}
+                        {typeof selectedTrainerDetails.mentoredCount === 'number' && selectedTrainerDetails.mentoredCount > 0 ? (
+                          <span>{selectedTrainerDetails.mentoredCount} trainees mentored</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </header>
+
+                  {selectedTrainerDetails.specializations?.length ? (
+                    <p className="gym-membership-actions__trainer-meta">
+                      <strong>Specialisations:</strong> {selectedTrainerDetails.specializations.join(', ')}
+                    </p>
+                  ) : null}
+
+                  {selectedTrainerDetails.certifications?.length ? (
+                    <p className="gym-membership-actions__trainer-meta">
+                      <strong>Certifications:</strong> {selectedTrainerDetails.certifications.join(', ')}
+                    </p>
+                  ) : null}
+
+                  {selectedTrainerDetails.bio ? (
+                    <p className="gym-membership-actions__trainer-bio">{selectedTrainerDetails.bio}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </>
@@ -298,6 +393,11 @@ GymMembershipActions.propTypes = {
     id: PropTypes.string,
     status: PropTypes.string,
     plan: PropTypes.string,
+    trainerAccess: PropTypes.shape({
+      status: PropTypes.string,
+      approvedAt: PropTypes.string,
+      requestedAt: PropTypes.string,
+    }),
   }),
   isLoading: PropTypes.bool,
   canManage: PropTypes.bool,
@@ -314,6 +414,14 @@ GymMembershipActions.propTypes = {
       name: PropTypes.string.isRequired,
       activeTrainees: PropTypes.number,
       status: PropTypes.string,
+      experienceYears: PropTypes.number,
+      certifications: PropTypes.arrayOf(PropTypes.string),
+      mentoredCount: PropTypes.number,
+      specializations: PropTypes.arrayOf(PropTypes.string),
+      headline: PropTypes.string,
+      bio: PropTypes.string,
+      profilePicture: PropTypes.string,
+      gender: PropTypes.string,
     }),
   ),
   monthlyFee: PropTypes.number,

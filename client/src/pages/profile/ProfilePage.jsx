@@ -21,6 +21,10 @@ const ProfilePage = () => {
     contactNumber: profile?.contactNumber || '',
     address: profile?.address || '',
     bio: profile?.bio || '',
+    experienceYears: profile?.experienceYears ?? '',
+    mentoredCount: profile?.mentoredCount ?? '',
+    specializations: Array.isArray(profile?.specializations) ? profile.specializations.join(', ') : '',
+    certifications: Array.isArray(profile?.certifications) ? profile.certifications.join(', ') : '',
     'profile.location': profile?.profile?.location || '',
     'profile.headline': profile?.profile?.headline || '',
     'profile.about': profile?.profile?.about || '',
@@ -84,6 +88,14 @@ const ProfilePage = () => {
     if (data.contactNumber && !/^\+?[0-9\s\-()]{10,}$/.test(data.contactNumber)) {
       newErrors.contactNumber = 'Invalid phone number format';
     }
+
+    if (data.experienceYears && (data.experienceYears < 0 || data.experienceYears > 60)) {
+      newErrors.experienceYears = 'Experience should be between 0 and 60 years';
+    }
+
+    if (data.mentoredCount && data.mentoredCount < 0) {
+      newErrors.mentoredCount = 'Mentored trainees cannot be negative';
+    }
     
     return newErrors;
   };
@@ -96,6 +108,10 @@ const ProfilePage = () => {
       
       // Append basic fields
       Object.entries(data).forEach(([key, value]) => {
+        if (['specializations', 'certifications'].includes(key)) {
+          return;
+        }
+
         if (value !== '' && !key.startsWith('profile.')) {
           formPayload.append(key, value);
         }
@@ -118,6 +134,15 @@ const ProfilePage = () => {
       if (selectedFile) {
         formPayload.append('profilePicture', selectedFile);
       }
+
+      const normaliseList = (value) =>
+        value
+          .split(',')
+          .map((token) => token.trim())
+          .filter(Boolean);
+
+      formPayload.append('specializations', JSON.stringify(normaliseList(data.specializations || '')));
+      formPayload.append('certifications', JSON.stringify(normaliseList(data.certifications || '')));
       
       return formPayload;
     },
@@ -276,6 +301,69 @@ const ProfilePage = () => {
               </div>
             </div>
           </section>
+
+          {/* Trainer Profile */}
+          {currentUser?.role === 'trainer' ? (
+            <section className="profile-form__section">
+              <h2>Trainer Profile</h2>
+              <div className="profile-form__grid">
+                <div className="form-field">
+                  <label htmlFor="experienceYears">Experience (years)</label>
+                  <input
+                    type="number"
+                    id="experienceYears"
+                    name="experienceYears"
+                    value={formData.experienceYears}
+                    onChange={handleChange}
+                    min="0"
+                    max="60"
+                    className={errors.experienceYears ? 'error' : ''}
+                  />
+                  {errors.experienceYears && <span className="field-error">{errors.experienceYears}</span>}
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="mentoredCount">Trainees mentored</label>
+                  <input
+                    type="number"
+                    id="mentoredCount"
+                    name="mentoredCount"
+                    value={formData.mentoredCount}
+                    onChange={handleChange}
+                    min="0"
+                    className={errors.mentoredCount ? 'error' : ''}
+                  />
+                  {errors.mentoredCount && <span className="field-error">{errors.mentoredCount}</span>}
+                </div>
+
+                <div className="form-field form-field--full">
+                  <label htmlFor="specializations">Specialisations</label>
+                  <input
+                    type="text"
+                    id="specializations"
+                    name="specializations"
+                    value={formData.specializations}
+                    onChange={handleChange}
+                    placeholder="Strength training, Mobility, Nutrition"
+                  />
+                  <span className="help-text">Separate multiple specialisations with commas.</span>
+                </div>
+
+                <div className="form-field form-field--full">
+                  <label htmlFor="certifications">Certifications</label>
+                  <textarea
+                    id="certifications"
+                    name="certifications"
+                    value={formData.certifications}
+                    onChange={handleChange}
+                    rows="3"
+                    placeholder="e.g., ACE Certified, CrossFit Level 1, NASM CPT"
+                  />
+                  <span className="help-text">Separate multiple certifications with commas.</span>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {/* Contact Information */}
           <section className="profile-form__section">

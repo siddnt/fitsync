@@ -84,6 +84,71 @@
   height: 18px;
 }
 
+.gym-membership-actions__trainer-card {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+}
+
+.gym-membership-actions__trainer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gym-membership-actions__trainer-avatar {
+  border-radius: 50%;
+  height: 48px;
+  width: 48px;
+  object-fit: cover;
+}
+
+.gym-membership-actions__trainer-avatar--placeholder {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--light-text-color);
+  display: flex;
+  font-weight: 600;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.gym-membership-actions__trainer-headline {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  margin: 0.15rem 0 0;
+}
+
+.gym-membership-actions__trainer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.gym-membership-actions__trainer-tags span {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.gym-membership-actions__trainer-meta,
+.gym-membership-actions__trainer-bio {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.gym-membership-actions__trainer-bio {
+  line-height: 1.4;
+}
+
 .status-pill {
   border-radius: 999px;
   border: 1px solid transparent;

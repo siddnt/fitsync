@@ -22,6 +22,24 @@ export const ownerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'Analytics'],
     }),
+    getTrainerRequests: builder.query({
+      query: () => '/owner/trainers/requests',
+      providesTags: ['TrainerRequest', 'Dashboard'],
+    }),
+    approveTrainerRequest: builder.mutation({
+      query: ({ assignmentId }) => ({
+        url: `/owner/trainers/requests/${assignmentId}/approve`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['TrainerRequest', 'Dashboard', 'Gym'],
+    }),
+    declineTrainerRequest: builder.mutation({
+      query: ({ assignmentId }) => ({
+        url: `/owner/trainers/requests/${assignmentId}/decline`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['TrainerRequest', 'Dashboard', 'Gym'],
+    }),
   }),
 });
 
@@ -29,4 +47,7 @@ export const {
   useGetMonetisationOptionsQuery,
   useCheckoutListingSubscriptionMutation,
   usePurchaseSponsorshipMutation,
+  useGetTrainerRequestsQuery,
+  useApproveTrainerRequestMutation,
+  useDeclineTrainerRequestMutation,
 } = ownerApi;

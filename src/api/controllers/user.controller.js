@@ -4,6 +4,71 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 
+const parseMaybeJson = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return value;
+  }
+};
+
+const parseNumber = (value, { min, max } = {}) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return undefined;
+  }
+
+  if (min !== undefined && numeric < min) {
+    return min;
+  }
+
+  if (max !== undefined && numeric > max) {
+    return max;
+  }
+
+  return numeric;
+};
+
+const parseStringArray = (value) => {
+  if (!value && value !== '') {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    if (!value.trim()) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
+      }
+    } catch (_error) {
+      /* swallow */
+    }
+
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
 export const updateProfile = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
 
@@ -22,6 +87,10 @@ export const updateProfile = asyncHandler(async (req, res) => {
     address,
     bio,
     profile,
+    experienceYears,
+    specializations,
+    certifications,
+    mentoredCount,
   } = req.body;
 
   const user = await User.findById(userId);
@@ -40,21 +109,42 @@ export const updateProfile = asyncHandler(async (req, res) => {
   if (address !== undefined) user.address = address;
   if (bio !== undefined) user.bio = bio;
 
+  const parsedExperience = parseNumber(experienceYears, { min: 0, max: 60 });
+  if (parsedExperience !== undefined) {
+    user.experienceYears = parsedExperience;
+  }
+
+  const parsedMentored = parseNumber(mentoredCount, { min: 0 });
+  if (parsedMentored !== undefined) {
+    user.mentoredCount = parsedMentored;
+  }
+
+  const parsedSpecialisations = parseStringArray(specializations);
+  if (parsedSpecialisations !== undefined) {
+    user.specializations = parsedSpecialisations;
+  }
+
+  const parsedCertifications = parseStringArray(certifications);
+  if (parsedCertifications !== undefined) {
+    user.certifications = parsedCertifications;
+  }
+
   // Update nested profile fields
-  if (profile) {
-    if (profile.headline !== undefined) user.profile.headline = profile.headline;
-    if (profile.about !== undefined) user.profile.about = profile.about;
-    if (profile.location !== undefined) user.profile.location = profile.location;
-    if (profile.company !== undefined) user.profile.company = profile.company;
-    if (profile.socialLinks) {
-      if (profile.socialLinks.website !== undefined) {
-        user.profile.socialLinks.website = profile.socialLinks.website;
+  const profileData = parseMaybeJson(profile);
+  if (profileData) {
+    if (profileData.headline !== undefined) user.profile.headline = profileData.headline;
+    if (profileData.about !== undefined) user.profile.about = profileData.about;
+    if (profileData.location !== undefined) user.profile.location = profileData.location;
+    if (profileData.company !== undefined) user.profile.company = profileData.company;
+    if (profileData.socialLinks) {
+      if (profileData.socialLinks.website !== undefined) {
+        user.profile.socialLinks.website = profileData.socialLinks.website;
       }
-      if (profile.socialLinks.instagram !== undefined) {
-        user.profile.socialLinks.instagram = profile.socialLinks.instagram;
+      if (profileData.socialLinks.instagram !== undefined) {
+        user.profile.socialLinks.instagram = profileData.socialLinks.instagram;
       }
-      if (profile.socialLinks.facebook !== undefined) {
-        user.profile.socialLinks.facebook = profile.socialLinks.facebook;
+      if (profileData.socialLinks.facebook !== undefined) {
+        user.profile.socialLinks.facebook = profileData.socialLinks.facebook;
       }
     }
   }
@@ -86,6 +176,10 @@ export const updateProfile = asyncHandler(async (req, res) => {
     contactNumber: user.contactNumber,
     address: user.address,
     bio: user.bio,
+    experienceYears: user.experienceYears,
+    mentoredCount: user.mentoredCount,
+    specializations: user.specializations,
+    certifications: user.certifications,
   };
 
   return res.status(200).json(new ApiResponse(200, updatedUser, 'Profile updated successfully'));
@@ -121,6 +215,10 @@ export const getProfile = asyncHandler(async (req, res) => {
     contactNumber: user.contactNumber,
     address: user.address,
     bio: user.bio,
+    experienceYears: user.experienceYears,
+    mentoredCount: user.mentoredCount,
+    specializations: user.specializations,
+    certifications: user.certifications,
   };
 
   return res.status(200).json(new ApiResponse(200, profileData, 'Profile fetched successfully'));

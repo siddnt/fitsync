@@ -100,6 +100,21 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: ""
         },
+        experienceYears: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 60
+        },
+        certifications: [{
+            type: String,
+            trim: true
+        }],
+        mentoredCount: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         contactNumber: {
             type: String,
             default: ""

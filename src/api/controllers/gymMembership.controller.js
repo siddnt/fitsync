@@ -71,12 +71,13 @@ const ensureGymForMembership = async (gymId) => {
 export const getMyGymMembership = asyncHandler(async (req, res) => {
   const { gymId } = req.params;
   const userId = req.user?._id;
+  const userRole = req.user?.role;
 
   if (!isObjectId(gymId)) {
     throw new ApiError(400, 'Invalid gym id.');
   }
 
-  const membership = await GymMembership.findOne({
+  const membershipDoc = await GymMembership.findOne({
     gym: gymId,
     trainee: userId,
   })
@@ -85,12 +86,43 @@ export const getMyGymMembership = asyncHandler(async (req, res) => {
     .populate({ path: 'trainer', select: 'name profilePicture' })
     .lean();
 
+  let trainerAssignment = null;
+  if (
+    membershipDoc &&
+    membershipDoc.plan === 'trainer-access' &&
+    (userRole === 'trainer' || String(membershipDoc.trainee) === String(userId))
+  ) {
+    trainerAssignment = await TrainerAssignment.findOne({
+      trainer: membershipDoc.trainee,
+      gym: gymId,
+    })
+      .select('status requestedAt approvedAt')
+      .lean();
+  }
+
+  let membership = mapMembership(membershipDoc);
+
+  if (membership && membership.plan === 'trainer-access') {
+    if (trainerAssignment) {
+      membership.trainerAccess = {
+        status: trainerAssignment.status,
+        requestedAt: trainerAssignment.requestedAt,
+        approvedAt: trainerAssignment.approvedAt,
+      };
+      if (trainerAssignment.status === 'active' && membership.status !== 'active') {
+        membership.status = 'active';
+      }
+    } else {
+      membership.trainerAccess = null;
+    }
+  }
+
   return res
     .status(200)
     .json(
       new ApiResponse(
         200,
-        { membership: mapMembership(membership) },
+        { membership },
         membership ? 'Membership found.' : 'No membership for this gym.',
       ),
     );
@@ -120,82 +152,66 @@ export const joinGym = asyncHandler(async (req, res) => {
   const existingMembership = await GymMembership.findOne({
     gym: gym._id,
     trainee: user._id,
-    status: { $in: ['active', 'paused'] },
+    status: { $in: ['pending', 'active', 'paused'] },
   }).lean();
 
+  const existingTrainerMembership = existingMembership?.plan === 'trainer-access'
+    ? existingMembership
+    : await GymMembership.findOne({
+        gym: gym._id,
+        trainee: user._id,
+        plan: 'trainer-access',
+        status: { $in: ['pending', 'active'] },
+      }).lean();
+
   if (joinAsTrainer) {
-    if (existingMembership) {
-      if (existingMembership.plan === 'trainer-access') {
-        throw new ApiError(409, 'You are already registered as a trainer at this gym.');
+    if (existingTrainerMembership) {
+      if (existingTrainerMembership.status === 'pending') {
+        throw new ApiError(409, 'Trainer approval already requested for this gym.');
       }
 
+      throw new ApiError(409, 'You are already registered as a trainer at this gym.');
+    }
+
+    if (existingMembership && existingMembership.plan !== 'trainer-access') {
       throw new ApiError(
         409,
         'You already have an active membership for this gym. End it before joining as a trainer.',
       );
     }
 
-    const startDate = new Date();
-    const endDate = new Date(startDate);
+    const requestedAt = new Date();
+    const endDate = new Date(requestedAt);
     endDate.setMonth(endDate.getMonth() + 6);
 
     const trainerMembership = await GymMembership.create({
       trainee: user._id,
       gym: gym._id,
       plan: 'trainer-access',
-      startDate,
+      startDate: requestedAt,
       endDate,
-      status: 'active',
+      status: 'pending',
       autoRenew: false,
       benefits: ['trainer-roster'],
       notes: req.body?.notes,
     });
 
-    const existingAssignment = await TrainerAssignment.findOne({ trainer: user._id, gym: gym._id }).lean();
-    const updates = [
-      TrainerAssignment.updateOne(
-        { trainer: user._id, gym: gym._id },
-        {
-          $setOnInsert: {
-            trainer: user._id,
-            gym: gym._id,
-            trainees: [],
-          },
-          $set: { status: 'active' },
+    await TrainerAssignment.updateOne(
+      { trainer: user._id, gym: gym._id },
+      {
+        $setOnInsert: {
+          trainer: user._id,
+          gym: gym._id,
+          trainees: [],
         },
-        { upsert: true },
-      ),
-      User.updateOne(
-        { _id: user._id },
-        {
-          $addToSet: { 'trainerMetrics.gyms': gym._id },
-          $set: { status: 'active' },
+        $set: {
+          status: 'pending',
+          requestedAt,
         },
-      ),
-    ];
-
-    if (!existingAssignment || existingAssignment.status !== 'active') {
-      updates.push(
-        Gym.updateOne(
-          { _id: gym._id },
-          {
-            $inc: { 'analytics.trainers': 1 },
-            $set: { lastUpdatedBy: user._id },
-          },
-        ),
-      );
-    } else {
-      updates.push(
-        Gym.updateOne(
-          { _id: gym._id },
-          {
-            $set: { lastUpdatedBy: user._id },
-          },
-        ),
-      );
-    }
-
-    await Promise.all(updates);
+        $unset: { approvedAt: '' },
+      },
+      { upsert: true },
+    );
 
     const populatedTrainerMembership = await GymMembership.findById(trainerMembership._id)
       .populate({ path: 'gym', select: 'name location pricing' })
@@ -203,17 +219,17 @@ export const joinGym = asyncHandler(async (req, res) => {
       .lean();
 
     return res
-      .status(201)
+      .status(202)
       .json(
         new ApiResponse(
-          201,
+          202,
           { membership: mapMembership(populatedTrainerMembership) },
-          'You are now listed as a trainer for this gym.',
+          'Trainer request submitted. Await gym owner approval.',
         ),
       );
   }
 
-  if (existingMembership) {
+  if (existingMembership && existingMembership.plan !== 'trainer-access') {
     throw new ApiError(409, 'You already have an active membership for this gym.');
   }
 
@@ -571,17 +587,16 @@ export const listGymTrainers = asyncHandler(async (req, res) => {
   }
 
   const assignments = await TrainerAssignment.find({ gym: gymId, status: 'active' })
-    .populate({ path: 'trainer', select: 'name firstName lastName profilePicture trainerMetrics rating status' })
+    .populate({
+      path: 'trainer',
+      select:
+        'name firstName lastName profilePicture trainerMetrics rating status bio experienceYears certifications mentoredCount profile specializations age height gender',
+    })
     .lean();
 
   const trainers = assignments
     .map((assignment) => {
-      if (!assignment.trainer) {
-        return null;
-      }
-
-      const trainerAccountStatus = assignment.trainer.status ?? 'active';
-      if (!['active', 'pending'].includes(trainerAccountStatus)) {
+      if (!assignment.trainer || assignment.trainer.status !== 'active') {
         return null;
       }
 
@@ -595,7 +610,19 @@ export const listGymTrainers = asyncHandler(async (req, res) => {
         profilePicture: assignment.trainer.profilePicture ?? null,
         activeTrainees,
         gyms: assignment.trainer.trainerMetrics?.gyms?.map(String) ?? [],
-        status: trainerAccountStatus,
+        experienceYears: assignment.trainer.experienceYears ?? null,
+        certifications: Array.isArray(assignment.trainer.certifications)
+          ? assignment.trainer.certifications
+          : [],
+        mentoredCount: assignment.trainer.mentoredCount ?? activeTrainees,
+        specializations: Array.isArray(assignment.trainer.specializations)
+          ? assignment.trainer.specializations
+          : [],
+        headline: assignment.trainer.profile?.headline ?? '',
+        bio: assignment.trainer.bio ?? assignment.trainer.profile?.about ?? '',
+        age: assignment.trainer.age ?? null,
+        height: assignment.trainer.height ?? null,
+        gender: assignment.trainer.gender ?? '',
       };
     })
     .filter(Boolean);

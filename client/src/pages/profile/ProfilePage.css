@@ -97,6 +97,12 @@
   gap: 0.75rem;
 }
 
+.help-text {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
 .profile-picture-actions .help-text {
   color: var(--muted-text-color);
   font-size: 0.85rem;

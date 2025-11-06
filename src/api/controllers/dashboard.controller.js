@@ -569,25 +569,58 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
 
 export const getTrainerOverview = asyncHandler(async (req, res) => {
   const trainerId = req.user?._id;
+  const [memberships, assignmentDocs, progressDocs] = await Promise.all([
+    GymMembership.find({ trainer: trainerId, status: { $in: ['active', 'paused'] } })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainee', select: 'name profilePicture role' })
+      .lean(),
+    TrainerAssignment.find({ trainer: trainerId }).lean(),
+    TrainerProgress.find({ trainer: trainerId })
+      .populate({ path: 'trainee', select: 'name profilePicture role' })
+      .lean(),
+  ]);
 
-  const assignments = await TrainerAssignment.find({ trainer: trainerId })
-    .populate({ path: 'gym', select: 'name location' })
-    .lean();
+  const assignmentByGym = assignmentDocs.reduce((acc, doc) => {
+    if (doc?.gym) {
+      acc[String(doc.gym)] = doc;
+    }
+    return acc;
+  }, {});
 
-  const progressDocs = await TrainerProgress.find({ trainer: trainerId })
-    .populate({ path: 'trainee', select: 'name profilePicture role' })
-    .lean();
+  const activeTrainees = memberships.map((membership) => {
+    const gymInfo = membership.gym
+      ? {
+          id: membership.gym._id,
+          name: membership.gym.name,
+          city: membership.gym.location?.city,
+        }
+      : null;
 
-  const activeTrainees = assignments.flatMap((assignment) =>
-    (assignment.trainees || [])
-      .filter((trainee) => trainee.status === 'active')
-      .map((trainee) => ({
-        trainee: trainee.trainee,
-        gym: assignment.gym,
-        assignedAt: trainee.assignedAt,
-        goals: trainee.goals,
-      })),
-  );
+    const assignment = assignmentByGym[String(membership.gym?._id)] ?? null;
+    const goals = (() => {
+      if (!assignment?.trainees?.length) {
+        return [];
+      }
+      const record = assignment.trainees.find(
+        (entry) => String(entry.trainee) === String(membership.trainee?._id),
+      );
+      return record?.goals ?? [];
+    })();
+
+    return {
+      trainee: membership.trainee
+        ? {
+            id: membership.trainee._id,
+            name: membership.trainee.name,
+            profilePicture: membership.trainee.profilePicture,
+          }
+        : null,
+      gym: gymInfo,
+      assignedAt: membership.startDate,
+      goals,
+      status: membership.status,
+    };
+  });
 
   const upcomingCheckIns = progressDocs
     .map((doc) => {
@@ -606,7 +639,7 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
 
   const response = {
     totals: {
-      gyms: assignments.length,
+      gyms: new Set(memberships.map((membership) => String(membership.gym?._id))).size,
       activeTrainees: activeTrainees.length,
       pendingUpdates: upcomingCheckIns.filter((item) => !item.nextFeedback).length,
     },
@@ -621,26 +654,61 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
 
 export const getTrainerTrainees = asyncHandler(async (req, res) => {
   const trainerId = req.user?._id;
-  const assignments = await TrainerAssignment.find({ trainer: trainerId })
-    .populate({ path: 'gym', select: 'name location' })
-    .populate({ path: 'trainees.trainee', select: 'name email profilePicture role' })
-    .lean();
+  const [memberships, assignmentDocs] = await Promise.all([
+    GymMembership.find({ trainer: trainerId, status: { $in: ['active', 'paused'] } })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainee', select: 'name email profilePicture role' })
+      .lean(),
+    TrainerAssignment.find({ trainer: trainerId }).lean(),
+  ]);
 
-  const data = assignments.map((assignment) => ({
-    id: assignment._id,
-    gym: assignment.gym
-      ? { id: assignment.gym._id, name: assignment.gym.name, city: assignment.gym.location?.city }
-      : null,
-    status: assignment.status,
-    trainees: (assignment.trainees || []).map((record) => ({
-      id: record.trainee?._id ?? record.trainee,
-      name: record.trainee?.name,
-      email: record.trainee?.email,
-      status: record.status,
-      assignedAt: record.assignedAt,
-      goals: record.goals,
-    })),
-  }));
+  const assignmentByGym = assignmentDocs.reduce((acc, doc) => {
+    if (doc?.gym) {
+      acc[String(doc.gym)] = doc;
+    }
+    return acc;
+  }, {});
+
+  const grouped = new Map();
+
+  memberships.forEach((membership) => {
+    const gymId = membership.gym?._id ? String(membership.gym._id) : `membership-${membership._id}`;
+    const assignment = assignmentByGym[gymId] ?? null;
+
+    if (!grouped.has(gymId)) {
+      grouped.set(gymId, {
+        id: assignment?._id ?? gymId,
+        gym: membership.gym
+          ? { id: membership.gym._id, name: membership.gym.name, city: membership.gym.location?.city }
+          : null,
+        status: assignment?.status ?? membership.status,
+        trainees: [],
+      });
+    }
+
+    const container = grouped.get(gymId);
+    const goals = (() => {
+      if (!assignment?.trainees?.length) {
+        return [];
+      }
+      const record = assignment.trainees.find(
+        (entry) => String(entry.trainee) === String(membership.trainee?._id),
+      );
+      return record?.goals ?? [];
+    })();
+
+    container.trainees.push({
+      id: membership.trainee?._id ?? membership.trainee,
+      name: membership.trainee?.name,
+      email: membership.trainee?.email,
+      status: membership.status,
+      assignedAt: membership.startDate,
+      goals,
+      membershipId: membership._id,
+    });
+  });
+
+  const data = Array.from(grouped.values());
 
   return res
     .status(200)
@@ -682,6 +750,7 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
       },
     ]),
     Revenue.aggregate([
+      { $match: { type: { $ne: 'seller' } } },
       {
         $group: {
           _id: '$type',
