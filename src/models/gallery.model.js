@@ -22,12 +22,12 @@ const gallerySchema = new mongoose.Schema(
         },
         category: {
             type: String,
-            enum: ["course", "event", "facility", "other"],
-            default: "other"
+            enum: ["gym", "event", "facility", "other"],
+            default: "gym"
         },
-        course: {
+        gym: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Course"
+            ref: "Gym"
         },
         isPublic: {
             type: Boolean,
@@ -42,8 +42,8 @@ const gallerySchema = new mongoose.Schema(
 // Static method to get all public images
 gallerySchema.statics.getPublicImages = async function() {
     return this.find({ isPublic: true })
-        .populate("uploadedBy", "name role")
-        .populate("course", "name")
+    .populate("uploadedBy", "name role")
+    .populate("gym", "name")
         .sort({ createdAt: -1 });
 };
 

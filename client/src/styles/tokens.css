@@ -1,0 +1,26 @@
+:root {
+  --primary-color: #e50914;
+  --accent-color: #ff3d47;
+  --background-color: #121212;
+  --surface-color: #181818;
+  --surface-elevated-color: #1f1f1f;
+  --light-text-color: #f5f5f5;
+  --muted-text-color: rgba(255, 255, 255, 0.68);
+  --danger-color: #ff6b6b;
+  --success-color: #51cf66;
+}
+
+body {
+  background: var(--background-color);
+  color: var(--light-text-color);
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
+}
+
+a {
+  color: var(--light-text-color);
+}
+
+button {
+  font-family: inherit;
+}

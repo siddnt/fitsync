@@ -1,0 +1,179 @@
+.gym-membership-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gym-membership-actions__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.gym-membership-actions__buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gym-membership-actions__message {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  color: var(--muted-text-color);
+  margin: 0;
+}
+
+.gym-membership-actions__hint {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+}
+
+.gym-membership-actions__price {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.gym-membership-actions__error {
+  color: #f87171;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.gym-membership-actions__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+}
+
+.gym-membership-actions__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+}
+
+.gym-membership-actions__label select,
+.gym-membership-actions__label input[type="text"] {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--light-text-color);
+  padding: 0.65rem 0.9rem;
+}
+
+.gym-membership-actions__label select:disabled,
+.gym-membership-actions__label input[type="text"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gym-membership-actions__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.gym-membership-actions__toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.gym-membership-actions__trainer-card {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+}
+
+.gym-membership-actions__trainer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gym-membership-actions__trainer-avatar {
+  border-radius: 50%;
+  height: 48px;
+  width: 48px;
+  object-fit: cover;
+}
+
+.gym-membership-actions__trainer-avatar--placeholder {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--light-text-color);
+  display: flex;
+  font-weight: 600;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.gym-membership-actions__trainer-headline {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  margin: 0.15rem 0 0;
+}
+
+.gym-membership-actions__trainer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.gym-membership-actions__trainer-tags span {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+}
+
+.gym-membership-actions__trainer-meta,
+.gym-membership-actions__trainer-bio {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.gym-membership-actions__trainer-bio {
+  line-height: 1.4;
+}
+
+.status-pill {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  padding: 0.35rem 0.9rem;
+  text-transform: uppercase;
+}
+
+.status-pill--active {
+  background: rgba(52, 211, 153, 0.15);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #34d399;
+}
+
+.status-pill--paused {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+}
+
+.status-pill--cancelled,
+.status-pill--expired {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}

@@ -2,7 +2,6 @@ import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
-import Contact from "../models/contact.model.js";
 
 export const verifyJWT = asyncHandler(async (req, res, next) => {
     try {
@@ -44,34 +43,4 @@ export const authorizeRoles = (...roles) => {
         
         next();
     };
-};
-
-// Middleware to check session-based login
-export const checkLoginStatus = asyncHandler(async (req, res, next) => {
-    res.locals.isLoggedIn = !!req.session.userId;
-    res.locals.userRole = req.session.userRole;
-    res.locals.userName = req.session.userName;
-    
-    // If user is admin, check for new messages
-    if (req.session.userRole === 'admin') {
-        const newMessageCount = await Contact.countDocuments({ status: 'new' });
-        res.locals.newMessageCount = newMessageCount;
-    }
-    
-    next();
-}); 
-
-// Simple session-based guards used by some routes
-export const isAuthenticated = (req, res, next) => {
-    if (!req.session || !req.session.userId) {
-        throw new ApiError(401, "Please login to access this resource");
-    }
-    next();
-};
-
-export const isAdmin = (req, res, next) => {
-    if (!req.session || !req.session.userId || req.session.userRole !== 'admin') {
-        throw new ApiError(403, "Access denied. Admin privileges required");
-    }
-    next();
 };

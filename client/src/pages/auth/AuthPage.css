@@ -1,0 +1,103 @@
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 140px);
+}
+
+.auth-page--compact {
+  align-items: flex-start;
+  padding-top: 4rem;
+}
+
+.auth-card {
+  background: var(--surface-elevated-color);
+  border-radius: 24px;
+  padding: 2.5rem;
+  width: min(440px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.4);
+}
+
+.auth-card__subtitle {
+  color: var(--muted-text-color);
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.auth-card input,
+.auth-card select {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--light-text-color);
+  padding: 0.75rem 0.9rem;
+}
+
+.auth-card input:focus,
+.auth-card select:focus {
+  outline: none;
+  border-color: rgba(229, 9, 20, 0.7);
+  box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.2);
+}
+
+.auth-card__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.auth-card__switch {
+  text-align: center;
+  margin-top: 0.75rem;
+  color: var(--muted-text-color);
+}
+
+.auth-card__switch a {
+  color: var(--light-text-color);
+  text-decoration: underline;
+}
+
+.input-error {
+  color: #ff8787;
+  font-size: 0.85rem;
+}
+
+.form-error {
+  background: rgba(229, 9, 20, 0.2);
+  border-radius: 12px;
+  color: #ffc9c9;
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.role-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.role-card {
+  background: rgba(0, 0, 0, 0.24);
+  border-radius: 18px;
+  padding: 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.role-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 32px rgba(229, 9, 20, 0.25);
+}

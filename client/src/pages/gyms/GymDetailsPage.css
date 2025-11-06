@@ -1,0 +1,90 @@
+.gym-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.gym-details__header {
+  align-items: flex-end;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.gym-details__pricing {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.gym-details__pricing .price {
+  color: var(--primary-color);
+  font-size: 2.2rem;
+  font-weight: 700;
+}
+
+.gym-details__pricing .price--mrp {
+  color: var(--muted-text-color);
+  text-decoration: line-through;
+}
+
+.gym-details__gallery {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.gym-details__gallery img {
+  border-radius: 16px;
+  height: 220px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.gym-details__placeholder {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  color: var(--muted-text-color);
+  display: flex;
+  height: 220px;
+  justify-content: center;
+}
+
+.gym-details__grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.gym-details__grid article {
+  background: var(--surface-elevated-color);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.gym-details__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.gym-details__chips span {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+}
+
+.gym-details__reviews article {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.gym-details__empty {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+}

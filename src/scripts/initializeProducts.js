@@ -1,6 +1,4 @@
 import Product from "../models/product.model.js";
-import colors from "colors";
-import path from "path";
 
 // Normalize paths for cross-platform compatibility
 const normalizePath = (imagePath) => {
@@ -77,21 +75,21 @@ const sampleProducts = [
 
 const initializeProducts = async () => {
     try {
-        console.log(colors.yellow("Checking for existing products..."));
+        console.log("Checking for existing products...");
 
         // Check if products already exist
         const existingProducts = await Product.find();
         
         if (existingProducts.length > 0) {
-            console.log(colors.green("Products already exist in the database."));
+            console.log("Products already exist in the database.");
             return;
         }
 
         // Create products
         const products = await Product.create(sampleProducts);
-        console.log(colors.green(`${products.length} products created successfully!`));
+        console.log(`${products.length} products created successfully!`);
     } catch (error) {
-        console.error(colors.red(`Error creating products: ${error.message}`));
+        console.error(`Error creating products: ${error.message}`);
     }
 };
 

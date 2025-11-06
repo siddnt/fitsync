@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema(
     {
+        seller: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            index: true
+        },
         name: {
             type: String,
             required: [true, "Product name is required"],
@@ -34,6 +39,15 @@ const productSchema = new mongoose.Schema(
             type: String,
             enum: ["available", "out-of-stock"],
             default: "available"
+        },
+        isPublished: {
+            type: Boolean,
+            default: true
+        },
+        metadata: {
+            type: Map,
+            of: String,
+            default: undefined
         }
     },
     {

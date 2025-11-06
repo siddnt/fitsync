@@ -3,10 +3,11 @@ import mongoose from "mongoose";
 const paymentSessionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    type: { type: String, enum: ["course", "shop"], required: true },
-    // For course payments
-    course: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
-    trainer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  type: { type: String, enum: ["membership", "shop"], required: true },
+  // For membership payments
+  gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
+  membership: { type: mongoose.Schema.Types.ObjectId, ref: "GymMembership" },
+  trainer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     // For shop payments
     cartSnapshot: {
       items: [

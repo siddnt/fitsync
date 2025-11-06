@@ -1,0 +1,136 @@
+/* Cart Icon Styles */
+.nav-link .fa-shopping-cart {
+    font-size: 1.2rem;
+    color: #fff;
+    transition: color 0.3s ease;
+}
+
+.nav-link:hover .fa-shopping-cart {
+    color: #28a745;
+}
+
+.cart-count {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 50%;
+    background-color: #dc3545;
+    color: white;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #343a40;
+}
+
+/* Cart Icon Animation */
+@keyframes cartBounce {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.cart-count {
+    animation: cartBounce 1s ease-in-out;
+}
+
+/* General Styles */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    flex: 1;
+}
+
+/* Product Card Styles */
+.product-card {
+    transition: transform 0.2s;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.product-image {
+    height: 200px;
+    object-fit: cover;
+}
+
+/* Cart Page Styles */
+.cart-item {
+    border-bottom: 1px solid #eee;
+    padding: 1rem 0;
+}
+
+.cart-item:last-child {
+    border-bottom: none;
+}
+
+.quantity-control {
+    width: 100px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .product-image {
+        height: 150px;
+    }
+    
+    .cart-count {
+        top: -3px;
+        right: -3px;
+    }
+    
+    .navbar-nav:not(.me-auto) .cart-count {
+        top: -5px;
+        right: -5px;
+    }
+}
+
+/* Shop Link Styling */
+.shop-link {
+    color: #28a745 !important;
+    font-weight: 700;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    background-color: rgba(40, 167, 69, 0.1);
+    margin: 0 5px;
+    position: relative;
+    overflow: hidden;
+}
+
+.shop-link:hover {
+    background-color: #28a745;
+    color: white !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2);
+}
+
+.shop-link i {
+    margin-right: 8px;
+    font-size: 1.2em;
+    transition: transform 0.3s ease;
+}
+
+.shop-link:hover i {
+    transform: scale(1.1) rotate(-5deg);
+}
+
+/* Add a subtle pulse animation to the shop icon */
+@keyframes shopPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.shop-link i {
+    animation: shopPulse 2s infinite;
+} 

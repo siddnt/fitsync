@@ -14,7 +14,7 @@ const PLANS = [
     },
     level: "all",
     category: "muscle gain",
-    image: "/images/courses/strength_training.jpg",
+  image: "/images/gyms/strength_training.jpg",
     isActive: true,
     features: {
       sessions: 4,
@@ -36,7 +36,7 @@ const PLANS = [
     },
     level: "beginner",
     category: "flexibility",
-    image: "/images/courses/yoga.jpg",
+  image: "/images/gyms/yoga.jpg",
     isActive: true,
     features: {
       sessions: 2,
@@ -57,7 +57,7 @@ const PLANS = [
     },
     level: "all",
     category: "cardio",
-    image: "/images/courses/zumba.jpg",
+  image: "/images/gyms/zumba.jpg",
     isActive: true,
     features: {
       sessions: 3,
