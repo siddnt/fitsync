@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from './components/DashboardSection.jsx';
+import SellerCharts from './components/SellerCharts.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetSellerProductsQuery, useGetSellerOrdersQuery } from '../../services/sellerApi.js';
@@ -86,12 +87,19 @@ const SellerDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
-        {['Catalogue snapshot', 'Outstanding orders', 'Low stock alerts'].map((section) => (
-          <DashboardSection key={section} title={section}>
-            <SkeletonPanel lines={6} />
-          </DashboardSection>
-        ))}
+      <div className="seller-overview-layout">
+        <DashboardSection title="Catalogue snapshot" className="seller-overview__catalogue">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
+        <DashboardSection title="Analytics" className="seller-overview__analytics">
+          <SkeletonPanel lines={12} />
+        </DashboardSection>
+        <DashboardSection title="Outstanding orders" className="seller-overview__orders">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
+        <DashboardSection title="Low stock alerts" className="seller-overview__low-stock">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
       </div>
     );
   }
@@ -120,43 +128,51 @@ const SellerDashboard = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="seller-overview-layout">
       <DashboardSection
         title="Catalogue snapshot"
         action={(
           <Link to="/dashboard/seller/inventory">Manage inventory</Link>
         )}
+        className="seller-overview__catalogue"
       >
         {products.length ? (
-          <div className="stat-grid">
-            <div className="stat-card">
-              <small>Total products</small>
-              <strong>{formatNumber(products.length)}</strong>
-              <small>{formatNumber(publishedProducts.length)} published</small>
+          <>
+            <p className="seller-overview__intro">Monitor catalogue health at a glance and keep your bestsellers in stock.</p>
+            <div className="stat-grid seller-overview__stat-grid">
+              <div className="stat-card">
+                <small>Total products</small>
+                <strong>{formatNumber(products.length)}</strong>
+                <small>{formatNumber(publishedProducts.length)} published</small>
+              </div>
+              <div className="stat-card">
+                <small>Published conversion</small>
+                <strong>
+                  {products.length
+                    ? `${Math.round((publishedProducts.length / products.length) * 100)}%`
+                    : '—'}
+                </strong>
+                <small>Keep at least three live listings</small>
+              </div>
+              <div className="stat-card">
+                <small>Delivered orders</small>
+                <strong>{formatNumber(deliveredOrders.length)}</strong>
+                <small>{formatCurrency(deliveredOrdersValue)}</small>
+              </div>
+              <div className="stat-card">
+                <small>Outstanding volume</small>
+                <strong>{formatCurrency(totalOutstandingValue)}</strong>
+                <small>{formatNumber(outstandingOrders.length)} orders in fulfilment</small>
+              </div>
             </div>
-            <div className="stat-card">
-              <small>Published conversion</small>
-              <strong>
-                {products.length
-                  ? `${Math.round((publishedProducts.length / products.length) * 100)}%`
-                  : '—'}
-              </strong>
-              <small>Keep at least three live listings</small>
-            </div>
-            <div className="stat-card">
-              <small>Delivered orders</small>
-              <strong>{formatNumber(deliveredOrders.length)}</strong>
-              <small>{formatCurrency(deliveredOrdersValue)}</small>
-            </div>
-            <div className="stat-card">
-              <small>Outstanding volume</small>
-              <strong>{formatCurrency(totalOutstandingValue)}</strong>
-              <small>{formatNumber(outstandingOrders.length)} orders in fulfilment</small>
-            </div>
-          </div>
+          </>
         ) : (
           <EmptyState message="Add your first product to kickstart the marketplace." />
         )}
+      </DashboardSection>
+
+      <DashboardSection title="Analytics" className="seller-overview__analytics">
+        <SellerCharts orders={orders} products={products} />
       </DashboardSection>
 
       <DashboardSection
@@ -164,56 +180,59 @@ const SellerDashboard = () => {
         action={(
           <Link to="/dashboard/seller/orders">View all orders</Link>
         )}
+        className="seller-overview__orders"
       >
         {outstandingOrders.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Buyer</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {outstandingOrders.slice(0, 5).map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <strong>{order.orderNumber ?? order.id}</strong>
-                    <div>
-                      <small>{formatDate(order.createdAt)}</small>
-                    </div>
-                  </td>
-                  <td>{order.buyer?.name ?? order.buyer?.email ?? '—'}</td>
-                  <td>
-                    {Array.isArray(order.items) && order.items.length
-                      ? order.items
-                        .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
-                        .map((item) =>
-                          [item?.name, item?.status ? formatStatus(item.status) : null]
-                            .filter(Boolean)
-                            .join(' · '),
-                        )
-                        .filter(Boolean)
-                        .join('; ')
-                      : '—'}
-                  </td>
-                  <td>
-                    {formatCurrency(
-                      (order.items || [])
-                        .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
-                        .reduce(
-                          (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
-                          0,
-                        ),
-                    )}
-                  </td>
-                  <td>{formatStatus(order.status)}</td>
+          <div className="seller-overview__table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Buyer</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {outstandingOrders.slice(0, 5).map((order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <strong>{order.orderNumber ?? order.id}</strong>
+                      <div>
+                        <small>{formatDate(order.createdAt)}</small>
+                      </div>
+                    </td>
+                    <td>{order.buyer?.name ?? order.buyer?.email ?? '—'}</td>
+                    <td>
+                      {Array.isArray(order.items) && order.items.length
+                        ? order.items
+                          .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
+                          .map((item) =>
+                            [item?.name, item?.status ? formatStatus(item.status) : null]
+                              .filter(Boolean)
+                              .join(' · '),
+                          )
+                          .filter(Boolean)
+                          .join('; ')
+                        : '—'}
+                    </td>
+                    <td>
+                      {formatCurrency(
+                        (order.items || [])
+                          .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
+                          .reduce(
+                            (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+                            0,
+                          ),
+                      )}
+                    </td>
+                    <td>{formatStatus(order.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <EmptyState message="No pending orders. Great job staying on top of fulfilment." />
         )}
@@ -224,28 +243,31 @@ const SellerDashboard = () => {
         action={(
           <Link to="/dashboard/seller/inventory">Replenish stock</Link>
         )}
+        className="seller-overview__low-stock"
       >
         {lowStockProducts.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Status</th>
-                <th>Stock</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lowStockProducts.map((product) => (
-                <tr key={product.id}>
-                  <td>{product.name}</td>
-                  <td>{formatStatus(product.status)}</td>
-                  <td>{formatNumber(product.stock ?? 0)}</td>
-                  <td>{formatDate(product.updatedAt)}</td>
+          <div className="seller-overview__table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th>Stock</th>
+                  <th>Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lowStockProducts.map((product) => (
+                  <tr key={product.id}>
+                    <td>{product.name}</td>
+                    <td>{formatStatus(product.status)}</td>
+                    <td>{formatNumber(product.stock ?? 0)}</td>
+                    <td>{formatDate(product.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <EmptyState message="Inventory levels look healthy across published listings." />
         )}

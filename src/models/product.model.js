@@ -21,6 +21,11 @@ const productSchema = new mongoose.Schema(
             required: [true, "Product price is required"],
             min: [0, "Price cannot be negative"]
         },
+        mrp: {
+            type: Number,
+            min: [0, "MRP cannot be negative"],
+            default: null
+        },
         image: {
             type: String,
             required: [true, "Product image is required"]
@@ -54,6 +59,18 @@ const productSchema = new mongoose.Schema(
         timestamps: true
     }
 );
+
+productSchema.pre("validate", function (next) {
+    if (this.mrp === undefined || this.mrp === null) {
+        this.mrp = this.price;
+    }
+
+    if (this.price > this.mrp) {
+        this.price = this.mrp;
+    }
+
+    next();
+});
 
 const Product = mongoose.model("Product", productSchema);
 export default Product;

@@ -30,18 +30,30 @@ const SellerProductFormComponent = ({
         {renderCategoryOptions()}
       </Field>
       <Field
-        name="price"
+        name="mrp"
         component={FormField}
-        label="Price (₹)"
+        label="MRP (₹)"
+        placeholder="List price"
         type="number"
         step="0.01"
+        min="0"
+      />
+      <Field
+        name="price"
+        component={FormField}
+        label="Selling price (₹)"
+        placeholder="Optional if no discount"
+        type="number"
+        step="0.01"
+        min="0"
       />
       <Field
         name="stock"
         component={FormField}
         label="Stock"
         type="number"
-        placeholder="Optional"
+        min="0"
+        placeholder="Units available"
       />
     </div>
 

@@ -23,11 +23,34 @@ const SELLER_STATUS_FLAGS = new Set(ORDER_ITEM_STATUSES);
 
 const ORDER_NUMBER_PREFIX = 'FS';
 
+// Returns an integer discount percentage bounded between 0 and 100.
+const computeDiscountPercentage = (mrp, price) => {
+  const mrpValue = Number(mrp);
+  const priceValue = Number(price);
+
+  if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
+    return 0;
+  }
+
+  if (!Number.isFinite(priceValue) || priceValue <= 0) {
+    return 0;
+  }
+
+  if (priceValue >= mrpValue) {
+    return 0;
+  }
+
+  const discount = Math.round(((mrpValue - priceValue) / mrpValue) * 100);
+  return Math.min(100, Math.max(0, discount));
+};
+
 const mapProduct = (product) => ({
   id: product._id,
   name: product.name,
   description: product.description,
   price: product.price,
+  mrp: product.mrp ?? product.price,
+  discountPercentage: computeDiscountPercentage(product.mrp ?? product.price, product.price),
   image: product.image,
   category: product.category,
   stock: product.stock,
@@ -51,6 +74,8 @@ const mapCatalogueProduct = (product) => {
     name: product.name,
     description: product.description,
     price: product.price,
+    mrp: product.mrp ?? product.price,
+    discountPercentage: computeDiscountPercentage(product.mrp ?? product.price, product.price),
     image: product.image,
     category: product.category,
     stock: product.stock,
@@ -243,17 +268,41 @@ export const listSellerProducts = asyncHandler(async (req, res) => {
 });
 
 export const createSellerProduct = asyncHandler(async (req, res) => {
-  const { name, description, price, image, category, stock, status = 'available', isPublished = true } = req.body ?? {};
+  const {
+    name,
+    description,
+    price,
+    mrp,
+    image,
+    category,
+    stock,
+    status = 'available',
+    isPublished = true,
+  } = req.body ?? {};
 
-  if (!name || !description || price === undefined || !category) {
-    throw new ApiError(400, 'Name, description, price, and category are required');
+  if (!name || !description || mrp === undefined || !category) {
+    throw new ApiError(400, 'Name, description, MRP, and category are required');
+  }
+
+  const mrpValue = Number(mrp);
+  if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
+    throw new ApiError(400, 'MRP must be a valid amount');
+  }
+
+  let priceValue = price === undefined || price === null || price === '' ? mrpValue : Number(price);
+  if (!Number.isFinite(priceValue) || priceValue <= 0) {
+    priceValue = mrpValue;
+  }
+  if (priceValue > mrpValue) {
+    priceValue = mrpValue;
   }
 
   const product = await Product.create({
     seller: req.user._id,
     name,
     description,
-    price,
+    price: priceValue,
+    mrp: mrpValue,
     image,
     category,
     stock,
@@ -274,16 +323,33 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Product not found');
   }
 
-  const { name, description, price, image, category, stock, status, isPublished } = req.body ?? {};
+  const { name, description, price, mrp, image, category, stock, status, isPublished } = req.body ?? {};
 
   if (name !== undefined) product.name = name;
   if (description !== undefined) product.description = description;
-  if (price !== undefined) product.price = price;
+  if (mrp !== undefined) {
+    const mrpValue = Number(mrp);
+    if (!Number.isFinite(mrpValue) || mrpValue < 0) {
+      throw new ApiError(400, 'MRP must be a valid amount');
+    }
+    product.mrp = mrpValue;
+  }
+  if (price !== undefined) {
+    const priceValue = Number(price);
+    if (!Number.isFinite(priceValue) || priceValue < 0) {
+      throw new ApiError(400, 'Selling price must be a valid amount');
+    }
+    product.price = priceValue;
+  }
   if (image !== undefined) product.image = image;
   if (category !== undefined) product.category = category;
   if (stock !== undefined) product.stock = stock;
   if (status !== undefined) product.status = status;
   if (isPublished !== undefined) product.isPublished = isPublished;
+
+  if (product.mrp !== undefined && product.price > product.mrp) {
+    product.price = product.mrp;
+  }
 
   await product.save();
 

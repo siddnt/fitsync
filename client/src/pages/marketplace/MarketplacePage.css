@@ -117,6 +117,35 @@
   margin-top: auto;
 }
 
+.marketplace-product__price-block {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.marketplace-product__mrp {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  text-decoration: line-through;
+}
+
+.marketplace-product__price {
+  color: var(--light-text-color);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.marketplace-product__discount {
+  background: rgba(255, 107, 107, 0.25);
+  border-radius: 999px;
+  color: #ffa8a8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  text-transform: uppercase;
+}
+
 .marketplace-product__seller {
   color: var(--muted-text-color);
   font-size: 0.85rem;
