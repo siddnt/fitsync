@@ -11,8 +11,25 @@
   align-items: center;
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-section header h2 {
+  color: var(--text-color);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dashboard-section header > *:last-child {
+  margin-left: auto;
 }
 
 .dashboard-section__body {
   color: var(--muted-text-color);
+}
+
+.dashboard-section {
+  height: 100%;
 }

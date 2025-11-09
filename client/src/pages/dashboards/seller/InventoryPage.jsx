@@ -4,7 +4,7 @@ import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import SellerProductForm from './SellerProductForm.jsx';
-import { createSubmissionHandler, normaliseCategoryValue } from './helpers.js';
+import { createSubmissionHandler, normaliseCategoryValue, categoryOptions } from './helpers.js';
 import {
   useGetSellerProductsQuery,
   useCreateSellerProductMutation,
@@ -28,23 +28,58 @@ const filters = [
   { key: 'out-of-stock', label: 'Out of stock' },
 ];
 
+// Normalise server values so price widgets stay consistent across edge cases.
+const derivePricingDetails = (product) => {
+  const rawMrp = product?.mrp ?? product?.price ?? 0;
+  const rawPrice = product?.price ?? rawMrp;
+
+  const mrpValue = Number(rawMrp);
+  const priceValue = Number(rawPrice);
+
+  const safeMrp = Number.isFinite(mrpValue) && mrpValue > 0 ? mrpValue : (Number.isFinite(priceValue) && priceValue > 0 ? priceValue : 0);
+  const safePrice = Number.isFinite(priceValue) && priceValue > 0 ? priceValue : safeMrp;
+
+  if (!safeMrp || safePrice >= safeMrp) {
+    return {
+      mrp: safeMrp,
+      price: safePrice,
+      hasDiscount: false,
+      discountPercentage: 0,
+    };
+  }
+
+  const discount = Math.min(100, Math.max(0, Math.round(((safeMrp - safePrice) / safeMrp) * 100)));
+
+  return {
+    mrp: safeMrp,
+    price: safePrice,
+    hasDiscount: discount > 0,
+    discountPercentage: discount,
+  };
+};
+
 const mapInitialValues = (product) => {
   if (!product) {
     return {
       status: 'available',
-      isPublished: true,
+      mrp: '',
+      price: '',
     };
   }
+
+  const mrpValue = product.mrp ?? product.price ?? '';
+  const salePrice = product.price ?? '';
+  const hasDiscount = Number(mrpValue) > Number(salePrice);
 
   return {
     id: product.id,
     name: product.name,
     description: product.description,
-  category: normaliseCategoryValue(product.category),
-    price: product.price,
+    category: normaliseCategoryValue(product.category),
+    mrp: mrpValue === null || mrpValue === undefined ? '' : mrpValue,
+    price: hasDiscount ? salePrice : '',
     stock: product.stock,
-  status: typeof product.status === 'string' ? product.status.toLowerCase() : 'available',
-    isPublished: product.isPublished,
+    status: typeof product.status === 'string' ? product.status.toLowerCase() : 'available',
     image: product.image,
   };
 };
@@ -77,22 +112,53 @@ const InventoryPage = () => {
 
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [minStock, setMinStock] = useState('');
 
   const filteredProducts = useMemo(() => {
-    if (filterStatus === 'all') {
-      return products;
-    }
+    let list = products.slice();
 
+    // status-based filters
     if (filterStatus === 'published') {
-      return products.filter((product) => product.isPublished);
+      list = list.filter((product) => product.isPublished);
+    } else if (filterStatus === 'draft') {
+      list = list.filter((product) => !product.isPublished);
+    } else if (filterStatus !== 'all') {
+      list = list.filter((product) => (product.status ?? '').toLowerCase() === filterStatus);
     }
 
-    if (filterStatus === 'draft') {
-      return products.filter((product) => !product.isPublished);
+    // search by name
+    if (searchText.trim()) {
+      const t = searchText.trim().toLowerCase();
+      list = list.filter((p) => (p.name || '').toLowerCase().includes(t));
     }
 
-    return products.filter((product) => (product.status ?? '').toLowerCase() === filterStatus);
-  }, [products, filterStatus]);
+    // category filter
+    if (categoryFilter) {
+      list = list.filter((p) => (p.category || '').toLowerCase() === categoryFilter.toLowerCase());
+    }
+
+    // price range
+    const minP = minPrice === '' ? null : Number(minPrice);
+    const maxP = maxPrice === '' ? null : Number(maxPrice);
+    if (!Number.isNaN(minP) && minP !== null) {
+      list = list.filter((p) => (Number(p.price) || 0) >= minP);
+    }
+    if (!Number.isNaN(maxP) && maxP !== null) {
+      list = list.filter((p) => (Number(p.price) || 0) <= maxP);
+    }
+
+    // stock
+    const minS = minStock === '' ? null : Number(minStock);
+    if (!Number.isNaN(minS) && minS !== null) {
+      list = list.filter((p) => (Number(p.stock) || 0) >= minS);
+    }
+
+    return list;
+  }, [products, filterStatus, searchText, categoryFilter, minPrice, maxPrice, minStock]);
 
   const openCreatePanel = () => {
     setNotice(null);
@@ -127,15 +193,60 @@ const InventoryPage = () => {
     }
   };
 
+  const handleTogglePublish = async (product) => {
+    if (!product) return;
+    setNotice(null);
+    setErrorNotice(null);
+
+    try {
+      const pricing = derivePricingDetails(product);
+      // Prepare a payload with the current product fields but toggled isPublished.
+      // updateSellerProduct uses PUT so include the fields the API expects.
+      const payload = {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        category: product.category,
+        price: pricing.price,
+        mrp: pricing.mrp,
+        stock: product.stock,
+        status: product.status,
+        isPublished: !product.isPublished,
+        image: product.image,
+      };
+
+      await updateProduct(payload).unwrap();
+      setNotice(product.isPublished ? 'Product unpublished.' : 'Product published.');
+      refetch();
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to update product listing.');
+    }
+  };
+
   const submitProduct = createSubmissionHandler(async (values) => {
+    const mrpValue = Number(values.mrp ?? 0);
+    const sellingPriceProvided = !(values.price === undefined || values.price === null || values.price === '');
+    let sellingPriceValue = sellingPriceProvided ? Number(values.price) : mrpValue;
+
+    if (!Number.isFinite(sellingPriceValue) || sellingPriceValue <= 0) {
+      sellingPriceValue = mrpValue;
+    }
+
+    if (Number.isFinite(mrpValue) && mrpValue > 0 && sellingPriceValue > mrpValue) {
+      sellingPriceValue = mrpValue;
+    }
+
     const payload = {
       name: values.name,
       description: values.description,
-  category: normaliseCategoryValue(values.category),
-      price: Number(values.price),
+      category: normaliseCategoryValue(values.category),
+      price: sellingPriceValue,
+      mrp: Number.isFinite(mrpValue) && mrpValue > 0 ? mrpValue : sellingPriceValue,
       stock: Number(values.stock),
       status: values.status || 'available',
-      isPublished: Boolean(values.isPublished),
+      // products created from this form default to not published; publish/unpublish is
+      // controlled from the Inventory actions (Enable/Disable).
+      isPublished: editingProduct ? Boolean(editingProduct.isPublished) : false,
       image: values.image,
     };
 
@@ -185,10 +296,10 @@ const InventoryPage = () => {
     );
   }
 
-  const totalInventoryValue = filteredProducts.reduce(
-    (sum, product) => sum + (Number(product.price) || 0) * (Number(product.stock) || 0),
-    0,
-  );
+  const totalInventoryValue = filteredProducts.reduce((sum, product) => {
+    const { price } = derivePricingDetails(product);
+    return sum + (price || 0) * (Number(product.stock) || 0);
+  }, 0);
 
   return (
     <div className="dashboard-grid">
@@ -214,6 +325,47 @@ const InventoryPage = () => {
               </button>
             );
           })}
+        </div>
+
+        <div className="inventory-toolbar">
+          <input
+            type="text"
+            placeholder="Search by name"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="inventory-toolbar__input"
+          />
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="inventory-toolbar__input inventory-toolbar__input--select"
+          >
+            <option value="">All categories</option>
+            {categoryOptions.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Min selling price"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+            className="inventory-toolbar__input inventory-toolbar__input--number"
+          />
+          <input
+            type="number"
+            placeholder="Max selling price"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+            className="inventory-toolbar__input inventory-toolbar__input--number"
+          />
+          <input
+            type="number"
+            placeholder="Min stock"
+            value={minStock}
+            onChange={(e) => setMinStock(e.target.value)}
+            className="inventory-toolbar__input inventory-toolbar__input--number"
+          />
         </div>
 
         <div className="stat-grid">
@@ -253,34 +405,53 @@ const InventoryPage = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
-                <tr key={product.id}>
-                  <td>
-                    <strong>{product.name}</strong>
-                    <div>
-                      <small>{product.category}</small>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
-                      {product.isPublished ? 'Published' : 'Draft'} · {formatStatus(product.status)}
-                    </span>
-                  </td>
-                  <td>{formatNumber(product.stock ?? 0)}</td>
-                  <td>{formatCurrency(product.price)}</td>
-                  <td>{formatDate(product.updatedAt)}</td>
-                  <td>
-                    <div className="button-row">
-                      <button type="button" onClick={() => openEditPanel(product)}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
-                        {isDeleting ? 'Removing…' : 'Delete'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredProducts.map((product) => {
+                const pricing = derivePricingDetails(product);
+                const categoryLabel = product.category ? formatStatus(product.category) : 'Uncategorised';
+                return (
+                  <tr key={product.id}>
+                    <td>
+                      <strong>{product.name}</strong>
+                      <div className="dashboard-table__meta">
+                        <span className="inventory-category">{categoryLabel}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
+                        {product.isPublished ? 'Published' : 'Draft'} · {formatStatus(product.status)}
+                      </span>
+                    </td>
+                    <td>{formatNumber(product.stock ?? 0)}</td>
+                    <td>
+                      <div className="inventory-price">
+                        {pricing.hasDiscount ? (
+                          <>
+                            <span className="inventory-price__mrp">{formatCurrency(pricing.mrp)}</span>
+                            <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
+                            <span className="inventory-price__badge">-{pricing.discountPercentage}%</span>
+                          </>
+                        ) : (
+                          <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>{formatDate(product.updatedAt)}</td>
+                    <td>
+                      <div className="button-row">
+                        <button type="button" onClick={() => openEditPanel(product)}>
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => handleTogglePublish(product)}>
+                          {product.isPublished ? 'Disable' : 'Enable'}
+                        </button>
+                        <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
+                          {isDeleting ? 'Removing…' : 'Delete'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (

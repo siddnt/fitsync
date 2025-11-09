@@ -45,7 +45,7 @@ const GymFilters = ({ filters, onChange }) => {
             <input
               {...field}
               type="text"
-              placeholder="Search by gym or owner name"
+              placeholder="Search by gym"
               onChange={(event) => {
                 field.onChange(event);
                 handleFieldChange('search', event.target.value);

@@ -30,18 +30,30 @@ const SellerProductFormComponent = ({
         {renderCategoryOptions()}
       </Field>
       <Field
-        name="price"
+        name="mrp"
         component={FormField}
-        label="Price (₹)"
+        label="MRP (₹)"
+        placeholder="List price"
         type="number"
         step="0.01"
+        min="0"
+      />
+      <Field
+        name="price"
+        component={FormField}
+        label="Selling price (₹)"
+        placeholder="Optional if no discount"
+        type="number"
+        step="0.01"
+        min="0"
       />
       <Field
         name="stock"
         component={FormField}
         label="Stock"
         type="number"
-        placeholder="Optional"
+        min="0"
+        placeholder="Units available"
       />
     </div>
 
@@ -70,13 +82,6 @@ const SellerProductFormComponent = ({
         <option value="available">Available</option>
         <option value="out-of-stock">Out of stock</option>
       </Field>
-      <Field
-        name="isPublished"
-        component={FormField}
-        label="Show in marketplace"
-        as="checkbox"
-        type="checkbox"
-      />
     </div>
 
     {error ? <div className="form-error">{error}</div> : null}
@@ -119,7 +124,6 @@ const SellerProductForm = reduxForm({
   validate: validateProductForm,
   initialValues: {
     status: 'available',
-    isPublished: true,
   },
 })(SellerProductFormComponent);
 

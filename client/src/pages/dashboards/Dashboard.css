@@ -148,6 +148,14 @@
   flex-wrap: wrap;
 }
 
+.dashboard-form .button-row {
+  justify-content: flex-start;
+}
+
+.dashboard-form .button-row button {
+  flex: 1 1 160px;
+}
+
 .button-row button,
 .dashboard-table button {
   background: rgba(255, 255, 255, 0.08);
@@ -412,6 +420,151 @@
   border-color: rgba(132, 94, 247, 0.45);
 }
 
+.inventory-toolbar {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+}
+
+.inventory-toolbar__input {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--text-color);
+  font-size: 0.9rem;
+  padding: 0.55rem 0.75rem;
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.inventory-toolbar__input::placeholder {
+  color: var(--muted-text-color);
+}
+
+.inventory-toolbar__input--number {
+  max-width: 160px;
+}
+
+.inventory-toolbar__input--select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.6) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 2.25rem;
+}
+
+.inventory-price {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.inventory-price__mrp {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  text-decoration: line-through;
+}
+
+.inventory-price__final {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.inventory-price__badge {
+  background: rgba(255, 107, 107, 0.25);
+  border-radius: 999px;
+  color: #ffa8a8;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  text-transform: uppercase;
+}
+
+.inventory-category {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--muted-text-color);
+  display: inline-flex;
+  font-size: 0.7rem;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.6rem;
+  text-transform: uppercase;
+}
+
+.inventory-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.inventory-actions button {
+  flex: 1 1 120px;
+  justify-content: center;
+  min-width: 116px;
+}
+
+.inventory-actions--inline {
+  justify-content: flex-end;
+  min-width: 240px;
+}
+
+.inventory-actions--stacked {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.inventory-actions-cell {
+  width: 260px;
+}
+
+.inventory-actions-cell--hidden {
+  padding: 0 !important;
+  width: 0;
+}
+
+.inventory-actions-row td {
+  padding-top: 0;
+}
+
+.inventory-actions-row .inventory-actions {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 1280px) {
+  .inventory-actions--inline {
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 210px;
+  }
+
+  .inventory-actions--stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inventory-actions button {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+}
+
+.orders-toolbar {
+  margin: 0 0 1.25rem;
+}
+
+.orders-stat-grid {
+  margin-bottom: 1.25rem;
+}
+
 .order-items-list {
   display: flex;
   flex-direction: column;
@@ -636,5 +789,76 @@
   color: white;
   font-weight: 700;
   font-size: 0.85rem;
+}
+
+.seller-overview-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: stretch;
+}
+
+.seller-overview__catalogue,
+.seller-overview__analytics {
+  grid-column: 1 / -1;
+}
+
+.seller-overview__orders {
+  grid-column: auto;
+}
+
+.seller-overview__low-stock {
+  grid-column: auto;
+}
+
+.seller-overview__intro {
+  color: var(--muted-text-color);
+  font-size: 0.95rem;
+  margin: 0 0 1.25rem;
+}
+
+.seller-overview__stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.seller-overview__stat-grid .stat-card {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.seller-overview__table-wrapper {
+  margin-top: 0.75rem;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 0.35rem;
+}
+
+.seller-overview__table-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.seller-overview__table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.seller-overview__table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.seller-overview-layout .dashboard-table thead th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.seller-overview-layout .dashboard-table tbody td strong {
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .seller-overview__table-wrapper {
+    margin: 0.5rem -1rem 0;
+    padding: 0 1rem;
+  }
 }
 
