@@ -70,13 +70,6 @@ const SellerProductFormComponent = ({
         <option value="available">Available</option>
         <option value="out-of-stock">Out of stock</option>
       </Field>
-      <Field
-        name="isPublished"
-        component={FormField}
-        label="Show in marketplace"
-        as="checkbox"
-        type="checkbox"
-      />
     </div>
 
     {error ? <div className="form-error">{error}</div> : null}
@@ -119,7 +112,6 @@ const SellerProductForm = reduxForm({
   validate: validateProductForm,
   initialValues: {
     status: 'available',
-    isPublished: true,
   },
 })(SellerProductFormComponent);
 

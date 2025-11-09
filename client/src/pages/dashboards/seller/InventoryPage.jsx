@@ -32,7 +32,6 @@ const mapInitialValues = (product) => {
   if (!product) {
     return {
       status: 'available',
-      isPublished: true,
     };
   }
 
@@ -44,7 +43,6 @@ const mapInitialValues = (product) => {
     price: product.price,
     stock: product.stock,
   status: typeof product.status === 'string' ? product.status.toLowerCase() : 'available',
-    isPublished: product.isPublished,
     image: product.image,
   };
 };
@@ -127,6 +125,34 @@ const InventoryPage = () => {
     }
   };
 
+  const handleTogglePublish = async (product) => {
+    if (!product) return;
+    setNotice(null);
+    setErrorNotice(null);
+
+    try {
+      // Prepare a payload with the current product fields but toggled isPublished.
+      // updateSellerProduct uses PUT so include the fields the API expects.
+      const payload = {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        category: product.category,
+        price: product.price,
+        stock: product.stock,
+        status: product.status,
+        isPublished: !product.isPublished,
+        image: product.image,
+      };
+
+      await updateProduct(payload).unwrap();
+      setNotice(product.isPublished ? 'Product unpublished.' : 'Product published.');
+      refetch();
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to update product listing.');
+    }
+  };
+
   const submitProduct = createSubmissionHandler(async (values) => {
     const payload = {
       name: values.name,
@@ -135,7 +161,9 @@ const InventoryPage = () => {
       price: Number(values.price),
       stock: Number(values.stock),
       status: values.status || 'available',
-      isPublished: Boolean(values.isPublished),
+      // products created from this form default to not published; publish/unpublish is
+      // controlled from the Inventory actions (Enable/Disable).
+      isPublished: editingProduct ? Boolean(editingProduct.isPublished) : false,
       image: values.image,
     };
 
@@ -273,6 +301,9 @@ const InventoryPage = () => {
                     <div className="button-row">
                       <button type="button" onClick={() => openEditPanel(product)}>
                         Edit
+                      </button>
+                      <button type="button" onClick={() => handleTogglePublish(product)}>
+                        {product.isPublished ? 'Disable' : 'Enable'}
                       </button>
                       <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
                         {isDeleting ? 'Removing…' : 'Delete'}
