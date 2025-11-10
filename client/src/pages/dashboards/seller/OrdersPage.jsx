@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -6,7 +6,7 @@ import {
   useGetSellerOrdersQuery,
   useUpdateSellerOrderStatusMutation,
 } from '../../../services/sellerApi.js';
-import { formatCurrency, formatDate, formatStatus } from '../../../utils/format.js';
+import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import { SELLER_ORDER_STATUSES } from '../../../constants/orderStatuses.js';
 import '../Dashboard.css';
 
@@ -22,12 +22,80 @@ const OrdersPage = () => {
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [draftStatuses, setDraftStatuses] = useState({});
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const orders = ordersResponse?.data?.orders ?? [];
   const statusOptions = useMemo(() => {
     const allowed = new Set(ordersResponse?.data?.statusOptions ?? SELLER_ORDER_STATUSES.map((option) => option.value));
     return SELLER_ORDER_STATUSES.filter((option) => allowed.has(option.value));
   }, [ordersResponse]);
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All' },
+      ...statusOptions.map((option) => ({
+        value: option.value.toLowerCase(),
+        label: option.label,
+      })),
+    ],
+    [statusOptions],
+  );
+
+  const statusCounts = useMemo(() => {
+    const counts = orders.reduce((acc, order) => {
+      const key = (order.status ?? '').toString().toLowerCase() || 'unknown';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+    counts.all = orders.length;
+    return counts;
+  }, [orders]);
+
+  // Apply status and search filters without mutating the fetched dataset.
+  const filteredOrders = useMemo(() => {
+    const next = orders.filter((order) => {
+      const normalisedStatus = (order.status ?? '').toString().toLowerCase();
+      const statusMatch = statusFilter === 'all' ? true : normalisedStatus === statusFilter;
+
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) {
+        return statusMatch;
+      }
+
+      const searchable = [
+        order.orderNumber,
+        order.id,
+        order.buyer?.name,
+        order.buyer?.email,
+      ]
+        .map((value) => (value ?? '').toString().toLowerCase())
+        .some((value) => value.includes(query));
+
+      return statusMatch && searchable;
+    });
+
+    return next;
+  }, [orders, statusFilter, searchQuery]);
+
+  const filteredStats = useMemo(() => ({
+    shown: filteredOrders.length,
+    delivered: filteredOrders.filter((order) => (order.status ?? '').toString().toLowerCase() === 'delivered').length,
+    revenue: filteredOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+  }), [filteredOrders]);
+
+  const isFiltering = statusFilter !== 'all' || Boolean(searchQuery.trim());
+
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      return;
+    }
+
+    const available = statusFilterOptions.some((option) => option.value === statusFilter);
+    if (!available) {
+      setStatusFilter('all');
+    }
+  }, [statusFilter, statusFilterOptions]);
 
   const resolveDraftStatus = (orderId, itemId, currentStatus) =>
     draftStatuses[`${orderId}:${itemId}`] ?? currentStatus;
@@ -98,13 +166,57 @@ const OrdersPage = () => {
           </button>
         )}
       >
+        <div className="inventory-toolbar orders-toolbar">
+          <input
+            type="text"
+            className="inventory-toolbar__input"
+            placeholder="Search order number or buyer"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+          <select
+            className="inventory-toolbar__input inventory-toolbar__input--select"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            {statusFilterOptions.map((option) => {
+              const countKey = option.value === 'all' ? 'all' : option.value.toLowerCase();
+              const count = statusCounts[countKey] ?? 0;
+              const labelWithCount = count ? `${option.label} (${count})` : option.label;
+              return (
+                <option key={option.value} value={option.value}>
+                  {labelWithCount}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div className="stat-grid orders-stat-grid">
+          <div className="stat-card">
+            <small>Orders shown</small>
+            <strong>{formatNumber(filteredStats.shown)}</strong>
+            <small>{formatNumber(orders.length)} total</small>
+          </div>
+          <div className="stat-card">
+            <small>Delivered</small>
+            <strong>{formatNumber(filteredStats.delivered)}</strong>
+            <small>Within current filters</small>
+          </div>
+          <div className="stat-card">
+            <small>Gross revenue</small>
+            <strong>{formatCurrency(filteredStats.revenue)}</strong>
+            <small>Filtered selection</small>
+          </div>
+        </div>
+
         {(notice || errorNotice) && (
           <div className={`status-pill ${errorNotice ? 'status-pill--warning' : 'status-pill--success'}`}>
             {errorNotice || notice}
           </div>
         )}
 
-        {orders.length ? (
+        {filteredOrders.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
@@ -116,7 +228,7 @@ const OrdersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <tr key={order.id}>
                   <td>
                     <strong>{order.orderNumber ?? order.id}</strong>
@@ -174,7 +286,13 @@ const OrdersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No orders yet. Start promoting your listings to boost sales." />
+          <EmptyState
+            message={
+              isFiltering
+                ? 'No orders match the current filters.'
+                : 'No orders yet. Start promoting your listings to boost sales.'
+            }
+          />
         )}
       </DashboardSection>
     </div>

@@ -42,10 +42,23 @@ export const validateProductForm = (values) => {
   if (!values.description) {
     errors.description = 'Add a short description';
   }
-  if (values.price === undefined || values.price === null || values.price === '') {
-    errors.price = 'Price is required';
-  } else if (Number.isNaN(Number(values.price))) {
-    errors.price = 'Price must be a number';
+  if (values.mrp === undefined || values.mrp === null || values.mrp === '') {
+    errors.mrp = 'MRP is required';
+  } else if (Number.isNaN(Number(values.mrp))) {
+    errors.mrp = 'MRP must be a number';
+  } else if (Number(values.mrp) <= 0) {
+    errors.mrp = 'MRP must be greater than zero';
+  }
+
+  const hasSellingPrice = !(values.price === undefined || values.price === null || values.price === '');
+  if (hasSellingPrice) {
+    if (Number.isNaN(Number(values.price))) {
+      errors.price = 'Selling price must be a number';
+    } else if (Number(values.price) <= 0) {
+      errors.price = 'Selling price must be greater than zero';
+    } else if (!errors.mrp && Number(values.price) > Number(values.mrp)) {
+      errors.price = 'Selling price cannot exceed the MRP';
+    }
   }
   if (values.stock === undefined || values.stock === null || values.stock === '') {
     errors.stock = 'Stock quantity is required';
