@@ -30,10 +30,10 @@ export const sellerApi = apiSlice.injectEndpoints({
       ],
     }),
     updateSellerProduct: builder.mutation({
-      query: ({ id, ...payload }) => ({
+      query: ({ id, body }) => ({
         url: `/marketplace/seller/products/${id}`,
         method: 'PUT',
-        body: payload,
+        body,
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Marketplace', id },

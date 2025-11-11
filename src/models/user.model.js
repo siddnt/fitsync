@@ -48,10 +48,7 @@ const userSchema = new mongoose.Schema(
             enum: ["active", "inactive", "pending"],
             default: function() {
                 // If role is trainer, set status to pending by default
-                if (this.role === "trainer") {
-                    return "pending";
-                }
-                if (this.role === "gym-owner") {
+                if (["trainer", "gym-owner", "seller"].includes(this.role)) {
                     return "pending";
                 }
                 return "active";

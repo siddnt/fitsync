@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import SellerProductForm from './SellerProductForm.jsx';
+import { SubmissionError } from 'redux-form';
 import { createSubmissionHandler, normaliseCategoryValue, categoryOptions } from './helpers.js';
 import {
   useGetSellerProductsQuery,
@@ -27,6 +28,30 @@ const filters = [
   { key: 'available', label: 'Available' },
   { key: 'out-of-stock', label: 'Out of stock' },
 ];
+
+const buildProductFormData = (fields, file) => {
+  const formData = new FormData();
+  const supportsFile = typeof File !== 'undefined';
+
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    if (value instanceof Date) {
+      formData.append(key, value.toISOString());
+      return;
+    }
+
+    formData.append(key, value);
+  });
+
+  if (supportsFile && file instanceof File) {
+    formData.append('image', file);
+  }
+
+  return formData;
+};
 
 // Normalise server values so price widgets stay consistent across edge cases.
 const derivePricingDetails = (product) => {
@@ -64,6 +89,8 @@ const mapInitialValues = (product) => {
       status: 'available',
       mrp: '',
       price: '',
+      image: '',
+      existingImageUrl: null,
     };
   }
 
@@ -80,7 +107,8 @@ const mapInitialValues = (product) => {
     price: hasDiscount ? salePrice : '',
     stock: product.stock,
     status: typeof product.status === 'string' ? product.status.toLowerCase() : 'available',
-    image: product.image,
+    image: '__existing__',
+    existingImageUrl: product.image ?? null,
   };
 };
 
@@ -92,6 +120,7 @@ const InventoryPage = () => {
     data: productsResponse,
     isLoading,
     isError,
+    error,
     refetch,
   } = useGetSellerProductsQuery();
   const [createProduct] = useCreateSellerProductMutation();
@@ -117,6 +146,8 @@ const InventoryPage = () => {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minStock, setMinStock] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
 
   const filteredProducts = useMemo(() => {
     let list = products.slice();
@@ -160,9 +191,68 @@ const InventoryPage = () => {
     return list;
   }, [products, filterStatus, searchText, categoryFilter, minPrice, maxPrice, minStock]);
 
+  const approvalError = error?.status === 403 ? error : null;
+  const approvalMessage = approvalError?.data?.message
+    ?? 'Your seller account is awaiting admin approval. Hang tight—you can start listing products as soon as you are activated.';
+
+  const createPreviewUrl = useCallback((file) => {
+    if (!file) {
+      return null;
+    }
+    const hasWindowUrl = typeof window !== 'undefined'
+      && window.URL
+      && typeof window.URL.createObjectURL === 'function';
+    if (hasWindowUrl) {
+      return window.URL.createObjectURL(file);
+    }
+
+    const hasGlobalUrl = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function';
+    return hasGlobalUrl ? URL.createObjectURL(file) : null;
+  }, []);
+
+  const revokePreviewUrl = useCallback((url) => {
+    if (!url) {
+      return;
+    }
+    const hasWindowUrl = typeof window !== 'undefined'
+      && window.URL
+      && typeof window.URL.revokeObjectURL === 'function';
+    if (hasWindowUrl) {
+      window.URL.revokeObjectURL(url);
+      return;
+    }
+
+    if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(url);
+    }
+  }, []);
+
+  const resetImageSelection = useCallback(() => {
+    setImageFile(null);
+    setImagePreviewUrl((prevUrl) => {
+      revokePreviewUrl(prevUrl);
+      return null;
+    });
+  }, [revokePreviewUrl]);
+
+  const handleImageSelect = useCallback((file) => {
+    setImageFile(file ?? null);
+    setImagePreviewUrl((prevUrl) => {
+      revokePreviewUrl(prevUrl);
+      return createPreviewUrl(file ?? null);
+    });
+  }, [createPreviewUrl, revokePreviewUrl]);
+
+  useEffect(() => () => {
+    if (imagePreviewUrl) {
+      revokePreviewUrl(imagePreviewUrl);
+    }
+  }, [imagePreviewUrl, revokePreviewUrl]);
+
   const openCreatePanel = () => {
     setNotice(null);
     setErrorNotice(null);
+    resetImageSelection();
     dispatch(openProductPanel(null));
     dispatch(reset('sellerProduct'));
   };
@@ -170,6 +260,7 @@ const InventoryPage = () => {
   const openEditPanel = (product) => {
     setNotice(null);
     setErrorNotice(null);
+    resetImageSelection();
     dispatch(openProductPanel(product.id));
   };
 
@@ -200,22 +291,20 @@ const InventoryPage = () => {
 
     try {
       const pricing = derivePricingDetails(product);
-      // Prepare a payload with the current product fields but toggled isPublished.
-      // updateSellerProduct uses PUT so include the fields the API expects.
-      const payload = {
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        category: product.category,
-        price: pricing.price,
-        mrp: pricing.mrp,
-        stock: product.stock,
-        status: product.status,
-        isPublished: !product.isPublished,
-        image: product.image,
-      };
+      const formData = buildProductFormData(
+        {
+          name: product.name,
+          description: product.description ?? '',
+          category: normaliseCategoryValue(product.category),
+          price: pricing.price,
+          mrp: pricing.mrp,
+          stock: product.stock ?? 0,
+          status: product.status || 'available',
+          isPublished: !product.isPublished,
+        },
+      );
 
-      await updateProduct(payload).unwrap();
+      await updateProduct({ id: product.id, body: formData }).unwrap();
       setNotice(product.isPublished ? 'Product unpublished.' : 'Product published.');
       refetch();
     } catch (mutationError) {
@@ -236,37 +325,48 @@ const InventoryPage = () => {
       sellingPriceValue = mrpValue;
     }
 
-    const payload = {
-      name: values.name,
-      description: values.description,
-      category: normaliseCategoryValue(values.category),
-      price: sellingPriceValue,
-      mrp: Number.isFinite(mrpValue) && mrpValue > 0 ? mrpValue : sellingPriceValue,
-      stock: Number(values.stock),
-      status: values.status || 'available',
-      // products created from this form default to not published; publish/unpublish is
-      // controlled from the Inventory actions (Enable/Disable).
-      isPublished: editingProduct ? Boolean(editingProduct.isPublished) : false,
-      image: values.image,
-    };
+    const selectedImageFile = typeof File !== 'undefined' && imageFile instanceof File ? imageFile : null;
+
+    if (!editingProduct && !selectedImageFile) {
+      throw new SubmissionError({
+        image: 'Upload a product image before listing this product.',
+        _error: 'Select an image to continue.',
+      });
+    }
+
+    const formData = buildProductFormData(
+      {
+        name: values.name?.trim?.() ?? values.name,
+        description: values.description?.trim?.() ?? values.description,
+        category: normaliseCategoryValue(values.category),
+        price: sellingPriceValue,
+        mrp: Number.isFinite(mrpValue) && mrpValue > 0 ? mrpValue : sellingPriceValue,
+        stock: Number(values.stock),
+        status: values.status || 'available',
+        isPublished: editingProduct ? Boolean(editingProduct.isPublished) : false,
+      },
+      selectedImageFile,
+    );
 
     if (editingProduct) {
-      await updateProduct({ id: editingProduct.id, ...payload }).unwrap();
+      await updateProduct({ id: editingProduct.id, body: formData }).unwrap();
       setNotice('Product updated successfully.');
     } else {
-      await createProduct(payload).unwrap();
+      await createProduct(formData).unwrap();
       setNotice('Product created successfully.');
     }
 
     setErrorNotice(null);
     dispatch(closeProductPanel());
     dispatch(reset('sellerProduct'));
+    resetImageSelection();
     refetch();
   });
 
   const closePanel = () => {
     dispatch(closeProductPanel());
     dispatch(reset('sellerProduct'));
+    resetImageSelection();
   };
 
   if (isLoading) {
@@ -274,6 +374,23 @@ const InventoryPage = () => {
       <div className="dashboard-grid">
         <DashboardSection title="Inventory">
           <SkeletonPanel lines={10} />
+        </DashboardSection>
+      </div>
+    );
+  }
+
+  if (approvalError) {
+    return (
+      <div className="dashboard-grid">
+        <DashboardSection
+          title="Inventory"
+          action={(
+            <button type="button" onClick={() => refetch()}>
+              Refresh
+            </button>
+          )}
+        >
+          <EmptyState message={approvalMessage} />
         </DashboardSection>
       </div>
     );
@@ -466,6 +583,9 @@ const InventoryPage = () => {
             onCancel={closePanel}
             isEditing={Boolean(editingProduct)}
             initialValues={mapInitialValues(editingProduct)}
+            onImageSelect={handleImageSelect}
+            selectedFile={imageFile}
+            previewUrl={imagePreviewUrl}
           />
         </DashboardSection>
       ) : null}

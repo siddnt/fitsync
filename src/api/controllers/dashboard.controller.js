@@ -30,12 +30,51 @@ const daysBetween = (from, to) => {
 
 const formatCurrency = (amount = 0, currency = 'INR') => ({ amount, currency });
 
+const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
+
+const normaliseOrderItemStatus = (status) => {
+  if (!status) {
+    return 'processing';
+  }
+  const value = status.toString().toLowerCase();
+  if (ORDER_STATUS_KEYS.includes(value)) {
+    return value;
+  }
+  if (value === 'shipped') {
+    return 'in-transit';
+  }
+  if (value === 'placed' || value === 'cancelled') {
+    return 'processing';
+  }
+  return 'processing';
+};
+
+const summariseOrderStatus = (order) => {
+  const items = order?.orderItems || [];
+  if (!items.length) {
+    return 'processing';
+  }
+
+  const statuses = items.map((item) => normaliseOrderItemStatus(item.status));
+
+  if (statuses.every((status) => status === 'delivered')) {
+    return 'delivered';
+  }
+  if (statuses.some((status) => status === 'out-for-delivery')) {
+    return 'out-for-delivery';
+  }
+  if (statuses.some((status) => status === 'in-transit')) {
+    return 'in-transit';
+  }
+  return 'processing';
+};
+
 const buildOrderSummary = (orders = []) =>
   orders.map((order) => ({
     id: order._id,
     orderNumber: order.orderNumber,
     total: formatCurrency(order.total, 'INR'),
-    status: order.status,
+    status: summariseOrderStatus(order),
     createdAt: order.createdAt,
     itemsCount: order.orderItems?.reduce((total, item) => total + (item.quantity || 0), 0) ?? 0,
   }));
@@ -792,7 +831,7 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
 });
 
 export const getAdminUsers = asyncHandler(async (_req, res) => {
-  const pendingQuery = User.find({ status: 'pending' })
+  const pendingQuery = User.find({ status: 'pending', role: 'seller' })
     .select('name email role createdAt profile.location profile.headline')
     .lean();
 
@@ -892,7 +931,7 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
     id: order._id,
     orderNumber: order.orderNumber,
     total: formatCurrency(order.total, 'INR'),
-    status: order.status,
+    status: summariseOrderStatus(order),
     createdAt: order.createdAt,
     user: order.user ? { id: order.user._id, name: order.user.name, email: order.user.email } : null,
     items: order.orderItems?.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price })) ?? [],

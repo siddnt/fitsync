@@ -3,14 +3,15 @@ import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
-import { useDeleteUserMutation } from '../../../services/adminApi.js';
+import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const AdminUsersPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
-  const pending = data?.data?.pending ?? [];
+  const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
+  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'seller');
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
@@ -33,6 +34,23 @@ const AdminUsersPage = () => {
       refetch();
     } catch (mutationError) {
       setErrorNotice(mutationError?.data?.message ?? 'Unable to delete this user.');
+    }
+  };
+
+  const handleApprove = async (user) => {
+    if (!user) {
+      return;
+    }
+
+    setNotice(null);
+    setErrorNotice(null);
+
+    try {
+      await updateUserStatus({ userId: user._id ?? user.id, status: 'active' }).unwrap();
+      setNotice(`${user.name ?? 'User'} activated.`);
+      refetch();
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to approve this user.');
     }
   };
 
@@ -106,9 +124,18 @@ const AdminUsersPage = () => {
                   <td>{formatStatus(user.role)}</td>
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
-                    <button type="button" onClick={() => handleDelete(user)} disabled={isDeleting}>
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(user)}
+                        disabled={isUpdatingStatus}
+                      >
+                        {isUpdatingStatus ? 'Approving…' : 'Approve'}
+                      </button>
+                      <button type="button" onClick={() => handleDelete(user)} disabled={isDeleting}>
                       {isDeleting ? 'Deleting…' : 'Delete'}
-                    </button>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
