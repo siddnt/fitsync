@@ -2,84 +2,63 @@ import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import DistributionPieChart from '../components/DistributionPieChart.jsx';
-import RevenueSummaryChart from '../components/RevenueSummaryChart.jsx';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
+import GymOwnerRevenueChart from '../components/GymOwnerRevenueChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetGymOwnerAnalyticsQuery } from '../../../services/dashboardApi.js';
-import { formatNumber } from '../../../utils/format.js';
+import { formatCurrency, formatNumber } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const GymOwnerAnalyticsPage = () => {
-  const [granularity, setGranularity] = useState('monthly'); // 'weekly' or 'monthly'
+  const [timeframe, setTimeframe] = useState('monthly');
   const { data, isLoading, isError, refetch } = useGetGymOwnerAnalyticsQuery();
   const analytics = data?.data;
 
-  const rawRevenueTrend = analytics?.revenueTrend;
-  const rawMembershipTrend = analytics?.membershipTrend;
-
   const revenueTrend = useMemo(() => {
-    const sourceTrend = Array.isArray(rawRevenueTrend) ? rawRevenueTrend : [];
+    const trend = analytics?.revenueTrend?.[timeframe];
+    return Array.isArray(trend) ? trend : [];
+  }, [analytics, timeframe]);
 
-    if (granularity === 'monthly' || sourceTrend.length === 0) {
-      return sourceTrend.map((entry) => ({
-        label: entry.label,
-        earnings: entry.value,
-      }));
-    }
-
-    // For weekly granularity
-    const weeklyData = [];
-    sourceTrend.forEach((monthEntry) => {
-      const weeksInMonth = 4;
-      const weeklyEarnings = (Number(monthEntry.value) || 0) / weeksInMonth;
-
-      for (let week = 1; week <= weeksInMonth; week++) {
-        weeklyData.push({
-          label: `${monthEntry.label} W${week}`,
-          earnings: Math.round(weeklyEarnings),
-        });
-      }
-    });
-
-    return weeklyData;
-  }, [rawRevenueTrend, granularity]);
+  const revenueSummary = useMemo(
+    () => analytics?.revenueSummary?.[timeframe] ?? null,
+    [analytics, timeframe],
+  );
 
   const membershipTrend = useMemo(() => {
-    const sourceTrend = Array.isArray(rawMembershipTrend) ? rawMembershipTrend : [];
-
-    if (granularity === 'monthly' || sourceTrend.length === 0) {
-      return sourceTrend.map((entry) => ({
-        label: entry.label,
-        memberships: entry.value,
-      }));
+    const trend = analytics?.membershipTrend?.[timeframe];
+    if (!Array.isArray(trend)) {
+      return [];
     }
+    return trend.map((entry) => ({
+      label: entry.label,
+      memberships: entry.value,
+      fullLabel: entry.fullLabel,
+    }));
+  }, [analytics, timeframe]);
 
-    // For weekly granularity
-    const weeklyData = [];
-    sourceTrend.forEach((monthEntry) => {
-      const weeksInMonth = 4;
-      const weeklyMemberships = (Number(monthEntry.value) || 0) / weeksInMonth;
+  const impressionsSplit = useMemo(
+    () => analytics?.gyms?.map((gym) => ({
+      name: gym.name,
+      value: gym.impressions ?? 0,
+    })),
+    [analytics?.gyms],
+  );
 
-      for (let week = 1; week <= weeksInMonth; week++) {
-        weeklyData.push({
-          label: `${monthEntry.label} W${week}`,
-          memberships: Math.round(weeklyMemberships),
-        });
-      }
-    });
-
-    return weeklyData;
-  }, [rawMembershipTrend, granularity]);
-
-  const impressionsSplit = analytics?.gyms?.map((gym) => ({
-    name: gym.name,
-    value: gym.impressions ?? 0,
-  }));
+  const expenseBreakdown = useMemo(() => {
+    const breakdown = analytics?.expenseBreakdown;
+    if (!Array.isArray(breakdown)) {
+      return [];
+    }
+    return breakdown.map((entry) => ({
+      name: entry.label,
+      value: entry.value,
+    }));
+  }, [analytics]);
 
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
-        {['Revenue summary', 'Membership trend', 'Gym performance'].map((title) => (
+        {['Revenue performance', 'Membership trend', 'Gym performance'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -107,43 +86,28 @@ const GymOwnerAnalyticsPage = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--owner">
-      {/* Analytics Controls */}
-      <DashboardSection
-        title="Analytics View"
-        action={
-          <div className="dashboard-controls__toggle">
-            <button
-              type="button"
-              className={`toggle-btn ${granularity === 'weekly' ? 'active' : ''}`}
-              onClick={() => setGranularity('weekly')}
-            >
-              Weekly
-            </button>
-            <button
-              type="button"
-              className={`toggle-btn ${granularity === 'monthly' ? 'active' : ''}`}
-              onClick={() => setGranularity('monthly')}
-            >
-              Monthly
-            </button>
-          </div>
-        }
-        className="dashboard-section--span-12"
-      >
-        <p className="dashboard-section__hint">
-          Switch between weekly and monthly views to analyze trends at different time scales.
-        </p>
-      </DashboardSection>
-
-      <DashboardSection title="Revenue summary" className="dashboard-section--span-6">
+      <DashboardSection title="Revenue performance" className="dashboard-section--span-8">
         {revenueTrend?.length ? (
-          <RevenueSummaryChart role="gym-owner" data={revenueTrend} valueKey="earnings" />
+          <GymOwnerRevenueChart
+            data={revenueTrend}
+            timeframe={timeframe}
+            onTimeframeChange={setTimeframe}
+            summary={revenueSummary}
+          />
         ) : (
           <EmptyState message="You will see revenue once transactions are recorded." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Membership trend" className="dashboard-section--span-6">
+      <DashboardSection
+        title="Membership trend"
+        action={(
+          <span className="dashboard-timeframe-label">
+            {timeframe === 'weekly' ? 'Weekly view' : 'Monthly view'}
+          </span>
+        )}
+        className="dashboard-section--span-4"
+      >
         {membershipTrend?.length ? (
           <GrowthLineChart
             role="gym-owner"
@@ -157,7 +121,7 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Gym performance" className="dashboard-section--span-8">
+      <DashboardSection title="Gym performance" className="dashboard-section--span-12">
         {analytics?.gyms?.length ? (
           <table className="dashboard-table">
             <thead>
@@ -184,11 +148,31 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Impression share" className="dashboard-section--span-4">
+      <DashboardSection title="Impression share" className="dashboard-section--span-6">
         {impressionsSplit?.length ? (
-          <DistributionPieChart role="gym-owner" data={impressionsSplit} />
+          <DistributionPieChart
+            role="gym-owner"
+            data={impressionsSplit}
+            interactive
+            valueFormatter={(value) => formatNumber(value)}
+          />
         ) : (
           <EmptyState message="No impressions tracked yet." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Marketplace spend" className="dashboard-section--span-6">
+        {expenseBreakdown?.length ? (
+          <DistributionPieChart
+            role="gym-owner"
+            data={expenseBreakdown}
+            valueKey="value"
+            nameKey="name"
+            interactive
+            valueFormatter={(value) => formatCurrency({ amount: value })}
+          />
+        ) : (
+          <EmptyState message="No listing or sponsorship spend recorded yet." />
         )}
       </DashboardSection>
     </div>

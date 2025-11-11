@@ -1,7 +1,8 @@
 import PropTypes from 'prop-types';
+import { useEffect, useMemo, useState } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
 
-const COLORS = ['#ff6b6b', '#4dabf7', '#20c997', '#845ef7'];
+const COLORS = ['#845ef7', '#4dabf7', '#ff6b6b', '#ffd43b', '#20c997', '#94d82d', '#5c7cfa', '#ff922b'];
 
 const sampleDistribution = {
   'gym-owner': [
@@ -16,32 +17,129 @@ const sampleDistribution = {
   ],
 };
 
-const DistributionPieChart = ({ role, data, valueKey, nameKey }) => {
+const numberFormatter = new Intl.NumberFormat('en-IN');
+const defaultFormatter = (value) => numberFormatter.format(Number(value) || 0);
+
+const slugify = (value) => {
+  if (!value) {
+    return 'segment';
+  }
+  return value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+};
+
+const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valueFormatter }) => {
   const fallbackData = sampleDistribution[role] ?? sampleDistribution['gym-owner'];
   const resolvedData = data?.length ? data : fallbackData;
   const resolvedValueKey = valueKey || 'value';
   const resolvedNameKey = nameKey || 'name';
+  const formatter = valueFormatter || defaultFormatter;
+
+  const decoratedData = useMemo(
+    () =>
+      resolvedData.map((entry, index) => {
+        const name = entry?.[resolvedNameKey] ?? `Segment ${index + 1}`;
+        const id = entry?.id ?? (slugify(name) || `segment-${index}`);
+        const value = Number(entry?.[resolvedValueKey]) || 0;
+        return {
+          ...entry,
+          id,
+          name,
+          value,
+          color: entry?.color || COLORS[index % COLORS.length],
+        };
+      }),
+    [resolvedData, resolvedNameKey, resolvedValueKey],
+  );
+
+  const [hiddenKeys, setHiddenKeys] = useState([]);
+
+  useEffect(() => {
+    setHiddenKeys((prev) => prev.filter((key) => decoratedData.some((entry) => entry.id === key)));
+  }, [decoratedData]);
+
+  const activeData = interactive
+    ? decoratedData.filter((entry) => !hiddenKeys.includes(entry.id))
+    : decoratedData;
+
+  const totalVisible = activeData.reduce((sum, entry) => sum + entry.value, 0);
+  const hasData = decoratedData.length > 0;
+
+  const toggleKey = (key) => {
+    setHiddenKeys((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
+  };
+
+  const legend = interactive && hasData ? (
+    <ul className="pie-legend">
+      {decoratedData.map((entry) => {
+        const isMuted = hiddenKeys.includes(entry.id);
+        const share = totalVisible ? ((entry.value / totalVisible) * 100).toFixed(1) : 0;
+        return (
+          <li key={entry.id}>
+            <button
+              type="button"
+              className={`pie-legend__button${isMuted ? ' pie-legend__button--muted' : ''}`}
+              onClick={() => toggleKey(entry.id)}
+            >
+              <span
+                className="pie-legend__marker"
+                style={{ backgroundColor: entry.color, opacity: isMuted ? 0.4 : 1 }}
+              />
+              <span className="pie-legend__label">
+                <strong>{entry.name}</strong>
+                <small>
+                  {formatter(entry.value)}
+                  {totalVisible ? ` · ${share}%` : ''}
+                </small>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  ) : null;
+
+  const displayData = activeData.length ? activeData : [];
+  const emptyMessage = hasData
+    ? 'No segments selected. Use the legend below to toggle categories.'
+    : 'No data available yet.';
 
   return (
-    <div className="chart-container">
-      <ResponsiveContainer width="100%" height={240}>
-        <PieChart>
-          <Pie
-            data={resolvedData}
-            dataKey={resolvedValueKey}
-            nameKey={resolvedNameKey}
-            innerRadius={60}
-            outerRadius={90}
-            paddingAngle={6}
-          >
-            {resolvedData.map((entry, index) => (
-              <Cell key={entry[resolvedNameKey]} fill={COLORS[index % COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }} />
-          <Legend wrapperStyle={{ color: '#fff' }} />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className={`chart-container${interactive ? ' chart-container--interactive' : ''}`}>
+      {displayData.length ? (
+        <ResponsiveContainer width="100%" height={interactive ? 220 : 240}>
+          <PieChart>
+            <Pie
+              data={displayData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={60}
+              outerRadius={90}
+              paddingAngle={6}
+            >
+              {displayData.map((entry) => (
+                <Cell
+                  key={entry.id}
+                  fill={entry.color}
+                  fillOpacity={hiddenKeys.includes(entry.id) ? 0.4 : 1}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
+              formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
+            />
+            {interactive ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
+          </PieChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="empty-state">{emptyMessage}</p>
+      )}
+      {legend}
     </div>
   );
 };
@@ -51,6 +149,8 @@ DistributionPieChart.propTypes = {
   data: PropTypes.arrayOf(PropTypes.object),
   valueKey: PropTypes.string,
   nameKey: PropTypes.string,
+  interactive: PropTypes.bool,
+  valueFormatter: PropTypes.func,
 };
 
 DistributionPieChart.defaultProps = {
@@ -58,6 +158,8 @@ DistributionPieChart.defaultProps = {
   data: null,
   valueKey: null,
   nameKey: null,
+  interactive: false,
+  valueFormatter: null,
 };
 
 export default DistributionPieChart;

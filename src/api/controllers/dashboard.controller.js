@@ -30,7 +30,172 @@ const daysBetween = (from, to) => {
 
 const formatCurrency = (amount = 0, currency = 'INR') => ({ amount, currency });
 
+const toDate = (value) => {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const buildSubscriptionExpenseEntries = (subscriptions = []) => {
+  const entries = [];
+
+  subscriptions.forEach((subscription) => {
+    const invoices = Array.isArray(subscription?.invoices) ? subscription.invoices : [];
+
+    if (invoices.length) {
+      invoices.forEach((invoice) => {
+        const when = toDate(invoice?.paidOn) || toDate(invoice?.createdAt) || toDate(subscription?.periodStart);
+        if (!when) {
+          return;
+        }
+        entries.push({ amount: Number(invoice?.amount) || 0, date: when, source: 'listing' });
+      });
+      return;
+    }
+
+    const fallbackDate = toDate(subscription?.periodStart) || toDate(subscription?.createdAt);
+    if (!fallbackDate) {
+      return;
+    }
+    entries.push({ amount: Number(subscription?.amount) || 0, date: fallbackDate, source: 'listing' });
+  });
+
+  return entries;
+};
+
+const buildSponsorshipExpenseEntries = (gyms = []) => {
+  const entries = [];
+
+  gyms.forEach((gym) => {
+    const sponsorship = gym?.sponsorship;
+    if (!sponsorship || !sponsorship?.monthlyBudget) {
+      return;
+    }
+
+    const start = toDate(sponsorship.startDate) || toDate(gym?.createdAt);
+    const end = toDate(sponsorship.endDate) || new Date();
+
+    if (!start || !end) {
+      return;
+    }
+
+    const monthlyBudget = Number(sponsorship.monthlyBudget) || 0;
+    if (monthlyBudget <= 0) {
+      return;
+    }
+
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    while (cursor <= endMonth) {
+      entries.push({ amount: monthlyBudget, date: new Date(cursor), source: 'sponsorship' });
+      cursor.setMonth(cursor.getMonth() + 1, 1);
+    }
+  });
+
+  return entries;
+};
+
+const collectOwnerExpenseEntries = ({ subscriptions = [], gyms = [] } = {}) => {
+  const entries = [
+    ...buildSubscriptionExpenseEntries(subscriptions),
+    ...buildSponsorshipExpenseEntries(gyms),
+  ];
+
+  return entries.filter((entry) => entry.amount > 0 && entry.date instanceof Date);
+};
+
+const createMonthlyTimeline = (months, referenceDate = new Date()) => {
+  const timeline = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const date = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
+    const id = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    timeline.push({
+      id,
+      label: date.toLocaleDateString('en-IN', { month: 'short' }),
+      fullLabel: date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+      referenceDate: date,
+      revenue: 0,
+      expenses: 0,
+      memberships: 0,
+    });
+  }
+  return timeline;
+};
+
+const createWeeklyTimeline = (weeks, referenceDate = new Date()) => {
+  const timeline = [];
+  const end = new Date(referenceDate);
+  end.setHours(0, 0, 0, 0);
+
+  for (let i = weeks - 1; i >= 0; i -= 1) {
+    const weekEnd = new Date(end);
+    weekEnd.setDate(end.getDate() - (weeks - 1 - i) * 7);
+    const weekStart = new Date(weekEnd);
+    weekStart.setDate(weekEnd.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const label = `${weekStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+    const fullLabel = `${weekStart.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+    })} – ${weekEnd.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })}`;
+
+    timeline.push({
+      id: weekStart.toISOString().slice(0, 10),
+      label,
+      fullLabel,
+      start: weekStart,
+      end: weekEnd,
+      revenue: 0,
+      expenses: 0,
+      memberships: 0,
+    });
+  }
+
+  return timeline.reverse();
+};
+
+const applyMonthlyAmount = (timeline, date, key, amount) => {
+  const targetDate = toDate(date);
+  if (!targetDate) {
+    return;
+  }
+
+  const id = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+  const bucket = timeline.find((entry) => entry.id === id);
+  if (!bucket) {
+    return;
+  }
+  bucket[key] += Number(amount) || 0;
+};
+
+const applyWeeklyAmount = (timeline, date, key, amount) => {
+  const targetDate = toDate(date);
+  if (!targetDate) {
+    return;
+  }
+
+  const bucket = timeline.find((entry) => targetDate >= entry.start && targetDate <= entry.end);
+  if (!bucket) {
+    return;
+  }
+  bucket[key] += Number(amount) || 0;
+};
+
 const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
+
+const REVENUE_EARNING_TYPES = ['membership', 'enrollment', 'renewal'];
 
 const normaliseOrderItemStatus = (status) => {
   if (!status) {
@@ -325,7 +490,10 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
           pendingGyms: 0,
           activeMemberships: 0,
           revenue30d: formatCurrency(0),
+          expenses30d: formatCurrency(0),
+          profit30d: formatCurrency(0),
           impressions30d: 0,
+          sponsoredGyms: 0,
         },
         gyms: [],
         expiringSubscriptions: [],
@@ -347,6 +515,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       {
         $match: {
           user: ownerId,
+          type: { $in: REVENUE_EARNING_TYPES },
           createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
         },
       },
@@ -395,13 +564,24 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
         : null,
     }));
 
+  const sponsoredGyms = gyms.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none').length;
+  const expenseEntries = collectOwnerExpenseEntries({ subscriptions: subscriptionDocs, gyms });
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const expenses30d = expenseEntries
+    .filter((entry) => entry.date >= thirtyDaysAgo)
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const profit30d = revenue30d - expenses30d;
+
   const stats = {
     totalGyms: gyms.length,
     publishedGyms: gyms.filter((gym) => gym.isPublished).length,
     pendingGyms: gyms.filter((gym) => gym.status !== 'active').length,
     activeMemberships: membershipAggregates.reduce((sum, item) => sum + item.activeMembers, 0),
     revenue30d: formatCurrency(revenue30d),
+    expenses30d: formatCurrency(expenses30d),
+    profit30d: formatCurrency(profit30d),
     impressions30d: enrichedGyms.reduce((sum, gym) => sum + (gym.impressions ?? 0), 0),
+    sponsoredGyms,
   };
 
   const recentMembers = recentJoiners.map((membership) => ({
@@ -546,52 +726,182 @@ export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
 
 export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
-  const gyms = await Gym.find({ owner: ownerId }).select('_id name analytics').lean();
+  const referenceDate = new Date();
+
+  const gyms = await Gym.find({ owner: ownerId })
+    .select('_id name analytics sponsorship createdAt')
+    .lean();
 
   const gymIds = gyms.map((gym) => gym._id);
 
-  const membershipsByMonth = await GymMembership.aggregate([
-    { $match: { gym: { $in: gymIds }, status: { $in: ['active', 'paused'] } } },
-    {
-      $group: {
-        _id: {
-          gym: '$gym',
-          month: { $dateToString: { format: '%Y-%m', date: '$startDate' } },
-        },
-        count: { $sum: 1 },
-      },
-    },
+  const monthlyTimeline = createMonthlyTimeline(12, referenceDate);
+  const weeklyTimeline = createWeeklyTimeline(12, referenceDate);
+
+  const earliestMonthly = monthlyTimeline[0]?.referenceDate ?? referenceDate;
+  const earliestWeekly = weeklyTimeline[0]?.start ?? referenceDate;
+  const earliestDate = earliestMonthly < earliestWeekly ? earliestMonthly : earliestWeekly;
+
+  const [membershipDocs, revenueEvents, subscriptions] = await Promise.all([
+    GymMembership.find({
+      gym: { $in: gymIds },
+      status: { $in: ['active', 'paused'] },
+      startDate: { $gte: earliestDate },
+    })
+      .select('startDate createdAt')
+      .lean(),
+    Revenue.find({
+      user: ownerId,
+      type: { $in: REVENUE_EARNING_TYPES },
+      createdAt: { $gte: earliestDate },
+    })
+      .select('amount createdAt type')
+      .lean(),
+    GymListingSubscription.find({
+      owner: ownerId,
+      periodEnd: { $gte: earliestDate },
+    })
+      .select('amount periodStart periodEnd createdAt invoices')
+      .lean(),
   ]);
 
-  const revenueByMonth = await Revenue.aggregate([
-    {
-      $match: {
-        user: ownerId,
-      },
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-        amount: { $sum: '$amount' },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ]);
+  membershipDocs.forEach((membership) => {
+    const when = membership.startDate || membership.createdAt;
+    applyMonthlyAmount(monthlyTimeline, when, 'memberships', 1);
+    applyWeeklyAmount(weeklyTimeline, when, 'memberships', 1);
+  });
 
-  const membershipSeries = membershipsByMonth.reduce((acc, item) => {
-    const key = item._id.month;
-    if (!acc[key]) {
-      acc[key] = 0;
+  revenueEvents.forEach((event) => {
+    applyMonthlyAmount(monthlyTimeline, event.createdAt, 'revenue', event.amount);
+    applyWeeklyAmount(weeklyTimeline, event.createdAt, 'revenue', event.amount);
+  });
+
+  const expenseEntries = collectOwnerExpenseEntries({ subscriptions, gyms });
+  expenseEntries.forEach((entry) => {
+    applyMonthlyAmount(monthlyTimeline, entry.date, 'expenses', entry.amount);
+    applyWeeklyAmount(weeklyTimeline, entry.date, 'expenses', entry.amount);
+  });
+
+  const shapeTimeline = (timeline) =>
+    timeline.map((entry) => {
+      const revenue = Number(entry.revenue) || 0;
+      const expenses = Number(entry.expenses) || 0;
+      const profit = revenue - expenses;
+      return {
+        id: entry.id,
+        label: entry.label,
+        fullLabel: entry.fullLabel,
+        revenue,
+        expenses,
+        profit,
+        memberships: Number(entry.memberships) || 0,
+      };
+    });
+
+  const monthlyTrend = shapeTimeline(monthlyTimeline);
+  const weeklyTrend = shapeTimeline(weeklyTimeline);
+
+  const summarise = (timeline) => {
+    if (!timeline.length) {
+      return {
+        totalRevenue: 0,
+        totalExpenses: 0,
+        totalProfit: 0,
+        bestPeriod: null,
+      };
     }
-    acc[key] += item.count;
+
+    return timeline.reduce(
+      (acc, entry) => {
+        const revenue = entry.revenue;
+        const expenses = entry.expenses;
+        const profit = entry.profit;
+
+        const cumRevenue = acc.totalRevenue + revenue;
+        const cumExpenses = acc.totalExpenses + expenses;
+        const cumProfit = acc.totalProfit + profit;
+
+        const best =
+          profit > (acc.bestPeriod?.profit ?? Number.NEGATIVE_INFINITY)
+            ? { label: entry.fullLabel, profit }
+            : acc.bestPeriod;
+
+        return {
+          totalRevenue: cumRevenue,
+          totalExpenses: cumExpenses,
+          totalProfit: cumProfit,
+          bestPeriod: best,
+        };
+      },
+      { totalRevenue: 0, totalExpenses: 0, totalProfit: 0, bestPeriod: null },
+    );
+  };
+
+  const monthlySummary = summarise(monthlyTrend);
+  const weeklySummary = summarise(weeklyTrend);
+
+  const membershipTrend = {
+    monthly: monthlyTrend.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      fullLabel: entry.fullLabel,
+      value: entry.memberships,
+    })),
+    weekly: weeklyTrend.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      fullLabel: entry.fullLabel,
+      value: entry.memberships,
+    })),
+  };
+
+  const revenueTrend = {
+    monthly: monthlyTrend.map(({ id, label, fullLabel, revenue, expenses, profit }) => ({
+      id,
+      label,
+      fullLabel,
+      revenue,
+      expenses,
+      profit,
+    })),
+    weekly: weeklyTrend.map(({ id, label, fullLabel, revenue, expenses, profit }) => ({
+      id,
+      label,
+      fullLabel,
+      revenue,
+      expenses,
+      profit,
+    })),
+  };
+
+  const expenseAggregate = expenseEntries.reduce((acc, entry) => {
+    const key = entry.source || 'other';
+    acc[key] = (acc[key] || 0) + (Number(entry.amount) || 0);
     return acc;
   }, {});
 
+  const expenseBreakdown = Object.entries(expenseAggregate).map(([key, value]) => {
+    let label = 'Other';
+    if (key === 'listing') {
+      label = 'Listing plans';
+    } else if (key === 'sponsorship') {
+      label = 'Sponsorship campaigns';
+    }
+
+    return {
+      id: key,
+      label,
+      value,
+    };
+  });
+
   const analytics = {
-    membershipTrend: Object.entries(membershipSeries)
-      .sort(([aKey], [bKey]) => (aKey > bKey ? 1 : -1))
-      .map(([label, value]) => ({ label, value })),
-    revenueTrend: revenueByMonth.map((entry) => ({ label: entry._id, value: entry.amount })),
+    revenueTrend,
+    revenueSummary: {
+      monthly: monthlySummary,
+      weekly: weeklySummary,
+    },
+    membershipTrend,
+    expenseBreakdown,
     gyms: gyms.map((gym) => ({
       id: gym._id,
       name: gym.name,
