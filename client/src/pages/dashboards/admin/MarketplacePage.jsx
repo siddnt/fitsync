@@ -28,10 +28,11 @@ const AdminMarketplacePage = () => {
       (acc, order) => {
         acc.total += 1;
         acc.revenue += Number(order.total?.amount ?? order.total ?? 0);
-        if (order.status === 'Delivered') {
+        const status = (order.status || '').toString().toLowerCase();
+        if (status === 'delivered') {
           acc.fulfilled += 1;
         }
-        if (order.status === 'Processing') {
+        if (status === 'processing') {
           acc.processing += 1;
         }
         return acc;

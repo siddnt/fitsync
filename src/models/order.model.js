@@ -2,12 +2,10 @@ import mongoose from "mongoose";
 
 // Order Item Schema (for products within an order)
 export const ORDER_ITEM_STATUSES = [
-    "placed",
     "processing",
     "in-transit",
     "out-for-delivery",
-    "delivered",
-    "cancelled"
+    "delivered"
 ];
 
 const orderItemSchema = new mongoose.Schema({
@@ -39,7 +37,7 @@ const orderItemSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ORDER_ITEM_STATUSES,
-        default: "placed"
+        default: "processing"
     },
     lastStatusAt: {
         type: Date,
@@ -150,8 +148,8 @@ const orderSchema = new mongoose.Schema(
         status: {
             type: String,
             required: true,
-            enum: ["Processing", "Shipped", "Delivered", "Cancelled"],
-            default: "Processing"
+            enum: ["processing", "in-transit", "out-for-delivery", "delivered"],
+            default: "processing"
         },
         orderNumber: {
             type: String,

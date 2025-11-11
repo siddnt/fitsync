@@ -71,6 +71,19 @@ export const validateProductForm = (values) => {
     errors.category = 'Pick a category';
   }
 
+  const isEditing = Boolean(values.id);
+  const imageToken = typeof values.image === 'string' ? values.image.trim() : '';
+  const retainsExistingImage = imageToken === '__existing__';
+  const hasNewImage = Boolean(imageToken) && !retainsExistingImage;
+
+  if (!isEditing && !hasNewImage) {
+    errors.image = 'Upload a product image';
+  }
+
+  if (isEditing && !retainsExistingImage && !hasNewImage) {
+    errors.image = 'Upload a new image or keep the existing one.';
+  }
+
   return errors;
 };
 
@@ -78,6 +91,9 @@ export const createSubmissionHandler = (mutator) => async (values) => {
   try {
     await mutator(values);
   } catch (mutationError) {
+    if (mutationError instanceof SubmissionError) {
+      throw mutationError;
+    }
     throw new SubmissionError({
       _error: mutationError?.data?.message ?? 'Could not save the product.',
     });

@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
 import Product from '../../models/product.model.js';
-import Order, { ORDER_ITEM_STATUSES } from '../../models/order.model.js';
+import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 
 const toObjectId = (value, label) => {
   if (!value) {
@@ -19,9 +20,134 @@ const toObjectId = (value, label) => {
 
 const SELLER_PAYOUT_RATE = 0.85;
 
-const SELLER_STATUS_FLAGS = new Set(ORDER_ITEM_STATUSES);
+const MODERN_ITEM_STATUSES = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
+const LEGACY_STATUS_FALLBACKS = new Map([
+  ['placed', 'processing'],
+  ['cancelled', 'processing'],
+  ['shipped', 'in-transit'],
+]);
+
+const normaliseItemStatus = (status) => {
+  if (!status) {
+    return 'processing';
+  }
+
+  const lower = String(status).trim().toLowerCase();
+  if (MODERN_ITEM_STATUSES.includes(lower)) {
+    return lower;
+  }
+
+  if (LEGACY_STATUS_FALLBACKS.has(lower)) {
+    return LEGACY_STATUS_FALLBACKS.get(lower);
+  }
+
+  return 'processing';
+};
+
+const SELLER_STATUS_FLAGS = new Set(MODERN_ITEM_STATUSES);
+const STATUS_SEQUENCE = [...MODERN_ITEM_STATUSES];
+const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
+  acc[status] = index;
+  return acc;
+}, {});
 
 const ORDER_NUMBER_PREFIX = 'FS';
+
+const ensureSellerActive = (user) => {
+  if (!user) {
+    throw new ApiError(401, 'Sign in to view your seller workspace.');
+  }
+
+  if (user.role === 'admin') {
+    return;
+  }
+
+  if (user.status !== 'active') {
+    throw new ApiError(403, 'Your seller account is awaiting admin approval.');
+  }
+};
+
+const CUSTOMER_ROLES = new Set(['user', 'trainee']);
+
+const ensureMarketplaceBuyerEligible = (user) => {
+  if (!user) {
+    throw new ApiError(401, 'Sign in to place marketplace orders.');
+  }
+
+  if (!CUSTOMER_ROLES.has(user.role)) {
+    throw new ApiError(403, 'Only customer accounts can place marketplace orders.');
+  }
+
+  if (user.status !== 'active') {
+    throw new ApiError(403, 'Activate your account before placing marketplace orders.');
+  }
+};
+
+const parseBoolean = (value, defaultValue = false) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalised = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalised)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalised)) {
+      return false;
+    }
+    return defaultValue;
+  }
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) {
+      return defaultValue;
+    }
+    if (value === 0) {
+      return false;
+    }
+    return value !== 0;
+  }
+  return defaultValue;
+};
+
+const toNumber = (value, fallback) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const PRODUCT_CATEGORIES = new Set(['supplements', 'equipment', 'clothing', 'accessories']);
+
+const normaliseCategory = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const lower = value.trim().toLowerCase();
+  if (lower === 'apparel') {
+    return 'clothing';
+  }
+  if (lower === 'nutrition') {
+    return 'supplements';
+  }
+  return lower;
+};
+
+const canTransitionStatus = (currentStatus, nextStatus) => {
+  const current = normaliseItemStatus(currentStatus);
+  const next = normaliseItemStatus(nextStatus);
+
+  if (current === next) {
+    return true;
+  }
+
+  if (current === 'delivered') {
+    return false;
+  }
+
+  const currentIndex = STATUS_INDEX[current] ?? -1;
+  const nextIndex = STATUS_INDEX[next] ?? -1;
+
+  return nextIndex >= currentIndex && nextIndex !== -1;
+};
 
 // Returns an integer discount percentage bounded between 0 and 100.
 const computeDiscountPercentage = (mrp, price) => {
@@ -99,7 +225,7 @@ const mapBuyerOrder = (order) => ({
   tax: order.tax,
   shippingCost: order.shippingCost,
   total: order.total,
-  status: order.status,
+  status: deriveSellerOrderStatus(order.orderItems || []),
   paymentMethod: order.paymentMethod,
   createdAt: order.createdAt,
   items: (order.orderItems || []).map((item) => ({
@@ -108,7 +234,7 @@ const mapBuyerOrder = (order) => ({
     quantity: item.quantity,
     price: item.price,
     image: item.image ?? item.product?.image ?? null,
-    status: item.status,
+    status: normaliseItemStatus(item.status),
   })),
   shippingAddress: order.shippingAddress,
 });
@@ -148,6 +274,8 @@ export const listMarketplaceCatalogue = asyncHandler(async (_req, res) => {
 });
 
 export const createMarketplaceOrder = asyncHandler(async (req, res) => {
+  ensureMarketplaceBuyerEligible(req.user);
+
   const userId = req.user?._id;
   const { items, shippingAddress, paymentMethod = 'Cash on Delivery' } = req.body ?? {};
 
@@ -181,6 +309,8 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
 
   const productMap = new Map(products.map((product) => [String(product._id), product]));
 
+  const initialStatusTimestamp = new Date();
+
   const orderItems = preparedItems.map(({ productId, quantity }) => {
     const product = productMap.get(String(productId));
 
@@ -203,6 +333,14 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
       quantity,
       price: product.price,
       image: product.image,
+      status: 'processing',
+      lastStatusAt: initialStatusTimestamp,
+      statusHistory: [{
+        status: 'processing',
+        note: null,
+        updatedBy: null,
+        updatedAt: initialStatusTimestamp,
+      }],
     };
   });
 
@@ -258,6 +396,8 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
 });
 
 export const listSellerProducts = asyncHandler(async (req, res) => {
+  ensureSellerActive(req.user);
+
   const products = await Product.find({ seller: req.user._id })
     .sort({ updatedAt: -1 })
     .lean();
@@ -268,28 +408,29 @@ export const listSellerProducts = asyncHandler(async (req, res) => {
 });
 
 export const createSellerProduct = asyncHandler(async (req, res) => {
+  ensureSellerActive(req.user);
+
   const {
     name,
     description,
     price,
     mrp,
-    image,
     category,
     stock,
     status = 'available',
-    isPublished = true,
+    isPublished,
   } = req.body ?? {};
 
-  if (!name || !description || mrp === undefined || !category) {
-    throw new ApiError(400, 'Name, description, MRP, and category are required');
+  if (!name || !description || mrp === undefined || mrp === null || !category) {
+    throw new ApiError(400, 'Name, description, MRP, and category are required.');
   }
 
-  const mrpValue = Number(mrp);
+  const mrpValue = toNumber(mrp, NaN);
   if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
-    throw new ApiError(400, 'MRP must be a valid amount');
+    throw new ApiError(400, 'MRP must be a valid amount.');
   }
 
-  let priceValue = price === undefined || price === null || price === '' ? mrpValue : Number(price);
+  let priceValue = price === undefined || price === null || price === '' ? mrpValue : toNumber(price, NaN);
   if (!Number.isFinite(priceValue) || priceValue <= 0) {
     priceValue = mrpValue;
   }
@@ -297,17 +438,70 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     priceValue = mrpValue;
   }
 
+  const rawStockValue = toNumber(stock, NaN);
+  const stockValue = Number.isFinite(rawStockValue) ? Math.floor(rawStockValue) : NaN;
+  if (!Number.isFinite(stockValue) || stockValue < 0) {
+    throw new ApiError(400, 'Stock must be a non-negative integer.');
+  }
+
+  const categoryValue = normaliseCategory(category);
+  if (!PRODUCT_CATEGORIES.has(categoryValue)) {
+    throw new ApiError(400, 'Product category is invalid.');
+  }
+
+  const statusValue = ['available', 'out-of-stock'].includes(String(status).toLowerCase())
+    ? String(status).toLowerCase()
+    : 'available';
+  const publishFlag = parseBoolean(isPublished, false);
+
+  const imageFile = req.file;
+  if (!imageFile) {
+    throw new ApiError(400, 'Upload a product image to list this item.');
+  }
+
+  let uploadResult;
+  try {
+    uploadResult = await uploadOnCloudinary(imageFile.path, {
+      folder: 'fitsync/products',
+      resourceType: 'image',
+    });
+  } catch (error) {
+    throw new ApiError(500, 'Could not upload the product image. Please try again.');
+  }
+
+  if (!uploadResult?.url) {
+    throw new ApiError(500, 'Product image upload failed.');
+  }
+
+  const metadataEntries = [];
+  if (uploadResult.provider) {
+    metadataEntries.push(['imageProvider', uploadResult.provider]);
+  }
+  if (uploadResult.publicId) {
+    metadataEntries.push(['imagePublicId', uploadResult.publicId]);
+  }
+  if (uploadResult.format) {
+    metadataEntries.push(['imageFormat', uploadResult.format]);
+  }
+  if (uploadResult.bytes) {
+    metadataEntries.push(['imageBytes', String(uploadResult.bytes)]);
+  }
+  if (uploadResult.width && uploadResult.height) {
+    metadataEntries.push(['imageSize', `${uploadResult.width}x${uploadResult.height}`]);
+  }
+
   const product = await Product.create({
     seller: req.user._id,
-    name,
-    description,
+    name: name.trim(),
+    description: description.trim(),
     price: priceValue,
     mrp: mrpValue,
-    image,
-    category,
-    stock,
-    status,
-    isPublished,
+    image: uploadResult.url,
+    category: categoryValue,
+    stock: stockValue,
+    status: statusValue,
+    isPublished: publishFlag,
+    metadata: metadataEntries.length ? new Map(metadataEntries) : undefined,
   });
 
   return res
@@ -316,6 +510,8 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateSellerProduct = asyncHandler(async (req, res) => {
+  ensureSellerActive(req.user);
+
   const productId = toObjectId(req.params.productId, 'Product id');
   const product = await Product.findOne({ _id: productId, seller: req.user._id });
 
@@ -323,29 +519,110 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Product not found');
   }
 
-  const { name, description, price, mrp, image, category, stock, status, isPublished } = req.body ?? {};
+  const { name, description, price, mrp, category, stock, status, isPublished } = req.body ?? {};
 
-  if (name !== undefined) product.name = name;
-  if (description !== undefined) product.description = description;
+  if (name !== undefined) {
+    product.name = String(name).trim();
+  }
+  if (description !== undefined) {
+    product.description = String(description).trim();
+  }
+
   if (mrp !== undefined) {
-    const mrpValue = Number(mrp);
-    if (!Number.isFinite(mrpValue) || mrpValue < 0) {
+    const mrpValue = toNumber(mrp, NaN);
+    if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
       throw new ApiError(400, 'MRP must be a valid amount');
     }
     product.mrp = mrpValue;
+    if (product.price > mrpValue) {
+      product.price = mrpValue;
+    }
   }
+
   if (price !== undefined) {
-    const priceValue = Number(price);
-    if (!Number.isFinite(priceValue) || priceValue < 0) {
+    const priceValue = toNumber(price, NaN);
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
       throw new ApiError(400, 'Selling price must be a valid amount');
     }
     product.price = priceValue;
   }
-  if (image !== undefined) product.image = image;
-  if (category !== undefined) product.category = category;
-  if (stock !== undefined) product.stock = stock;
-  if (status !== undefined) product.status = status;
-  if (isPublished !== undefined) product.isPublished = isPublished;
+
+  if (category !== undefined) {
+    const categoryValue = normaliseCategory(category);
+    if (!PRODUCT_CATEGORIES.has(categoryValue)) {
+      throw new ApiError(400, 'Product category is invalid.');
+    }
+    product.category = categoryValue;
+  }
+
+  if (stock !== undefined) {
+    const rawStock = toNumber(stock, NaN);
+    const stockValue = Number.isFinite(rawStock) ? Math.floor(rawStock) : NaN;
+    if (!Number.isFinite(stockValue) || stockValue < 0) {
+      throw new ApiError(400, 'Stock must be a non-negative integer.');
+    }
+    product.stock = stockValue;
+  }
+
+  if (status !== undefined) {
+    const statusValue = ['available', 'out-of-stock'].includes(String(status).toLowerCase())
+      ? String(status).toLowerCase()
+      : null;
+    if (!statusValue) {
+      throw new ApiError(400, 'Stock status is invalid.');
+    }
+    product.status = statusValue;
+  }
+
+  if (isPublished !== undefined) {
+    product.isPublished = parseBoolean(isPublished, product.isPublished);
+  }
+
+  if (req.file) {
+    let uploadResult;
+    try {
+      uploadResult = await uploadOnCloudinary(req.file.path, {
+        folder: 'fitsync/products',
+        resourceType: 'image',
+      });
+    } catch (error) {
+      throw new ApiError(500, 'Could not upload the new product image.');
+    }
+
+    if (!uploadResult?.url) {
+      throw new ApiError(500, 'Product image upload failed.');
+    }
+
+    product.image = uploadResult.url;
+
+    let metadataMap;
+    if (product.metadata instanceof Map) {
+      metadataMap = product.metadata;
+    } else if (product.metadata && typeof product.metadata === 'object') {
+      metadataMap = new Map(Object.entries(product.metadata));
+    } else {
+      metadataMap = new Map();
+    }
+
+    metadataMap.set('imageProvider', uploadResult.provider ?? 'cloudinary');
+    if (uploadResult.publicId) {
+      metadataMap.set('imagePublicId', uploadResult.publicId);
+    }
+    if (uploadResult.format) {
+      metadataMap.set('imageFormat', uploadResult.format);
+    }
+    if (uploadResult.bytes) {
+      metadataMap.set('imageBytes', String(uploadResult.bytes));
+    }
+    if (uploadResult.width && uploadResult.height) {
+      metadataMap.set('imageSize', `${uploadResult.width}x${uploadResult.height}`);
+    }
+
+    product.metadata = metadataMap;
+    if (typeof product.markModified === 'function') {
+      product.markModified('metadata');
+    }
+  }
 
   if (product.mrp !== undefined && product.price > product.mrp) {
     product.price = product.mrp;
@@ -377,22 +654,24 @@ const normaliseSellerId = (value) => (value ? String(value) : null);
 
 const deriveSellerOrderStatus = (items = []) => {
   if (!items.length) {
-    return 'Processing';
+    return 'processing';
   }
 
-  if (items.every((item) => item.status === 'cancelled')) {
-    return 'Cancelled';
+  const statuses = items.map((item) => normaliseItemStatus(item.status));
+
+  if (statuses.every((status) => status === 'delivered')) {
+    return 'delivered';
   }
 
-  if (items.every((item) => item.status === 'delivered')) {
-    return 'Delivered';
+  if (statuses.some((status) => status === 'out-for-delivery')) {
+    return 'out-for-delivery';
   }
 
-  if (items.some((item) => item.status === 'in-transit' || item.status === 'out-for-delivery')) {
-    return 'Shipped';
+  if (statuses.some((status) => status === 'in-transit')) {
+    return 'in-transit';
   }
 
-  return 'Processing';
+  return 'processing';
 };
 
 const getSellerOrderItems = (order, sellerId) =>
@@ -415,10 +694,10 @@ const mapOrder = (order, sellerId) => {
       name: item.name,
       quantity: item.quantity,
       price: item.price,
-      status: item.status,
+      status: normaliseItemStatus(item.status),
       lastStatusAt: item.lastStatusAt,
       statusHistory: (item.statusHistory || []).map((entry) => ({
-        status: entry.status,
+        status: normaliseItemStatus(entry.status),
         note: entry.note,
         updatedBy: entry.updatedBy,
         updatedAt: entry.updatedAt,
@@ -433,7 +712,7 @@ const recordSellerPayoutIfEligible = (orderDoc, sellerId) => {
     return null;
   }
 
-  const allDelivered = sellerItems.every((item) => item.status === 'delivered');
+  const allDelivered = sellerItems.every((item) => normaliseItemStatus(item.status) === 'delivered');
   if (!allDelivered) {
     return null;
   }
@@ -490,8 +769,9 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
   const { itemId } = req.params;
   const sellerId = req.user._id;
   const { status, note } = req.body ?? {};
+  const nextStatus = normaliseItemStatus(status);
 
-  if (!status || !SELLER_STATUS_FLAGS.has(status)) {
+  if (!nextStatus || !SELLER_STATUS_FLAGS.has(nextStatus)) {
     throw new ApiError(400, 'Invalid status selection');
   }
 
@@ -522,20 +802,34 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
 
   const now = new Date();
 
+  const normaliseOrderItemStatuses = (items) => {
+    items.forEach((item) => {
+      item.status = normaliseItemStatus(item.status);
+    });
+  };
+
+  const allItems = order.orderItems || [];
+  normaliseOrderItemStatuses(allItems);
+
   targetItems.forEach((item) => {
-    item.status = status;
+    const currentStatus = normaliseItemStatus(item.status);
+    if (!canTransitionStatus(currentStatus, nextStatus)) {
+      throw new ApiError(400, 'Order items can only move forward through the fulfillment steps.');
+    }
+
+    item.status = nextStatus;
     item.lastStatusAt = now;
     if (!Array.isArray(item.statusHistory)) {
       item.statusHistory = [];
     }
     item.statusHistory.push({
-      status,
+      status: nextStatus,
       note,
       updatedBy: sellerId,
       updatedAt: now,
     });
 
-    if (status !== 'delivered') {
+    if (nextStatus !== 'delivered') {
       item.payoutRecorded = false;
     }
   });

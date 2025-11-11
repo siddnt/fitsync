@@ -35,8 +35,8 @@ const cancelMembershipsForUser = async (userId) => {
 
 const cleanOrdersForUser = async (userId) => {
   await Order.updateMany(
-    { user: userId, status: { $ne: 'Cancelled' } },
-    { $set: { status: 'Cancelled' } },
+    { user: userId, status: { $ne: 'delivered' } },
+    { $set: { status: 'delivered', 'orderItems.$[].status': 'delivered' } },
   );
 };
 
@@ -111,6 +111,36 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { userId: targetUserId }, 'User account deleted successfully.'));
+});
+
+export const updateUserStatus = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    throw new ApiError(403, 'Only administrators can manage user status.');
+  }
+
+  const targetUserId = toObjectId(req.params.userId, 'User id');
+  const { status } = req.body ?? {};
+
+  const allowedStatuses = new Set(['active', 'inactive', 'pending']);
+  if (!status || !allowedStatuses.has(status)) {
+    throw new ApiError(400, 'Provide a valid status (active, inactive, or pending).');
+  }
+
+  const user = await User.findById(targetUserId);
+  if (!user) {
+    throw new ApiError(404, 'User not found.');
+  }
+
+  if (user.role === 'admin') {
+    throw new ApiError(400, 'Administrator status cannot be changed.');
+  }
+
+  user.status = status;
+  await user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { userId: user._id, status: user.status }, 'User status updated successfully.'));
 });
 
 export const deleteGymListing = asyncHandler(async (req, res) => {

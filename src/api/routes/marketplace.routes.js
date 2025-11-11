@@ -11,17 +11,18 @@ import {
   updateSellerOrderStatus,
   settleSellerOrder,
 } from '../controllers/marketplace.controller.js';
+import { upload } from '../../middlewares/multer.middleware.js';
 
 const router = Router();
 
 router.get('/products', listMarketplaceCatalogue);
-router.post('/orders', verifyJWT, createMarketplaceOrder);
+router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
 
 router.use(verifyJWT, authorizeRoles('seller', 'admin'));
 
 router.get('/seller/products', listSellerProducts);
-router.post('/seller/products', createSellerProduct);
-router.put('/seller/products/:productId', updateSellerProduct);
+router.post('/seller/products', upload.single('image'), createSellerProduct);
+router.put('/seller/products/:productId', upload.single('image'), updateSellerProduct);
 router.delete('/seller/products/:productId', deleteSellerProduct);
 
 router.get('/seller/orders', listSellerOrders);

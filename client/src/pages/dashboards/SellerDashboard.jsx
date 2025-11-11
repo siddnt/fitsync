@@ -8,12 +8,18 @@ import { useGetSellerProductsQuery, useGetSellerOrdersQuery } from '../../servic
 import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../utils/format.js';
 import './Dashboard.css';
 
+const IN_PROGRESS_STATUSES = new Set(['processing', 'in-transit', 'out-for-delivery']);
+const normaliseStatus = (status) => (status ? status.toString().toLowerCase() : '');
+const isDelivered = (status) => normaliseStatus(status) === 'delivered';
+const isInProgress = (status) => IN_PROGRESS_STATUSES.has(normaliseStatus(status));
+
 const SellerDashboard = () => {
   const {
     data: productsResponse,
     isLoading: isProductsLoading,
     isError: isProductsError,
     refetch: refetchProducts,
+    error: productsError,
   } = useGetSellerProductsQuery();
 
   const {
@@ -21,10 +27,14 @@ const SellerDashboard = () => {
     isLoading: isOrdersLoading,
     isError: isOrdersError,
     refetch: refetchOrders,
+    error: ordersError,
   } = useGetSellerOrdersQuery();
 
   const isLoading = isProductsLoading || isOrdersLoading;
   const hasError = isProductsError || isOrdersError;
+  const approvalError = [productsError, ordersError].find((err) => err?.status === 403);
+  const approvalMessage = approvalError?.data?.message
+    ?? 'Your seller account is awaiting admin approval. Hang tight—we\'ll unlock the seller console as soon as you are activated.';
 
   const rawProducts = productsResponse?.data?.products;
   const rawOrders = ordersResponse?.data?.orders;
@@ -51,15 +61,15 @@ const SellerDashboard = () => {
   const deliveredOrders = useMemo(
     () =>
       orders.filter(
-        (order) => (order.items || []).length && (order.items || []).every((item) => item.status === 'delivered'),
+        (order) => (order.items || []).length && (order.items || []).every((item) => isDelivered(item.status)),
       ),
     [orders],
   );
 
-  const outstandingOrders = useMemo(
+  const inProgressOrders = useMemo(
     () =>
       orders.filter((order) =>
-        (order.items || []).some((item) => item.status !== 'delivered' && item.status !== 'cancelled'),
+        (order.items || []).some((item) => isInProgress(item.status)),
       ),
     [orders],
   );
@@ -69,13 +79,13 @@ const SellerDashboard = () => {
     [deliveredOrders],
   );
 
-  const totalOutstandingValue = useMemo(
+  const totalInProgressValue = useMemo(
     () =>
       orders.reduce(
         (sum, order) =>
           sum
           + (order.items || [])
-            .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
+            .filter((item) => isInProgress(item.status))
             .reduce(
               (itemSum, item) => itemSum + Number(item.price || 0) * Number(item.quantity || 0),
               0,
@@ -94,11 +104,34 @@ const SellerDashboard = () => {
         <DashboardSection title="Analytics" className="seller-overview__analytics">
           <SkeletonPanel lines={12} />
         </DashboardSection>
-        <DashboardSection title="Outstanding orders" className="seller-overview__orders">
+        <DashboardSection title="Orders in progress" className="seller-overview__orders">
           <SkeletonPanel lines={6} />
         </DashboardSection>
         <DashboardSection title="Low stock alerts" className="seller-overview__low-stock">
           <SkeletonPanel lines={6} />
+        </DashboardSection>
+      </div>
+    );
+  }
+
+  if (approvalError) {
+    return (
+      <div className="dashboard-grid">
+        <DashboardSection
+          title="Seller dashboard"
+          action={(
+            <button
+              type="button"
+              onClick={() => {
+                refetchProducts();
+                refetchOrders();
+              }}
+            >
+              Refresh
+            </button>
+          )}
+        >
+          <EmptyState message={approvalMessage} />
         </DashboardSection>
       </div>
     );
@@ -160,9 +193,9 @@ const SellerDashboard = () => {
                 <small>{formatCurrency(deliveredOrdersValue)}</small>
               </div>
               <div className="stat-card">
-                <small>Outstanding volume</small>
-                <strong>{formatCurrency(totalOutstandingValue)}</strong>
-                <small>{formatNumber(outstandingOrders.length)} orders in fulfilment</small>
+                <small>In-progress volume</small>
+                <strong>{formatCurrency(totalInProgressValue)}</strong>
+                <small>{formatNumber(inProgressOrders.length)} orders in fulfilment</small>
               </div>
             </div>
           </>
@@ -176,13 +209,13 @@ const SellerDashboard = () => {
       </DashboardSection>
 
       <DashboardSection
-        title="Outstanding orders"
+        title="Orders in progress"
         action={(
           <Link to="/dashboard/seller/orders">View all orders</Link>
         )}
         className="seller-overview__orders"
       >
-        {outstandingOrders.length ? (
+        {inProgressOrders.length ? (
           <div className="seller-overview__table-wrapper">
             <table className="dashboard-table">
               <thead>
@@ -195,7 +228,7 @@ const SellerDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {outstandingOrders.slice(0, 5).map((order) => (
+                {inProgressOrders.slice(0, 5).map((order) => (
                   <tr key={order.id}>
                     <td>
                       <strong>{order.orderNumber ?? order.id}</strong>
@@ -207,7 +240,7 @@ const SellerDashboard = () => {
                     <td>
                       {Array.isArray(order.items) && order.items.length
                         ? order.items
-                          .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
+                          .filter((item) => isInProgress(item.status))
                           .map((item) =>
                             [item?.name, item?.status ? formatStatus(item.status) : null]
                               .filter(Boolean)
@@ -220,7 +253,7 @@ const SellerDashboard = () => {
                     <td>
                       {formatCurrency(
                         (order.items || [])
-                          .filter((item) => item.status !== 'delivered' && item.status !== 'cancelled')
+                          .filter((item) => isInProgress(item.status))
                           .reduce(
                             (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
                             0,
@@ -234,7 +267,7 @@ const SellerDashboard = () => {
             </table>
           </div>
         ) : (
-          <EmptyState message="No pending orders. Great job staying on top of fulfilment." />
+          <EmptyState message="No in-progress orders. Great job staying on top of fulfilment." />
         )}
       </DashboardSection>
 
