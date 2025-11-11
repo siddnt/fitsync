@@ -78,7 +78,7 @@ const GymOwnerAnalyticsPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         {['Revenue summary', 'Membership trend', 'Gym performance'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -90,7 +90,7 @@ const GymOwnerAnalyticsPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection
           title="Analytics unavailable"
           action={(
@@ -106,10 +106,10 @@ const GymOwnerAnalyticsPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--owner">
       {/* Analytics Controls */}
-      <DashboardSection 
-        title="Analytics View" 
+      <DashboardSection
+        title="Analytics View"
         action={
           <div className="dashboard-controls__toggle">
             <button
@@ -128,13 +128,14 @@ const GymOwnerAnalyticsPage = () => {
             </button>
           </div>
         }
+        className="dashboard-section--span-12"
       >
         <p className="dashboard-section__hint">
           Switch between weekly and monthly views to analyze trends at different time scales.
         </p>
       </DashboardSection>
 
-      <DashboardSection title="Revenue summary">
+      <DashboardSection title="Revenue summary" className="dashboard-section--span-6">
         {revenueTrend?.length ? (
           <RevenueSummaryChart role="gym-owner" data={revenueTrend} valueKey="earnings" />
         ) : (
@@ -142,7 +143,7 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Membership trend">
+      <DashboardSection title="Membership trend" className="dashboard-section--span-6">
         {membershipTrend?.length ? (
           <GrowthLineChart
             role="gym-owner"
@@ -156,7 +157,7 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Gym performance">
+      <DashboardSection title="Gym performance" className="dashboard-section--span-8">
         {analytics?.gyms?.length ? (
           <table className="dashboard-table">
             <thead>
@@ -183,7 +184,7 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Impression share">
+      <DashboardSection title="Impression share" className="dashboard-section--span-4">
         {impressionsSplit?.length ? (
           <DistributionPieChart role="gym-owner" data={impressionsSplit} />
         ) : (

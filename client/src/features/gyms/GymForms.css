@@ -1,23 +1,79 @@
 .gym-form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  background: rgba(13, 17, 23, 0.7);
+  gap: 1.5rem;
+  background: rgba(15, 17, 24, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-  padding: 1.5rem;
+  border-radius: 16px;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  color: var(--text-color);
 }
 
 .gym-form__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem 1.5rem;
+}
+
+.gym-form__section {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gym-form__section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  color: var(--text-color);
+}
+
+.gym-form__section-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted-text-color);
+}
+
+.gym-form__section-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.5rem;
 }
 
 .gym-form__actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gym-form__actions button {
+  min-width: 150px;
+}
+
+@media (max-width: 599px) {
+  .gym-form {
+    padding: 1.1rem;
+    gap: 1.25rem;
+  }
+
+  .gym-form__grid,
+  .gym-form__section-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .gym-form__actions {
+    justify-content: stretch;
+  }
+
+  .gym-form__actions button {
+    flex: 1 1 100%;
+  }
 }
 
 .ghost-button {
