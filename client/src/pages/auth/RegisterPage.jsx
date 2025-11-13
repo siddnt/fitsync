@@ -1,27 +1,11 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
 import { useRegisterMutation } from '../../services/authApi.js';
+import { registerRoles, registerSchema } from './registerSchema.js';
 import './AuthPage.css';
-
-const roles = ['trainee', 'trainer', 'gym-owner', 'seller'];
-
-const baseSchema = {
-  firstName: yup.string().required('First name is required'),
-  lastName: yup.string().required('Last name is required'),
-  email: yup.string().email('Provide a valid email').required('Email is required'),
-  password: yup.string().min(6, 'Password must have at least 6 characters').required('Password is required'),
-  confirmPassword: yup
-    .string()
-    .oneOf([yup.ref('password'), null], 'Passwords must match')
-    .required('Confirm your password'),
-  role: yup.string().oneOf(roles).required('Select a role'),
-};
-
-const schema = yup.object().shape(baseSchema).noUnknown();
 
 const RegisterPage = () => {
   const dispatch = useAppDispatch();
@@ -36,10 +20,9 @@ const RegisterPage = () => {
     handleSubmit,
     formState: { errors },
   } = useForm({
-    resolver: yupResolver(schema),
+    resolver: yupResolver(registerSchema),
     defaultValues: {
-      role: preselectedRole && roles.includes(preselectedRole) ? preselectedRole : 'trainee',
-      amenities: [],
+      role: preselectedRole && registerRoles.includes(preselectedRole) ? preselectedRole : 'trainee',
     },
   });
 
@@ -68,7 +51,7 @@ const RegisterPage = () => {
         <label>
           <span>Role</span>
           <select {...register('role')}>
-            {roles.map((option) => (
+            {registerRoles.map((option) => (
               <option key={option} value={option}>
                 {option.replace('-', ' ')}
               </option>
