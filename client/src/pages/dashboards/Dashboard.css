@@ -219,6 +219,61 @@
   margin: 0;
 }
 
+.owner-revenue-chart__projection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.owner-revenue-chart__projection-label {
+  color: var(--muted-text-color);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.owner-revenue-chart__projection-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.owner-revenue-chart__projection-item {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 160px;
+  padding: 0.6rem 0.9rem;
+}
+
+.owner-revenue-chart__projection-item span {
+  color: var(--muted-text-color);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.owner-revenue-chart__projection-item strong {
+  font-size: 1.1rem;
+  color: currentColor;
+}
+
+.owner-revenue-chart__projection-item--gain {
+  background: rgba(81, 207, 102, 0.12);
+  border-color: rgba(81, 207, 102, 0.45);
+  color: #51cf66;
+}
+
+.owner-revenue-chart__projection-item--spend {
+  background: rgba(250, 82, 82, 0.12);
+  border-color: rgba(250, 82, 82, 0.45);
+  color: #fa5252;
+}
+
 .owner-revenue-chart__tooltip {
   background: rgba(18, 18, 18, 0.95);
   border-radius: 10px;

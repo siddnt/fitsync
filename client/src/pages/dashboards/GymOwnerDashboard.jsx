@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
+import RevenueSummaryChart from './components/RevenueSummaryChart.jsx';
 import GrowthLineChart from './components/GrowthLineChart.jsx';
 import DistributionPieChart from './components/DistributionPieChart.jsx';
-import GymOwnerRevenueChart from './components/GymOwnerRevenueChart.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import {
   useGetGymOwnerOverviewQuery,
@@ -47,50 +46,36 @@ const GymOwnerDashboard = () => {
   const analytics = analyticsResponse?.data;
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
 
-  const [timeframe, setTimeframe] = useState('monthly');
+  const revenueTrend = (() => {
+    const rawTrend = Array.isArray(analytics?.revenueTrend)
+      ? analytics.revenueTrend
+      : Array.isArray(analytics?.revenueTrend?.weekly)
+        ? analytics.revenueTrend.weekly
+        : [];
+    return rawTrend.map((entry) => ({
+      label: entry.label,
+      earnings: entry.profit ?? entry.value ?? 0,
+    }));
+  })();
 
-  const revenueTrend = useMemo(() => {
-    const trend = analytics?.revenueTrend?.[timeframe];
-    return Array.isArray(trend) ? trend : [];
-  }, [analytics, timeframe]);
-
-  const revenueSummary = useMemo(
-    () => analytics?.revenueSummary?.[timeframe] ?? null,
-    [analytics, timeframe],
-  );
-
-  const membershipTrend = useMemo(() => {
-    const trend = analytics?.membershipTrend?.[timeframe];
-    if (!Array.isArray(trend)) {
-      return [];
-    }
-    return trend.map((entry) => ({
+  const membershipTrend = (() => {
+    const rawTrend = Array.isArray(analytics?.membershipTrend)
+      ? analytics.membershipTrend
+      : Array.isArray(analytics?.membershipTrend?.weekly)
+        ? analytics.membershipTrend.weekly
+        : [];
+    return rawTrend.map((entry) => ({
       label: entry.label,
       memberships: entry.value,
-      fullLabel: entry.fullLabel,
     }));
-  }, [analytics, timeframe]);
+  })();
 
-  const sponsorshipSplit = useMemo(
-    () => overview?.gyms
-      ?.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none')
-      .map((gym) => ({
-        name: gym.name,
-        value: gym.impressions ?? 0,
-      })),
-    [overview?.gyms],
-  );
-
-  const expenseBreakdown = useMemo(() => {
-    const breakdown = analytics?.expenseBreakdown;
-    if (!Array.isArray(breakdown)) {
-      return [];
-    }
-    return breakdown.map((entry) => ({
-      name: entry.label,
-      value: entry.value,
+  const sponsorshipSplit = overview?.gyms
+    ?.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none')
+    .map((gym) => ({
+      name: gym.name,
+      value: gym.impressions ?? 0,
     }));
-  }, [analytics]);
 
   const refetchAll = () => {
     refetchOverview();
@@ -101,7 +86,7 @@ const GymOwnerDashboard = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
-  {['Business snapshot', 'Revenue performance', 'Membership trend', 'Subscriptions'].map((title) => (
+        {['Business snapshot', 'Revenue trend', 'Membership trend', 'Subscriptions'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -135,9 +120,7 @@ const GymOwnerDashboard = () => {
             <div className="stat-card">
               <small>Total gyms</small>
               <strong>{overview.stats.totalGyms}</strong>
-              <small>
-                {overview.stats.publishedGyms} published · {overview.stats.sponsoredGyms} sponsored
-              </small>
+              <small>{overview.stats.publishedGyms} published</small>
             </div>
             <div className="stat-card">
               <small>Active memberships</small>
@@ -147,12 +130,12 @@ const GymOwnerDashboard = () => {
             <div className="stat-card">
               <small>30-day revenue</small>
               <strong>{formatCurrency(overview.stats.revenue30d)}</strong>
-              <small>{formatCurrency(overview.stats.expenses30d)} marketplace spend</small>
+              <small>{formatNumber(overview.stats.impressions30d)} impressions</small>
             </div>
             <div className="stat-card">
-              <small>Net profit (30 days)</small>
-              <strong>{formatCurrency(overview.stats.profit30d)}</strong>
-              <small>{formatNumber(overview.stats.impressions30d)} impressions</small>
+              <small>Pending gyms</small>
+              <strong>{overview.stats.pendingGyms}</strong>
+              <small>Awaiting verification</small>
             </div>
           </div>
         ) : (
@@ -161,35 +144,22 @@ const GymOwnerDashboard = () => {
       </DashboardSection>
 
       <DashboardSection
-        title="Revenue performance"
+        title="Revenue trend"
         action={(
           <button type="button" onClick={refetchAnalytics}>
             Refresh
           </button>
         )}
-        className="dashboard-section--span-8"
+        className="dashboard-section--span-6"
       >
         {revenueTrend?.length ? (
-          <GymOwnerRevenueChart
-            data={revenueTrend}
-            timeframe={timeframe}
-            onTimeframeChange={setTimeframe}
-            summary={revenueSummary}
-          />
+          <RevenueSummaryChart role="gym-owner" data={revenueTrend} valueKey="earnings" />
         ) : (
           <EmptyState message="We need more transactions to show revenue insights." />
         )}
       </DashboardSection>
 
-      <DashboardSection
-        title="Membership trend"
-        action={(
-          <span className="dashboard-timeframe-label">
-            {timeframe === 'weekly' ? 'Weekly view' : 'Monthly view'}
-          </span>
-        )}
-        className="dashboard-section--span-4"
-      >
+      <DashboardSection title="Membership trend" className="dashboard-section--span-6">
         {membershipTrend?.length ? (
           <GrowthLineChart
             role="gym-owner"
@@ -203,37 +173,20 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Sponsorship exposure" className="dashboard-section--span-6">
+      <DashboardSection title="Sponsorship exposure" className="dashboard-section--span-4">
         {sponsorshipSplit?.length ? (
           <DistributionPieChart
             role="gym-owner"
             data={sponsorshipSplit}
             valueKey="value"
             nameKey="name"
-            interactive
-            valueFormatter={(value) => formatNumber(value)}
           />
         ) : (
           <EmptyState message="No sponsorship campaigns are active right now." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Marketplace spend" className="dashboard-section--span-6">
-        {expenseBreakdown?.length ? (
-          <DistributionPieChart
-            role="gym-owner"
-            data={expenseBreakdown}
-            valueKey="value"
-            nameKey="name"
-            interactive
-            valueFormatter={(value) => formatCurrency({ amount: value })}
-          />
-        ) : (
-          <EmptyState message="No listing or sponsorship spend has been recorded yet." />
-        )}
-      </DashboardSection>
-
-    <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-6">
+      <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-4">
         {overview?.expiringSubscriptions?.length ? (
           <table className="dashboard-table">
             <thead>
@@ -258,7 +211,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-    <DashboardSection title="Active subscriptions" className="dashboard-section--span-6">
+      <DashboardSection title="Active subscriptions" className="dashboard-section--span-4">
         {subscriptions.length ? (
           <table className="dashboard-table">
             <thead>

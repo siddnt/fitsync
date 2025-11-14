@@ -131,7 +131,7 @@ const createMonthlyTimeline = (months, referenceDate = new Date()) => {
 const createWeeklyTimeline = (weeks, referenceDate = new Date()) => {
   const timeline = [];
   const end = new Date(referenceDate);
-  end.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
 
   for (let i = weeks - 1; i >= 0; i -= 1) {
     const weekEnd = new Date(end);
@@ -476,8 +476,10 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
 
 export const getGymOwnerOverview = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
+  const ownerObjectId = toObjectId(ownerId);
+  const ownerFilter = ownerObjectId ?? ownerId;
 
-  const gyms = await Gym.find({ owner: ownerId })
+  const gyms = await Gym.find({ owner: ownerFilter })
     .select('name location status isPublished analytics sponsorship pricing updatedAt')
     .lean();
 
@@ -508,13 +510,13 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       { $match: { gym: { $in: gymIds }, status: 'active' } },
       { $group: { _id: '$gym', activeMembers: { $sum: 1 } } },
     ]),
-    GymListingSubscription.find({ owner: ownerId, status: { $in: ['active', 'grace'] } })
+    GymListingSubscription.find({ owner: ownerFilter, status: { $in: ['active', 'grace'] } })
       .populate({ path: 'gym', select: 'name location' })
       .lean(),
     Revenue.aggregate([
       {
         $match: {
-          user: ownerId,
+          user: ownerFilter,
           type: { $in: REVENUE_EARNING_TYPES },
           createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
         },
@@ -726,9 +728,12 @@ export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
 
 export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
+  const ownerObjectId = toObjectId(ownerId);
+  const ownerFilter = ownerObjectId ?? ownerId;
   const referenceDate = new Date();
+  referenceDate.setHours(23, 59, 59, 999);
 
-  const gyms = await Gym.find({ owner: ownerId })
+  const gyms = await Gym.find({ owner: ownerFilter })
     .select('_id name analytics sponsorship createdAt')
     .lean();
 
@@ -750,14 +755,14 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       .select('startDate createdAt')
       .lean(),
     Revenue.find({
-      user: ownerId,
+      user: ownerFilter,
       type: { $in: REVENUE_EARNING_TYPES },
       createdAt: { $gte: earliestDate },
     })
       .select('amount createdAt type')
       .lean(),
     GymListingSubscription.find({
-      owner: ownerId,
+      owner: ownerFilter,
       periodEnd: { $gte: earliestDate },
     })
       .select('amount periodStart periodEnd createdAt invoices')

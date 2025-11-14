@@ -92,9 +92,55 @@ const computeSummary = (data = []) => {
   );
 };
 
+const computeProjection = (data = []) => {
+  if (!data.length) {
+    return {
+      revenue: 0,
+      expenses: 0,
+    };
+  }
+
+  if (data.length === 1) {
+    const point = data[0];
+    return {
+      revenue: Number(point.revenue) || 0,
+      expenses: Number(point.expenses) || 0,
+    };
+  }
+
+  const recent = data.slice(-4);
+  const revenueChanges = [];
+  const expenseChanges = [];
+
+  for (let index = 1; index < recent.length; index += 1) {
+    const previous = recent[index - 1];
+    const current = recent[index];
+    revenueChanges.push((Number(current.revenue) || 0) - (Number(previous.revenue) || 0));
+    expenseChanges.push((Number(current.expenses) || 0) - (Number(previous.expenses) || 0));
+  }
+
+  const averageChange = (changes) => {
+    if (!changes.length) {
+      return 0;
+    }
+    const total = changes.reduce((sum, change) => sum + change, 0);
+    return total / changes.length;
+  };
+
+  const lastPoint = recent[recent.length - 1];
+  const projectedRevenue = Math.max((Number(lastPoint.revenue) || 0) + averageChange(revenueChanges), 0);
+  const projectedExpenses = Math.max((Number(lastPoint.expenses) || 0) + averageChange(expenseChanges), 0);
+
+  return {
+    revenue: projectedRevenue,
+    expenses: projectedExpenses,
+  };
+};
+
 const GymOwnerRevenueChart = ({ data, timeframe, onTimeframeChange, summary }) => {
   const resolvedData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const resolvedSummary = useMemo(() => summary ?? computeSummary(resolvedData), [summary, resolvedData]);
+  const projection = useMemo(() => computeProjection(resolvedData), [resolvedData]);
 
   const bestCopy = resolvedSummary?.bestPeriod
     ? `Top period: ${resolvedSummary.bestPeriod.label} (${formatFullCurrency(resolvedSummary.bestPeriod.profit || 0)} profit)`
@@ -183,6 +229,21 @@ const GymOwnerRevenueChart = ({ data, timeframe, onTimeframeChange, summary }) =
       ) : (
         <p className="empty-state">Not enough transactions yet. We will chart your performance once data flows in.</p>
       )}
+      {resolvedData.length ? (
+        <div className="owner-revenue-chart__projection" aria-live="polite">
+          <span className="owner-revenue-chart__projection-label">Projection</span>
+          <div className="owner-revenue-chart__projection-items">
+            <div className="owner-revenue-chart__projection-item owner-revenue-chart__projection-item--gain">
+              <span>Earnings</span>
+              <strong>{formatFullCurrency(projection.revenue)}</strong>
+            </div>
+            <div className="owner-revenue-chart__projection-item owner-revenue-chart__projection-item--spend">
+              <span>Expenditure</span>
+              <strong>{formatFullCurrency(projection.expenses)}</strong>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
