@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { SubmissionError, reset as resetForm } from 'redux-form';
 import { useDispatch } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
@@ -26,6 +26,10 @@ const GymOwnerGymsPage = () => {
   const [processingAction, setProcessingAction] = useState(null);
   const [trainerActionMessage, setTrainerActionMessage] = useState(null);
   const [trainerActionError, setTrainerActionError] = useState(null);
+  const [gymActionMessage, setGymActionMessage] = useState(null);
+  const [gymActionError, setGymActionError] = useState(null);
+  const [processingGymId, setProcessingGymId] = useState(null);
+  const [processingGymAction, setProcessingGymAction] = useState(null);
 
   const {
     data,
@@ -41,9 +45,14 @@ const GymOwnerGymsPage = () => {
     [rawGyms],
   );
 
-  const pendingGyms = useMemo(
-    () => gyms.filter((gym) => gym.status !== 'active' || !gym.isPublished),
+  const displayGyms = useMemo(
+    () => gyms.filter((gym) => gym.status !== 'suspended'),
     [gyms],
+  );
+
+  const pendingGyms = useMemo(
+    () => displayGyms.filter((gym) => gym.status !== 'active' || !gym.isPublished),
+    [displayGyms],
   );
 
   const activeGym = useMemo(() => gyms.find((gym) => gym.id === activeGymId), [gyms, activeGymId]);
@@ -76,6 +85,11 @@ const GymOwnerGymsPage = () => {
     setTrainerActionMessage(null);
     setTrainerActionError(null);
   };
+
+  const clearGymMessages = useCallback(() => {
+    setGymActionMessage(null);
+    setGymActionError(null);
+  }, []);
 
   const {
     data: gymDetailsResponse,
@@ -117,10 +131,12 @@ const GymOwnerGymsPage = () => {
   const handleEditGym = (gymId) => {
     setIsCreateOpen(false);
     dispatch(resetForm('gymCreate'));
+    clearGymMessages();
     setActiveGymId(gymId);
   };
 
   const handleCancelEdit = () => {
+    clearGymMessages();
     setActiveGymId(null);
     dispatch(resetForm('gymEdit'));
   };
@@ -129,6 +145,7 @@ const GymOwnerGymsPage = () => {
     setActiveGymId(null);
     dispatch(resetForm('gymEdit'));
     dispatch(resetForm('gymCreate'));
+    clearGymMessages();
     setIsCreateOpen(true);
   };
 
@@ -180,9 +197,29 @@ const GymOwnerGymsPage = () => {
   };
 
   const handleCancelCreate = () => {
+    clearGymMessages();
     setIsCreateOpen(false);
     dispatch(resetForm('gymCreate'));
   };
+
+  const isOverlayOpen = isCreateOpen || Boolean(activeGymId);
+  const overlayTitle = isCreateOpen
+    ? 'Add a new gym'
+    : activeGym?.name
+      ? `Edit ${activeGym.name}`
+      : 'Edit gym';
+
+  useEffect(() => {
+    if (!isOverlayOpen) {
+      return undefined;
+    }
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, [isOverlayOpen]);
 
   const handleUpdateGym = async (values) => {
     if (!activeGymId) {
@@ -232,9 +269,77 @@ const GymOwnerGymsPage = () => {
     }
   };
 
+  const handleTogglePublishGym = async (gym) => {
+    if (!gym) {
+      return;
+    }
+
+    clearGymMessages();
+    setProcessingGymId(gym.id);
+    setProcessingGymAction('toggle');
+
+    const shouldPublish = !gym.isPublished;
+    const nextStatus = shouldPublish ? 'active' : 'paused';
+
+    try {
+      await updateGym({ id: gym.id, status: nextStatus, isPublished: shouldPublish }).unwrap();
+      setGymActionMessage(shouldPublish ? 'Gym published successfully.' : 'Gym hidden from marketplace.');
+      await refetch();
+    } catch (mutationError) {
+      setGymActionError(mutationError?.data?.message ?? 'Could not update gym visibility.');
+    } finally {
+      setProcessingGymId(null);
+      setProcessingGymAction(null);
+    }
+  };
+
+  const handleDeleteGym = async (gym) => {
+    if (!gym) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Remove ${gym.name}? This will hide the listing for members.`);
+    if (!confirmed) {
+      return;
+    }
+
+    clearGymMessages();
+    setProcessingGymId(gym.id);
+    setProcessingGymAction('delete');
+
+    try {
+      await updateGym({ id: gym.id, status: 'suspended', isPublished: false }).unwrap();
+      setGymActionMessage('Gym removed from your listings.');
+      if (activeGymId === gym.id) {
+        setActiveGymId(null);
+        dispatch(resetForm('gymEdit'));
+      }
+      await refetch();
+    } catch (mutationError) {
+      setGymActionError(mutationError?.data?.message ?? 'Could not remove this gym.');
+    } finally {
+      setProcessingGymId(null);
+      setProcessingGymAction(null);
+    }
+  };
+
+  const handleOverlayDismiss = () => {
+    if (isCreateOpen) {
+      handleCancelCreate();
+    } else if (activeGymId) {
+      handleCancelEdit();
+    }
+  };
+
+  const handleOverlayBackdropClick = (event) => {
+    if (event.target === event.currentTarget) {
+      handleOverlayDismiss();
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         {['Registered gyms', 'Pending approvals'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -246,7 +351,7 @@ const GymOwnerGymsPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection
           title="Gyms unavailable"
           action={(
@@ -262,216 +367,295 @@ const GymOwnerGymsPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      <DashboardSection
-        title="Registered gyms"
-        action={(
-          <button type="button" className="cta-button" onClick={handleStartCreate}>
-            Add gym
-          </button>
-        )}
-      >
-        {gyms.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Members</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {gyms.map((gym) => (
-                <tr key={gym.id}>
-                  <td>{gym.name}</td>
-                  <td>{formatStatus(gym.status)}</td>
-                  <td>
-                    Active {gym.members?.active ?? 0} · Paused {gym.members?.paused ?? 0}
-                  </td>
-                  <td>{formatDate(gym.updatedAt)}</td>
-                  <td>
-                    <button type="button" onClick={() => handleEditGym(gym.id)} className="ghost-button">
-                      Edit
-                    </button>
-                  </td>
+    <>
+      <div className="dashboard-grid dashboard-grid--owner">
+        <DashboardSection
+          title="Registered gyms"
+          action={(
+            <button type="button" className="cta-button" onClick={handleStartCreate}>
+              Add gym
+            </button>
+          )}
+          className="dashboard-section--span-12"
+        >
+          {gymActionError ? (
+            <p className="dashboard-message dashboard-message--error">{gymActionError}</p>
+          ) : null}
+          {gymActionMessage ? (
+            <p className="dashboard-message dashboard-message--success">{gymActionMessage}</p>
+          ) : null}
+
+          {displayGyms.length ? (
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Members</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState message="Add your first gym to start attracting members." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection
-        title="Trainer approvals"
-        action={(
-          <button type="button" className="ghost-button" onClick={handleRefreshTrainerRequests}>
-            Refresh
-          </button>
-        )}
-      >
-        {trainerActionError ? (
-          <p className="dashboard-message dashboard-message--error">{trainerActionError}</p>
-        ) : null}
-        {trainerActionMessage ? (
-          <p className="dashboard-message dashboard-message--success">{trainerActionMessage}</p>
-        ) : null}
-
-        {isTrainerRequestsFetching && !pendingTrainerRequests.length ? (
-          <SkeletonPanel lines={4} />
-        ) : isTrainerRequestsError ? (
-          <EmptyState message="We could not load trainer requests." />
-        ) : pendingTrainerRequests.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Trainer</th>
-                <th>Gym</th>
-                <th>Requested</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingTrainerRequests.map((request) => {
-                const isProcessing = processingRequestId === request.id;
-                const approving = isProcessing && processingAction === 'approve' && isApprovingTrainer;
-                const declining = isProcessing && processingAction === 'decline' && isDecliningTrainer;
-                const disabled = isProcessing && (isApprovingTrainer || isDecliningTrainer);
-                const trainer = request.trainer ?? {};
-                const metaParts = [];
-
-                if (typeof trainer.experienceYears === 'number') {
-                  metaParts.push(`${trainer.experienceYears} yrs experience`);
-                }
-
-                if (typeof trainer.mentoredCount === 'number' && trainer.mentoredCount > 0) {
-                  metaParts.push(`${trainer.mentoredCount} trainees mentored`);
-                }
-
-                if (typeof trainer.age === 'number' && trainer.age > 0) {
-                  metaParts.push(`${trainer.age} yrs`);
-                }
-
-                if (typeof trainer.height === 'number' && trainer.height > 0) {
-                  metaParts.push(`${trainer.height} cm`);
-                }
-
-                if (trainer.gender) {
-                  const genderLabel = trainer.gender
-                    .replace(/-/g, ' ')
-                    .split(' ')
-                    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-                    .join(' ');
-                  metaParts.push(genderLabel);
-                }
-
-                const specialisations = Array.isArray(trainer.specializations) && trainer.specializations.length
-                  ? trainer.specializations.join(', ')
-                  : null;
-
-                const certifications = Array.isArray(trainer.certifications) && trainer.certifications.length
-                  ? trainer.certifications.join(', ')
-                  : null;
-                const bio = trainer.bio ? `${trainer.bio.slice(0, 220)}${trainer.bio.length > 220 ? '…' : ''}` : null;
-
-                return (
-                  <tr key={request.id}>
+              </thead>
+              <tbody>
+                {displayGyms.map((gym) => {
+                  const isProcessing = processingGymId === gym.id;
+                  const toggling = isProcessing && processingGymAction === 'toggle';
+                  const deleting = isProcessing && processingGymAction === 'delete';
+                  const disableLabel = gym.isPublished ? 'Disable' : 'Enable';
+                  return (
+                  <tr key={gym.id}>
+                    <td>{gym.name}</td>
+                    <td>{formatStatus(gym.status)}</td>
                     <td>
-                      <strong>{trainer.name ?? 'Unknown trainer'}</strong>
-                      {metaParts.length ? (
-                        <div className="dashboard-table__meta">{metaParts.join(' • ')}</div>
-                      ) : null}
-                      {trainer.headline ? (
-                        <div className="dashboard-table__meta">{trainer.headline}</div>
-                      ) : null}
-                      {specialisations ? (
-                        <div className="dashboard-table__meta">Specialisations: {specialisations}</div>
-                      ) : null}
-                      {certifications ? (
-                        <div className="dashboard-table__meta">Certifications: {certifications}</div>
-                      ) : null}
-                      {bio ? (
-                        <div className="dashboard-table__note">{bio}</div>
-                      ) : null}
+                      Active {gym.members?.active ?? 0} · Paused {gym.members?.paused ?? 0}
                     </td>
-                    <td>{request.gym?.name ?? '—'}</td>
-                    <td>{formatDate(request.requestedAt)}</td>
+                    <td>{formatDate(gym.updatedAt)}</td>
                     <td>
                       <div className="button-row">
-                        <button
-                          type="button"
-                          className="cta-button"
-                          onClick={() => handleApproveTrainer(request.id)}
-                          disabled={disabled}
-                        >
-                          {approving ? 'Approving…' : 'Approve'}
+                        <button type="button" onClick={() => handleEditGym(gym.id)}>
+                          Edit
                         </button>
                         <button
                           type="button"
-                          className="ghost-button"
-                          onClick={() => handleDeclineTrainer(request.id)}
-                          disabled={disabled}
+                          onClick={() => handleTogglePublishGym(gym)}
+                          disabled={isProcessing}
                         >
-                          {declining ? 'Declining…' : 'Decline'}
+                          {toggling ? 'Updating…' : disableLabel}
+                        </button>
+                        <button
+                          type="button"
+                          className="button--danger"
+                          onClick={() => handleDeleteGym(gym)}
+                          disabled={isProcessing}
+                        >
+                          {deleting ? 'Removing…' : 'Delete'}
                         </button>
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState message="No trainer requests awaiting approval." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection title="Pending approvals">
-        {pendingGyms.length ? (
-          <ul>
-            {pendingGyms.map((gym) => (
-              <li key={`${gym.id}-pending`}>
-                <strong>{gym.name}</strong> · {formatStatus(gym.status)} · Last updated {formatDate(gym.updatedAt)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <EmptyState message="All gyms are active and visible." />
-        )}
-      </DashboardSection>
-
-      {isCreateOpen ? (
-        <DashboardSection title="Add a new gym">
-          {isPlansFetching && !plans.length ? (
-            <SkeletonPanel lines={8} />
+                  );
+                })}
+              </tbody>
+            </table>
           ) : (
-            <GymCreateForm
-              onSubmit={handleCreateGym}
-              onCancel={handleCancelCreate}
-              plans={plans}
-              isPlansLoading={isPlansFetching}
-            />
+            <EmptyState message="Add your first gym to start attracting members." />
           )}
         </DashboardSection>
-      ) : null}
 
-      {activeGym ? (
-        <DashboardSection title={`Edit ${activeGym.name}`}>
-          {isGymDetailsFetching && !formInitialValues ? (
-            <SkeletonPanel lines={6} />
+        <DashboardSection
+          title="Trainer approvals"
+          action={(
+            <button type="button" className="ghost-button" onClick={handleRefreshTrainerRequests}>
+              Refresh
+            </button>
+          )}
+          className="dashboard-section--span-6"
+        >
+          {trainerActionError ? (
+            <p className="dashboard-message dashboard-message--error">{trainerActionError}</p>
+          ) : null}
+          {trainerActionMessage ? (
+            <p className="dashboard-message dashboard-message--success">{trainerActionMessage}</p>
+          ) : null}
+
+          {isTrainerRequestsFetching && !pendingTrainerRequests.length ? (
+            <SkeletonPanel lines={4} />
+          ) : isTrainerRequestsError ? (
+            <EmptyState message="We could not load trainer requests." />
+          ) : pendingTrainerRequests.length ? (
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>Trainer</th>
+                  <th>Gym</th>
+                  <th>Requested</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingTrainerRequests.map((request) => {
+                  const isProcessing = processingRequestId === request.id;
+                  const approving = isProcessing && processingAction === 'approve' && isApprovingTrainer;
+                  const declining = isProcessing && processingAction === 'decline' && isDecliningTrainer;
+                  const disabled = isProcessing && (isApprovingTrainer || isDecliningTrainer);
+                  const trainer = request.trainer ?? {};
+                  const metaParts = [];
+
+                  if (typeof trainer.experienceYears === 'number') {
+                    metaParts.push(`${trainer.experienceYears} yrs experience`);
+                  }
+
+                  if (typeof trainer.mentoredCount === 'number' && trainer.mentoredCount > 0) {
+                    metaParts.push(`${trainer.mentoredCount} trainees mentored`);
+                  }
+
+                  if (typeof trainer.age === 'number' && trainer.age > 0) {
+                    metaParts.push(`${trainer.age} yrs`);
+                  }
+
+                  if (typeof trainer.height === 'number' && trainer.height > 0) {
+                    metaParts.push(`${trainer.height} cm`);
+                  }
+
+                  if (trainer.gender) {
+                    const genderLabel = trainer.gender
+                      .replace(/-/g, ' ')
+                      .split(' ')
+                      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+                      .join(' ');
+                    metaParts.push(genderLabel);
+                  }
+
+                  const specialisations = Array.isArray(trainer.specializations) && trainer.specializations.length
+                    ? trainer.specializations.join(', ')
+                    : null;
+
+                  const certifications = Array.isArray(trainer.certifications) && trainer.certifications.length
+                    ? trainer.certifications.join(', ')
+                    : null;
+                  const bio = trainer.bio ? `${trainer.bio.slice(0, 220)}${trainer.bio.length > 220 ? '…' : ''}` : null;
+
+                  return (
+                    <tr key={request.id}>
+                      <td>
+                        <strong>{trainer.name ?? 'Unknown trainer'}</strong>
+                        {metaParts.length ? (
+                          <div className="dashboard-table__meta">{metaParts.join(' • ')}</div>
+                        ) : null}
+                        {trainer.headline ? (
+                          <div className="dashboard-table__meta">{trainer.headline}</div>
+                        ) : null}
+                        {specialisations ? (
+                          <div className="dashboard-table__meta">Specialisations: {specialisations}</div>
+                        ) : null}
+                        {certifications ? (
+                          <div className="dashboard-table__meta">Certifications: {certifications}</div>
+                        ) : null}
+                        {bio ? (
+                          <div className="dashboard-table__note">{bio}</div>
+                        ) : null}
+                      </td>
+                      <td>{request.gym?.name ?? '—'}</td>
+                      <td>{formatDate(request.requestedAt)}</td>
+                      <td>
+                        <div className="button-row">
+                          <button
+                            type="button"
+                            className="cta-button"
+                            onClick={() => handleApproveTrainer(request.id)}
+                            disabled={disabled}
+                          >
+                            {approving ? 'Approving…' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => handleDeclineTrainer(request.id)}
+                            disabled={disabled}
+                          >
+                            {declining ? 'Declining…' : 'Decline'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           ) : (
-            <GymEditForm
-              onSubmit={handleUpdateGym}
-              onCancel={handleCancelEdit}
-              initialValues={formInitialValues}
-            />
+            <EmptyState message="No trainer requests awaiting approval." />
           )}
         </DashboardSection>
+
+        <DashboardSection title="Pending approvals" className="dashboard-section--span-6">
+          {pendingGyms.length ? (
+            <ul>
+              {pendingGyms.map((gym) => (
+                <li key={`${gym.id}-pending`}>
+                  <strong>{gym.name}</strong> · {formatStatus(gym.status)} · Last updated {formatDate(gym.updatedAt)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState message="All gyms are active and visible." />
+          )}
+        </DashboardSection>
+      </div>
+
+      {isOverlayOpen ? (
+        <div
+          className="dashboard-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={overlayTitle}
+          onClick={handleOverlayBackdropClick}
+        >
+          <div className="dashboard-overlay__panel">
+            <DashboardSection
+              title={overlayTitle}
+              className="dashboard-section--overlay"
+              action={(
+                <div className="dashboard-overlay__actions">
+                  {activeGym ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePublishGym(activeGym)}
+                        disabled={processingGymId === activeGym.id}
+                      >
+                        {processingGymId === activeGym.id && processingGymAction === 'toggle'
+                          ? 'Updating…'
+                          : activeGym.isPublished
+                            ? 'Disable listing'
+                            : 'Enable listing'}
+                      </button>
+                      <button
+                        type="button"
+                        className="button--danger"
+                        onClick={() => handleDeleteGym(activeGym)}
+                        disabled={processingGymId === activeGym.id}
+                      >
+                        {processingGymId === activeGym.id && processingGymAction === 'delete'
+                          ? 'Removing…'
+                          : 'Delete'}
+                      </button>
+                    </>
+                  ) : null}
+                  <button type="button" className="ghost-button" onClick={handleOverlayDismiss}>
+                    Close
+                  </button>
+                </div>
+              )}
+            >
+              {isCreateOpen ? (
+                isPlansFetching && !plans.length ? (
+                  <SkeletonPanel lines={8} />
+                ) : plans.length ? (
+                  <GymCreateForm
+                    onSubmit={handleCreateGym}
+                    onCancel={handleCancelCreate}
+                    plans={plans}
+                    isPlansLoading={isPlansFetching}
+                  />
+                ) : (
+                  <EmptyState message="Activate a listing plan from the subscriptions tab before adding a gym." />
+                )
+              ) : activeGym ? (
+                isGymDetailsFetching && !formInitialValues ? (
+                  <SkeletonPanel lines={6} />
+                ) : (
+                  <GymEditForm
+                    onSubmit={handleUpdateGym}
+                    onCancel={handleCancelEdit}
+                    initialValues={formInitialValues}
+                  />
+                )
+              ) : null}
+            </DashboardSection>
+          </div>
+        </div>
       ) : null}
-    </div>
+    </>
   );
 };
 

@@ -108,7 +108,7 @@ const GymOwnerSubscriptionsPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         {['Activate listing plan', 'Active subscriptions', 'Billing history'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -120,7 +120,7 @@ const GymOwnerSubscriptionsPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection
           title="Subscriptions unavailable"
           action={<button type="button" onClick={handleRetry}>Retry</button>}
@@ -132,8 +132,8 @@ const GymOwnerSubscriptionsPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      <DashboardSection title="Activate listing plan">
+    <div className="dashboard-grid dashboard-grid--owner">
+      <DashboardSection title="Activate listing plan" className="dashboard-section--span-12">
         {gymOptions.length && plans.length ? (
           <ListingSubscriptionForm
             onSubmit={handleCheckout}
@@ -146,7 +146,7 @@ const GymOwnerSubscriptionsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active subscriptions">
+      <DashboardSection title="Active subscriptions" className="dashboard-section--span-6">
         {subscriptions.length ? (
           <table className="dashboard-table">
             <thead>
@@ -173,7 +173,7 @@ const GymOwnerSubscriptionsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Billing history">
+      <DashboardSection title="Billing history" className="dashboard-section--span-6">
         {invoices.length ? (
           <table className="dashboard-table">
             <thead>
