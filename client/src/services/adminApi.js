@@ -14,6 +14,14 @@ export const adminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'User'],
     }),
+    updateUserStatus: builder.mutation({
+      query: ({ userId, status }) => ({
+        url: `/admin/users/${userId}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: ['Dashboard', 'User'],
+    }),
     deleteGym: builder.mutation({
       query: (gymId) => ({
         url: `/admin/gyms/${gymId}`,
@@ -37,4 +45,5 @@ export const {
   useDeleteUserMutation,
   useDeleteGymMutation,
   useUpdateAdminTogglesMutation,
+  useUpdateUserStatusMutation,
 } = adminApi;

@@ -89,7 +89,7 @@ const GymOwnerSponsorshipPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         {['Launch sponsorship', 'Active sponsorships', 'Opportunities'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -101,7 +101,7 @@ const GymOwnerSponsorshipPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection
           title="Sponsorship data unavailable"
           action={<button type="button" onClick={handleRetry}>Retry</button>}
@@ -113,8 +113,8 @@ const GymOwnerSponsorshipPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      <DashboardSection title="Launch sponsorship">
+    <div className="dashboard-grid dashboard-grid--owner">
+      <DashboardSection title="Launch sponsorship" className="dashboard-section--span-12">
         {gymOptions.length && packages.length ? (
           <SponsorshipForm
             onSubmit={handlePurchase}
@@ -127,7 +127,7 @@ const GymOwnerSponsorshipPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active sponsorships">
+      <DashboardSection title="Active sponsorships" className="dashboard-section--span-6">
         {sponsorships.length ? (
           <table className="dashboard-table">
             <thead>
@@ -154,7 +154,7 @@ const GymOwnerSponsorshipPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Opportunities">
+      <DashboardSection title="Opportunities" className="dashboard-section--span-6">
         {gymOptions.length ? (
           <ul>
             {gymOptions.map((gym) => {

@@ -54,7 +54,8 @@ export const register = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'User with this email already exists');
   }
 
-  const defaultStatus = role === 'trainer' ? 'pending' : 'active';
+  const pendingRoles = new Set(['trainer', 'seller']);
+  const defaultStatus = pendingRoles.has(role) ? 'pending' : 'active';
 
   const user = await User.create({
     firstName,

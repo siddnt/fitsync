@@ -46,15 +46,29 @@ const GymOwnerDashboard = () => {
   const analytics = analyticsResponse?.data;
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
 
-  const revenueTrend = analytics?.revenueTrend?.map((entry) => ({
-    label: entry.label,
-    earnings: entry.value,
-  }));
+  const revenueTrend = (() => {
+    const rawTrend = Array.isArray(analytics?.revenueTrend)
+      ? analytics.revenueTrend
+      : Array.isArray(analytics?.revenueTrend?.weekly)
+        ? analytics.revenueTrend.weekly
+        : [];
+    return rawTrend.map((entry) => ({
+      label: entry.label,
+      earnings: entry.profit ?? entry.value ?? 0,
+    }));
+  })();
 
-  const membershipTrend = analytics?.membershipTrend?.map((entry) => ({
-    label: entry.label,
-    memberships: entry.value,
-  }));
+  const membershipTrend = (() => {
+    const rawTrend = Array.isArray(analytics?.membershipTrend)
+      ? analytics.membershipTrend
+      : Array.isArray(analytics?.membershipTrend?.weekly)
+        ? analytics.membershipTrend.weekly
+        : [];
+    return rawTrend.map((entry) => ({
+      label: entry.label,
+      memberships: entry.value,
+    }));
+  })();
 
   const sponsorshipSplit = overview?.gyms
     ?.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none')
@@ -71,7 +85,7 @@ const GymOwnerDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         {['Business snapshot', 'Revenue trend', 'Membership trend', 'Subscriptions'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -83,7 +97,7 @@ const GymOwnerDashboard = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection
           title="Dashboard unavailable"
           action={(
@@ -99,8 +113,8 @@ const GymOwnerDashboard = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      <DashboardSection title="Business snapshot">
+    <div className="dashboard-grid dashboard-grid--owner">
+      <DashboardSection title="Business snapshot" className="dashboard-section--span-12">
         {overview?.stats ? (
           <div className="stat-grid">
             <div className="stat-card">
@@ -136,6 +150,7 @@ const GymOwnerDashboard = () => {
             Refresh
           </button>
         )}
+        className="dashboard-section--span-6"
       >
         {revenueTrend?.length ? (
           <RevenueSummaryChart role="gym-owner" data={revenueTrend} valueKey="earnings" />
@@ -144,7 +159,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Membership trend">
+      <DashboardSection title="Membership trend" className="dashboard-section--span-6">
         {membershipTrend?.length ? (
           <GrowthLineChart
             role="gym-owner"
@@ -158,7 +173,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Sponsorship exposure">
+      <DashboardSection title="Sponsorship exposure" className="dashboard-section--span-4">
         {sponsorshipSplit?.length ? (
           <DistributionPieChart
             role="gym-owner"
@@ -171,7 +186,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Expiring subscriptions">
+      <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-4">
         {overview?.expiringSubscriptions?.length ? (
           <table className="dashboard-table">
             <thead>
@@ -196,7 +211,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active subscriptions">
+      <DashboardSection title="Active subscriptions" className="dashboard-section--span-4">
         {subscriptions.length ? (
           <table className="dashboard-table">
             <thead>
@@ -223,7 +238,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Recent joiners">
+      <DashboardSection title="Recent joiners" className="dashboard-section--span-12">
         {overview?.recentMembers?.length ? (
           <table className="dashboard-table">
             <thead>

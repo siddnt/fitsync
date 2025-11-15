@@ -17,9 +17,10 @@ import './seller-charts.css';
 const COLORS = ['#824EF7', '#E54D14', '#4DD7F7', '#8CE99A', '#FFB020', '#FF6AD5', '#35C89A', '#7B5BFF'];
 
 const STATUS_COLOR_MAP = {
+  processing: '#FFB020',
+  'in-transit': '#4DD7F7',
+  'out-for-delivery': '#824EF7',
   delivered: '#8CE99A',
-  outstanding: '#FFB020',
-  cancelled: '#E54D14',
 };
 
 const TIMEFRAME_OPTIONS = [
@@ -126,27 +127,30 @@ function buildCategoryBreakdown(products = []) {
   return Array.from(map.values());
 }
 
+const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
+
+const normaliseStatus = (status) => {
+  if (!status) {
+    return 'processing';
+  }
+  const value = status.toString().toLowerCase();
+  return ORDER_STATUS_KEYS.includes(value) ? value : 'processing';
+};
+
 function buildOrderStatusBreakdown(orders = []) {
-  const counts = new Map([
-    ['delivered', 0],
-    ['outstanding', 0],
-    ['cancelled', 0],
-  ]);
+  const counts = new Map(ORDER_STATUS_KEYS.map((key) => [key, 0]));
 
   (orders || []).forEach((order) => {
     const items = order?.items || [];
     items.forEach((item) => {
-      const status = (item?.status || 'outstanding').toLowerCase();
-      if (!counts.has(status)) {
-        counts.set(status, 0);
-      }
-      counts.set(status, counts.get(status) + 1);
+      const status = normaliseStatus(item?.status);
+      counts.set(status, (counts.get(status) ?? 0) + 1);
     });
   });
 
   return Array.from(counts.entries()).map(([key, value]) => ({
     id: key,
-    name: key.charAt(0).toUpperCase() + key.slice(1),
+    name: key.replace(/-/g, ' ').replace(/^\w/, (char) => char.toUpperCase()),
     value,
   }));
 }

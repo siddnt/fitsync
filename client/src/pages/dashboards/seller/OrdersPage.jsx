@@ -15,6 +15,7 @@ const OrdersPage = () => {
     data: ordersResponse,
     isLoading,
     isError,
+    error,
     refetch,
   } = useGetSellerOrdersQuery();
 
@@ -139,6 +140,27 @@ const OrdersPage = () => {
     );
   }
 
+  const approvalError = error?.status === 403 ? error : null;
+  const approvalMessage = approvalError?.data?.message
+    ?? 'Your seller account is awaiting admin approval. Hang tight—order management will unlock once you are activated.';
+
+  if (approvalError) {
+    return (
+      <div className="dashboard-grid">
+        <DashboardSection
+          title="Orders"
+          action={(
+            <button type="button" onClick={() => refetch()}>
+              Refresh
+            </button>
+          )}
+        >
+          <EmptyState message={approvalMessage} />
+        </DashboardSection>
+      </div>
+    );
+  }
+
   if (isError) {
     return (
       <div className="dashboard-grid">
@@ -238,7 +260,7 @@ const OrdersPage = () => {
                   </td>
                   <td>{formatDate(order.createdAt)}</td>
                   <td>
-                    <span className={`status-pill ${order.status === 'Delivered' ? 'status-pill--success' : 'status-pill--info'}`}>
+                    <span className={`status-pill ${order.status === 'delivered' ? 'status-pill--success' : 'status-pill--info'}`}>
                       {formatStatus(order.status)}
                     </span>
                   </td>

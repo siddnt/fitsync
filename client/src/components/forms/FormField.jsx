@@ -4,8 +4,10 @@ import './FormField.css';
 const FormField = ({ input, label, type, as, meta, children, ...rest }) => {
   const fieldType = as ?? 'input';
   const showError = Boolean(meta?.touched && meta?.error);
+  const isFileField = type === 'file';
 
   let control = null;
+  let fileName = null;
 
   if (fieldType === 'textarea') {
     control = <textarea {...input} {...rest} />;
@@ -29,6 +31,26 @@ const FormField = ({ input, label, type, as, meta, children, ...rest }) => {
         <span>{label}</span>
       </label>
     );
+  } else if (isFileField) {
+    // redux-form stores files as File objects; avoid binding the value attribute
+    const { value, onChange, ...inputProps } = input;
+    if (value && typeof value === 'object' && 'name' in value) {
+      fileName = value.name;
+    }
+    control = (
+      <input
+        type="file"
+        {...inputProps}
+        {...rest}
+        onChange={(event) => {
+          const file = event.target.files && event.target.files.length ? event.target.files[0] : null;
+          onChange(file);
+          // allow the same file to be selected again if needed
+          // eslint-disable-next-line no-param-reassign
+          event.target.value = '';
+        }}
+      />
+    );
   } else {
     control = <input type={type} {...input} {...rest} />;
   }
@@ -43,6 +65,9 @@ const FormField = ({ input, label, type, as, meta, children, ...rest }) => {
       ) : (
         control
       )}
+      {isFileField && fileName ? (
+        <small className="form-field__hint">Selected file: {fileName}</small>
+      ) : null}
       {showError ? <small className="form-field__error">{meta.error}</small> : null}
     </div>
   );
