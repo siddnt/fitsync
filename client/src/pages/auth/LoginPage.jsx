@@ -1,7 +1,7 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
@@ -48,32 +48,54 @@ const LoginPage = () => {
 
   return (
     <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit(onSubmit)}>
-        <h1>Welcome back</h1>
-        <p className="auth-card__subtitle">Sign in to manage your fitness journey.</p>
+      <div className="auth-layout">
+        <aside className="auth-hero">
+          <p className="auth-hero__kicker">Welcome Back</p>
+          <h1>Your Fitness Command Center</h1>
+          <p className="auth-hero__lede">Log in to manage your workouts, clients, or facility from one powerful dashboard.</p>
+          <div className="auth-hero__pill-row">
+            <span className="auth-pill">Trainees</span>
+            <span className="auth-pill">Trainers</span>
+            <span className="auth-pill">Gym Owners</span>
+          </div>
+          <ul className="auth-hero__points">
+            <li><strong>Trainees:</strong> Check your schedule and stats.</li>
+            <li><strong>Trainers:</strong> Review client progress and bookings.</li>
+            <li><strong>Owners:</strong> Monitor gym performance and revenue.</li>
+          </ul>
+        </aside>
 
-        <label>
-          <span>Email</span>
-          <input type="email" {...register('email')} placeholder="you@example.com" autoComplete="email" />
-          {errors.email && <p className="input-error">{errors.email.message}</p>}
-        </label>
+        <form className="auth-card" onSubmit={handleSubmit(onSubmit)}>
+          <div className="auth-card__header">
+            <h2>Welcome back</h2>
+            <p className="auth-card__subtitle">Sign in to manage your fitness journey.</p>
+          </div>
 
-        <label>
-          <span>Password</span>
-          <input type="password" {...register('password')} placeholder="••••••••" autoComplete="current-password" />
-          {errors.password && <p className="input-error">{errors.password.message}</p>}
-        </label>
+          <div className="auth-card__fields">
+            <label>
+              <span>Email</span>
+              <input type="email" {...register('email')} placeholder="you@example.com" autoComplete="email" />
+              {errors.email && <p className="input-error">{errors.email.message}</p>}
+            </label>
 
-        {status === 'failed' && <p className="form-error">{error}</p>}
+            <label>
+              <span>Password</span>
+              <input type="password" {...register('password')} placeholder="********" autoComplete="current-password" />
+              {errors.password && <p className="input-error">{errors.password.message}</p>}
+            </label>
+          </div>
 
-        <button type="submit" className="primary-button" disabled={isLoading}>
-          {isLoading ? 'Signing in…' : 'Sign in'}
-        </button>
+          {status === 'failed' && <p className="form-error">{error}</p>}
 
-        <p className="auth-card__switch">
-          New here? <a href="/auth/register">Create an account</a>
-        </p>
-      </form>
+          <button type="submit" className="primary-button" disabled={isLoading}>
+            {isLoading ? 'Signing in...' : 'Sign in'}
+          </button>
+
+          <p className="auth-card__switch">
+            New here? <a href="/auth/register">Create an account</a>
+          </p>
+        </form>
+      </div>
     </div>
   );
 };

@@ -61,65 +61,85 @@ const RegisterPage = () => {
 
   return (
     <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit(onSubmit)}>
-        <h1>Create your account</h1>
-        <p className="auth-card__subtitle">Join FitSync and unlock role-specific dashboards.</p>
+      <div className="auth-layout auth-layout--register">
+        <aside className="auth-hero auth-hero--register">
+          <p className="auth-hero__kicker">For Everyone in Fitness</p>
+          <h1>One Platform. Every Role.</h1>
+          <p className="auth-hero__lede">Whether you're training, teaching, or managing a gym, FitSync powers your potential.</p>
+          <div className="auth-hero__pill-row">
+            <span className="auth-pill">Trainees</span>
+            <span className="auth-pill">Trainers</span>
+            <span className="auth-pill">Gym Owners</span>
+          </div>
+          <ul className="auth-hero__points">
+            <li><strong>Trainees:</strong> Find top coaches and track your progress.</li>
+            <li><strong>Trainers:</strong> Manage clients, bookings, and payments.</li>
+            <li><strong>Owners:</strong> Streamline operations and grow your gym.</li>
+          </ul>
+        </aside>
 
-        <label>
-          <span>Role</span>
-          <select {...register('role')}>
-            {roles.map((option) => (
-              <option key={option} value={option}>
-                {option.replace('-', ' ')}
-              </option>
-            ))}
-          </select>
-          {errors.role && <p className="input-error">{errors.role.message}</p>}
-        </label>
+        <form className="auth-card" onSubmit={handleSubmit(onSubmit)}>
+          <div className="auth-card__header">
+            <h1>Create your account</h1>
+            <p className="auth-card__subtitle">Join FitSync and unlock role-specific dashboards.</p>
+          </div>
 
-        <div className="auth-card__grid">
           <label>
-            <span>First name</span>
-            <input type="text" {...register('firstName')} placeholder="Alex" autoComplete="given-name" />
-            {errors.firstName && <p className="input-error">{errors.firstName.message}</p>}
+            <span>Role</span>
+            <select {...register('role')}>
+              {roles.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace('-', ' ')}
+                </option>
+              ))}
+            </select>
+            {errors.role && <p className="input-error">{errors.role.message}</p>}
           </label>
+
+          <div className="auth-card__grid">
+            <label>
+              <span>First name</span>
+              <input type="text" {...register('firstName')} placeholder="Alex" autoComplete="given-name" />
+              {errors.firstName && <p className="input-error">{errors.firstName.message}</p>}
+            </label>
+            <label>
+              <span>Last name</span>
+              <input type="text" {...register('lastName')} placeholder="Morgan" autoComplete="family-name" />
+              {errors.lastName && <p className="input-error">{errors.lastName.message}</p>}
+            </label>
+          </div>
+
           <label>
-            <span>Last name</span>
-            <input type="text" {...register('lastName')} placeholder="Morgan" autoComplete="family-name" />
-            {errors.lastName && <p className="input-error">{errors.lastName.message}</p>}
+            <span>Email</span>
+            <input type="email" {...register('email')} placeholder="you@example.com" autoComplete="email" />
+            {errors.email && <p className="input-error">{errors.email.message}</p>}
           </label>
-        </div>
 
-        <label>
-          <span>Email</span>
-          <input type="email" {...register('email')} placeholder="you@example.com" autoComplete="email" />
-          {errors.email && <p className="input-error">{errors.email.message}</p>}
-        </label>
-
-        <div className="auth-card__grid">
-          <label>
-            <span>Password</span>
-            <input type="password" {...register('password')} placeholder="••••••••" autoComplete="new-password" />
-            {errors.password && <p className="input-error">{errors.password.message}</p>}
-          </label>
-          <label>
-            <span>Confirm password</span>
-            <input type="password" {...register('confirmPassword')} placeholder="••••••••" autoComplete="new-password" />
-            {errors.confirmPassword && <p className="input-error">{errors.confirmPassword.message}</p>}
-          </label>
-        </div>
+          <div className="auth-card__grid">
+            <label>
+              <span>Password</span>
+              <input type="password" {...register('password')} placeholder="********" autoComplete="new-password" />
+              {errors.password && <p className="input-error">{errors.password.message}</p>}
+            </label>
+            <label>
+              <span>Confirm password</span>
+              <input type="password" {...register('confirmPassword')} placeholder="********" autoComplete="new-password" />
+              {errors.confirmPassword && <p className="input-error">{errors.confirmPassword.message}</p>}
+            </label>
+          </div>
 
 
-        {status === 'failed' && <p className="form-error">{error}</p>}
+          {status === 'failed' && <p className="form-error">{error}</p>}
 
-        <button type="submit" className="primary-button" disabled={isLoading}>
-          {isLoading ? 'Creating account…' : 'Create account'}
-        </button>
+          <button type="submit" className="primary-button" disabled={isLoading}>
+            {isLoading ? 'Creating account...' : 'Create account'}
+          </button>
 
-        <p className="auth-card__switch">
-          Already have an account? <a href="/auth/login">Sign in</a>
-        </p>
-      </form>
+          <p className="auth-card__switch">
+            Already have an account? <a href="/auth/login">Sign in</a>
+          </p>
+        </form>
+      </div>
     </div>
   );
 };
