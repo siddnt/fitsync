@@ -13,6 +13,7 @@ const dashboardLinksByRole = {
   'gym-owner': [
     { to: '/dashboard/gym-owner', label: 'Overview' },
     { to: '/dashboard/gym-owner/gyms', label: 'My Gyms' },
+    { to: '/dashboard/gym-owner/people', label: 'People' },
     { to: '/dashboard/gym-owner/subscriptions', label: 'Listing Subscription' },
     { to: '/dashboard/gym-owner/sponsorship', label: 'Sponsorship' },
     { to: '/dashboard/gym-owner/analytics', label: 'Analytics' },

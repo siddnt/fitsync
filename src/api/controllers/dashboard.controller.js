@@ -41,6 +41,18 @@ const toDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const OWNER_REVENUE_SHARE = 0.5;
+const TRAINER_REVENUE_SHARE = 0.5;
+
+const calculateRevenueShare = (amount = 0, ratio = OWNER_REVENUE_SHARE) => {
+  const value = Number(amount) || 0;
+  if (value <= 0) {
+    return 0;
+  }
+  const clampedRatio = Number.isFinite(ratio) ? Math.min(Math.max(ratio, 0), 1) : OWNER_REVENUE_SHARE;
+  return Math.max(Math.round(value * clampedRatio), 0);
+};
+
 const buildSubscriptionExpenseEntries = (subscriptions = []) => {
   const entries = [];
 
@@ -504,8 +516,15 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
   }
 
   const gymIds = gyms.map((gym) => gym._id);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [membershipAggregates, subscriptionDocs, revenueAggregate, recentJoiners] = await Promise.all([
+  const [
+    membershipAggregates,
+    subscriptionDocs,
+    revenueAggregate,
+    recentJoiners,
+    membershipBillings,
+  ] = await Promise.all([
     GymMembership.aggregate([
       { $match: { gym: { $in: gymIds }, status: 'active' } },
       { $group: { _id: '$gym', activeMembers: { $sum: 1 } } },
@@ -518,7 +537,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
         $match: {
           user: ownerFilter,
           type: { $in: REVENUE_EARNING_TYPES },
-          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          createdAt: { $gte: thirtyDaysAgo },
         },
       },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
@@ -529,6 +548,15 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       .populate({ path: 'trainee', select: 'name email profilePicture' })
       .populate({ path: 'gym', select: 'name' })
       .lean(),
+    GymMembership.find({
+      gym: { $in: gymIds },
+      status: { $in: ['active', 'paused'] },
+      createdAt: { $gte: thirtyDaysAgo },
+      'billing.status': 'paid',
+      'billing.amount': { $gt: 0 },
+    })
+      .select('billing')
+      .lean(),
   ]);
 
   const membershipMap = membershipAggregates.reduce((acc, item) => {
@@ -536,7 +564,15 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
     return acc;
   }, {});
 
-  const revenue30d = revenueAggregate?.[0]?.totalAmount ?? 0;
+  const derivedOwnerRevenue30d = membershipBillings.reduce((sum, membership) => {
+    const amount = membership?.billing?.amount;
+    return sum + calculateRevenueShare(amount, OWNER_REVENUE_SHARE);
+  }, 0);
+
+  let revenue30d = revenueAggregate?.[0]?.totalAmount ?? 0;
+  if (revenue30d <= 0 && derivedOwnerRevenue30d > 0) {
+    revenue30d = derivedOwnerRevenue30d;
+  }
 
   const enrichedGyms = gyms.map((gym) => {
     const members = membershipMap[gym._id.toString()] ?? 0;
@@ -568,7 +604,6 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
 
   const sponsoredGyms = gyms.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none').length;
   const expenseEntries = collectOwnerExpenseEntries({ subscriptions: subscriptionDocs, gyms });
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const expenses30d = expenseEntries
     .filter((entry) => entry.date >= thirtyDaysAgo)
     .reduce((sum, entry) => sum + entry.amount, 0);
@@ -673,6 +708,100 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { gyms: data }, 'Gym list fetched successfully'));
 });
 
+export const getGymOwnerRoster = asyncHandler(async (req, res) => {
+  const ownerId = req.user?._id;
+  const ownerObjectId = toObjectId(ownerId);
+  const ownerFilter = ownerObjectId ?? ownerId;
+
+  const gyms = await Gym.find({ owner: ownerFilter })
+    .select('name location status isPublished createdAt')
+    .lean();
+
+  if (!gyms.length) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { gyms: [] }, 'No gyms found for this owner.'));
+  }
+
+  const gymIds = gyms.map((gym) => gym._id);
+
+  const [assignmentDocs, membershipDocs] = await Promise.all([
+    TrainerAssignment.find({ gym: { $in: gymIds }, status: { $in: ['pending', 'active'] } })
+      .populate({ path: 'trainer', select: 'name email profilePicture status role' })
+      .lean(),
+    GymMembership.find({ gym: { $in: gymIds }, status: { $in: ['pending', 'active', 'paused'] } })
+      .populate({ path: 'trainee', select: 'name email profilePicture role' })
+      .populate({ path: 'trainer', select: 'name email profilePicture role' })
+      .lean(),
+  ]);
+
+  const rosterMap = gyms.reduce((acc, gym) => {
+    acc[gym._id.toString()] = {
+      id: gym._id,
+      name: gym.name,
+      city: gym.location?.city ?? '',
+      status: gym.status,
+      isPublished: gym.isPublished,
+      trainers: [],
+      trainees: [],
+    };
+    return acc;
+  }, {});
+
+  assignmentDocs.forEach((assignment) => {
+    const gymId = assignment.gym ? assignment.gym.toString() : null;
+    if (!gymId || !rosterMap[gymId]) {
+      return;
+    }
+
+    rosterMap[gymId].trainers.push({
+      assignmentId: assignment._id,
+      id: assignment.trainer?._id ?? null,
+      name: assignment.trainer?.name ?? 'Trainer',
+      email: assignment.trainer?.email ?? '',
+      status: assignment.status,
+      profilePicture: assignment.trainer?.profilePicture ?? null,
+      requestedAt: assignment.requestedAt,
+      approvedAt: assignment.approvedAt,
+    });
+  });
+
+  membershipDocs.forEach((membership) => {
+    const gymId = membership.gym ? membership.gym.toString() : null;
+    if (!gymId || !rosterMap[gymId]) {
+      return;
+    }
+
+    rosterMap[gymId].trainees.push({
+      membershipId: membership._id,
+      id: membership.trainee?._id ?? null,
+      name: membership.trainee?.name ?? 'Member',
+      email: membership.trainee?.email ?? '',
+      status: membership.status,
+      plan: membership.plan,
+      startDate: membership.startDate,
+      endDate: membership.endDate,
+      autoRenew: membership.autoRenew,
+      trainer: membership.trainer
+        ? {
+            id: membership.trainer._id,
+            name: membership.trainer.name,
+          }
+        : null,
+    });
+  });
+
+  const roster = Object.values(rosterMap).map((gym) => ({
+    ...gym,
+    trainers: gym.trainers.sort((a, b) => new Date(b.approvedAt || b.requestedAt) - new Date(a.approvedAt || a.requestedAt)),
+    trainees: gym.trainees.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)),
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { gyms: roster }, 'Gym roster fetched successfully'));
+});
+
 export const getGymOwnerSubscriptions = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
 
@@ -752,7 +881,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       status: { $in: ['active', 'paused'] },
       startDate: { $gte: earliestDate },
     })
-      .select('startDate createdAt')
+      .select('startDate createdAt billing')
       .lean(),
     Revenue.find({
       user: ownerFilter,
@@ -769,16 +898,30 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       .lean(),
   ]);
 
+  const fallbackRevenueEntries = [];
+
   membershipDocs.forEach((membership) => {
     const when = membership.startDate || membership.createdAt;
     applyMonthlyAmount(monthlyTimeline, when, 'memberships', 1);
     applyWeeklyAmount(weeklyTimeline, when, 'memberships', 1);
+
+  const ownerShareAmount = calculateRevenueShare(membership?.billing?.amount, OWNER_REVENUE_SHARE);
+    if (ownerShareAmount > 0) {
+      fallbackRevenueEntries.push({ amount: ownerShareAmount, date: when });
+    }
   });
 
   revenueEvents.forEach((event) => {
     applyMonthlyAmount(monthlyTimeline, event.createdAt, 'revenue', event.amount);
     applyWeeklyAmount(weeklyTimeline, event.createdAt, 'revenue', event.amount);
   });
+
+  if (!revenueEvents.length && fallbackRevenueEntries.length) {
+    fallbackRevenueEntries.forEach((entry) => {
+      applyMonthlyAmount(monthlyTimeline, entry.date, 'revenue', entry.amount);
+      applyWeeklyAmount(weeklyTimeline, entry.date, 'revenue', entry.amount);
+    });
+  }
 
   const expenseEntries = collectOwnerExpenseEntries({ subscriptions, gyms });
   expenseEntries.forEach((entry) => {
@@ -923,7 +1066,11 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
 
 export const getTrainerOverview = asyncHandler(async (req, res) => {
   const trainerId = req.user?._id;
-  const [memberships, assignmentDocs, progressDocs] = await Promise.all([
+  const trainerObjectId = toObjectId(trainerId);
+  const trainerFilter = trainerObjectId ?? trainerId;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [memberships, assignmentDocs, progressDocs, revenueAggregate] = await Promise.all([
     GymMembership.find({ trainer: trainerId, status: { $in: ['active', 'paused'] } })
       .populate({ path: 'gym', select: 'name location' })
       .populate({ path: 'trainee', select: 'name profilePicture role' })
@@ -932,6 +1079,16 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     TrainerProgress.find({ trainer: trainerId })
       .populate({ path: 'trainee', select: 'name profilePicture role' })
       .lean(),
+    Revenue.aggregate([
+      {
+        $match: {
+          user: trainerFilter,
+          type: { $in: REVENUE_EARNING_TYPES },
+          createdAt: { $gte: thirtyDaysAgo },
+        },
+      },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
+    ]),
   ]);
 
   const assignmentByGym = assignmentDocs.reduce((acc, doc) => {
@@ -991,11 +1148,25 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     })
     .filter(Boolean);
 
+  const derivedTrainerRevenue30d = memberships.reduce((sum, membership) => {
+    const referenceDate = membership.startDate || membership.createdAt;
+    if (!referenceDate || new Date(referenceDate) < thirtyDaysAgo) {
+      return sum;
+    }
+    return sum + calculateRevenueShare(membership?.billing?.amount, TRAINER_REVENUE_SHARE);
+  }, 0);
+
+  let trainerRevenue30d = revenueAggregate?.[0]?.totalAmount ?? 0;
+  if (trainerRevenue30d <= 0 && derivedTrainerRevenue30d > 0) {
+    trainerRevenue30d = derivedTrainerRevenue30d;
+  }
+
   const response = {
     totals: {
       gyms: new Set(memberships.map((membership) => String(membership.gym?._id))).size,
       activeTrainees: activeTrainees.length,
       pendingUpdates: upcomingCheckIns.filter((item) => !item.nextFeedback).length,
+      earnings30d: formatCurrency(trainerRevenue30d),
     },
     activeAssignments: activeTrainees,
     upcomingCheckIns,

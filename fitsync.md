@@ -59,8 +59,8 @@ FitSync is an end-to-end fitness marketplace that connects gym owners, trainees,
 | Listing Subscriptions | Gym owners | `GymListingSubscription`, `Revenue` | 100% Admin | Recurring monthly/annual packages controlling marketplace visibility.
 | Sponsorship Campaigns | Gym owners | `Revenue`, sponsorship config on Gym model | 100% Admin | Adds promotional badge and preferential ordering in explorer.
 | Marketplace Sales | Product orders | `Order`, `Revenue` | 85% Seller / 15% Admin | Settlement creates two revenue records for payout + commission.
-| Trainer Services | Trainer updates and plan assignments | (Future) `TrainerRevenue` | TBD | Currently tracked for analytics; monetisation hooks available.
-| Trainee Memberships | Gym memberships | `GymMembership`, `Revenue` | 100% Gym Owner | Membership purchases recorded against owning gym.
+| Trainer Services | Trainer updates and plan assignments | (Future) `TrainerRevenue` | 50% Trainer / 50% Gym Owner | Mirrors membership split: payouts trigger alongside gym owner earnings whenever trainees stay active. |
+| Trainee Memberships | Gym memberships | `GymMembership`, `Revenue` | 50% Gym Owner / 50% Trainer | Membership purchases automatically log two revenue entries so both parties receive their equal share. |
 
 ## Data & Analytics
 - **Revenue Collection Schema**: Captures amount, type (seller, marketplace, listing, sponsorship), user reference (null for admin commission), metadata (orderId, sellerId, plan, etc.), and timestamps.

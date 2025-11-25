@@ -40,6 +40,20 @@ export const ownerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['TrainerRequest', 'Dashboard', 'Gym'],
     }),
+    removeTrainerFromGym: builder.mutation({
+      query: ({ assignmentId }) => ({
+        url: `/owner/trainers/${assignmentId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['TrainerRequest', 'Dashboard', 'Gym', 'Analytics'],
+    }),
+    removeGymMember: builder.mutation({
+      query: ({ membershipId }) => ({
+        url: `/owner/memberships/${membershipId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Dashboard', 'Gym', 'Analytics'],
+    }),
   }),
 });
 
@@ -50,4 +64,6 @@ export const {
   useGetTrainerRequestsQuery,
   useApproveTrainerRequestMutation,
   useDeclineTrainerRequestMutation,
+  useRemoveTrainerFromGymMutation,
+  useRemoveGymMemberMutation,
 } = ownerApi;

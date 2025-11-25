@@ -32,7 +32,7 @@ const slugify = (value) => {
     .replace(/(^-|-$)+/g, '');
 };
 
-const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valueFormatter }) => {
+const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valueFormatter, centerLabel }) => {
   const fallbackData = sampleDistribution[role] ?? sampleDistribution['gym-owner'];
   const resolvedData = data?.length ? data : fallbackData;
   const resolvedValueKey = valueKey || 'value';
@@ -73,7 +73,14 @@ const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valu
     setHiddenKeys((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
   };
 
-  const legend = interactive && hasData ? (
+  const topEntry = activeData.reduce((best, entry) => {
+    if (!best || entry.value > best.value) {
+      return entry;
+    }
+    return best;
+  }, null);
+
+  const legendContent = interactive && hasData ? (
     <ul className="pie-legend">
       {decoratedData.map((entry) => {
         const isMuted = hiddenKeys.includes(entry.id);
@@ -108,38 +115,52 @@ const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valu
     ? 'No segments selected. Use the legend below to toggle categories.'
     : 'No data available yet.';
 
+  const shouldShowLegend = Boolean(legendContent);
+
   return (
-    <div className={`chart-container${interactive ? ' chart-container--interactive' : ''}`}>
+    <div className={`chart-container chart-container--donut${interactive ? ' chart-container--interactive' : ''}`}>
       {displayData.length ? (
-        <ResponsiveContainer width="100%" height={interactive ? 220 : 240}>
-          <PieChart>
-            <Pie
-              data={displayData}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={60}
-              outerRadius={90}
-              paddingAngle={6}
-            >
-              {displayData.map((entry) => (
-                <Cell
-                  key={entry.id}
-                  fill={entry.color}
-                  fillOpacity={hiddenKeys.includes(entry.id) ? 0.4 : 1}
+        <div className={`pie-layout${shouldShowLegend ? ' pie-layout--with-legend' : ''}`}>
+          <div className="pie-layout__chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={displayData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={84}
+                  outerRadius={106}
+                  paddingAngle={1.5}
+                  cornerRadius={16}
+                  stroke="rgba(6,6,6,0.6)"
+                  strokeWidth={1}
+                >
+                  {displayData.map((entry) => (
+                    <Cell
+                      key={entry.id}
+                      fill={entry.color}
+                      fillOpacity={hiddenKeys.includes(entry.id) ? 0.35 : 1}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
+                  formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
                 />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
-              formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
-            />
-            {interactive ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
-          </PieChart>
-        </ResponsiveContainer>
+                {interactive ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pie-center">
+              <span>{centerLabel}</span>
+              <strong>{formatter(totalVisible)}</strong>
+              {topEntry ? <small>Top: {topEntry.name}</small> : null}
+            </div>
+          </div>
+          {shouldShowLegend ? <div className="pie-layout__legend">{legendContent}</div> : null}
+        </div>
       ) : (
         <p className="empty-state">{emptyMessage}</p>
       )}
-      {legend}
     </div>
   );
 };
@@ -151,6 +172,7 @@ DistributionPieChart.propTypes = {
   nameKey: PropTypes.string,
   interactive: PropTypes.bool,
   valueFormatter: PropTypes.func,
+  centerLabel: PropTypes.string,
 };
 
 DistributionPieChart.defaultProps = {
@@ -160,6 +182,7 @@ DistributionPieChart.defaultProps = {
   nameKey: null,
   interactive: false,
   valueFormatter: null,
+  centerLabel: 'Total',
 };
 
 export default DistributionPieChart;
