@@ -32,9 +32,19 @@ const slugify = (value) => {
     .replace(/(^-|-$)+/g, '');
 };
 
-const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valueFormatter, centerLabel }) => {
+const DistributionPieChart = ({
+  role,
+  data,
+  valueKey,
+  nameKey,
+  interactive,
+  valueFormatter,
+  centerLabel,
+  useSampleFallback,
+  showLegend,
+}) => {
   const fallbackData = sampleDistribution[role] ?? sampleDistribution['gym-owner'];
-  const resolvedData = data?.length ? data : fallbackData;
+  const resolvedData = data?.length ? data : (useSampleFallback ? fallbackData : []);
   const resolvedValueKey = valueKey || 'value';
   const resolvedNameKey = nameKey || 'name';
   const formatter = valueFormatter || defaultFormatter;
@@ -147,7 +157,7 @@ const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valu
                   contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
                   formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
                 />
-                {interactive ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
+                {interactive || !showLegend ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
               </PieChart>
             </ResponsiveContainer>
             <div className="pie-center">
@@ -173,6 +183,8 @@ DistributionPieChart.propTypes = {
   interactive: PropTypes.bool,
   valueFormatter: PropTypes.func,
   centerLabel: PropTypes.string,
+  useSampleFallback: PropTypes.bool,
+  showLegend: PropTypes.bool,
 };
 
 DistributionPieChart.defaultProps = {
@@ -183,6 +195,8 @@ DistributionPieChart.defaultProps = {
   interactive: false,
   valueFormatter: null,
   centerLabel: 'Total',
+  useSampleFallback: true,
+  showLegend: true,
 };
 
 export default DistributionPieChart;

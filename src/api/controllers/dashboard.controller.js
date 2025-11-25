@@ -6,6 +6,7 @@ import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
 import Revenue from '../../models/revenue.model.js';
 import Order from '../../models/order.model.js';
+import Product from '../../models/product.model.js';
 import User from '../../models/user.model.js';
 import {
   loadAdminToggles,
@@ -189,7 +190,7 @@ const applyMonthlyAmount = (timeline, date, key, amount) => {
   if (!bucket) {
     return;
   }
-  bucket[key] += Number(amount) || 0;
+  bucket[key] = (bucket[key] || 0) + (Number(amount) || 0);
 };
 
 const applyWeeklyAmount = (timeline, date, key, amount) => {
@@ -202,7 +203,7 @@ const applyWeeklyAmount = (timeline, date, key, amount) => {
   if (!bucket) {
     return;
   }
-  bucket[key] += Number(amount) || 0;
+  bucket[key] = (bucket[key] || 0) + (Number(amount) || 0);
 };
 
 const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
@@ -1260,7 +1261,7 @@ export const getTrainerUpdates = asyncHandler(async (req, res) => {
 });
 
 export const getAdminOverview = asyncHandler(async (_req, res) => {
-  const [userCounts, gyms, orders, revenue, adminToggles] = await Promise.all([
+  const [userCounts, gyms, orders, revenue, productCount, adminToggles] = await Promise.all([
     User.aggregate([
       { $group: { _id: '$role', count: { $sum: 1 } } },
     ]),
@@ -1283,6 +1284,7 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
         },
       },
     ]),
+    Product.countDocuments(),
     loadAdminToggles(),
   ]);
 
@@ -1298,9 +1300,12 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
     totalImpressions: gyms.reduce((sum, gym) => sum + (gym.analytics?.impressions ?? 0), 0),
   };
 
+  const marketplaceRevenue = revenue.find((r) => r._id === 'marketplace')?.amount || 0;
+
   const orderStats = {
     totalOrders: orders?.[0]?.totalOrders ?? 0,
-    totalRevenue: formatCurrency(orders?.[0]?.totalRevenue ?? 0),
+    totalRevenue: formatCurrency(marketplaceRevenue),
+    totalItems: productCount,
   };
 
   const revenueBreakdown = revenue.map((entry) => ({ type: entry._id, amount: formatCurrency(entry.amount) }));
@@ -1324,7 +1329,7 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
   const recentQuery = User.find()
     .sort({ createdAt: -1 })
     .limit(20)
-    .select('name email role status createdAt')
+    .select('name email role status createdAt profilePicture')
     .lean();
 
   const [pending, recent, adminToggles] = await Promise.all([
@@ -1368,37 +1373,108 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
 });
 
 export const getAdminRevenue = asyncHandler(async (_req, res) => {
-  const [aggregates, adminToggles] = await Promise.all([
-    Revenue.aggregate([
-      {
-        $group: {
-          _id: {
-            month: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-            type: '$type',
-          },
-          amount: { $sum: '$amount' },
-        },
-      },
-    ]),
+  const referenceDate = new Date();
+  referenceDate.setHours(23, 59, 59, 999);
+
+  const monthlyTimeline = createMonthlyTimeline(12, referenceDate);
+  const weeklyTimeline = createWeeklyTimeline(12, referenceDate);
+
+  const earliestMonthly = monthlyTimeline[0]?.referenceDate ?? referenceDate;
+  const earliestWeekly = weeklyTimeline[0]?.start ?? referenceDate;
+  const earliestDate = earliestMonthly < earliestWeekly ? earliestMonthly : earliestWeekly;
+
+  const [revenueEvents, adminToggles, marketplaceOrders] = await Promise.all([
+    Revenue.find({
+      createdAt: { $gte: earliestDate },
+      type: { $ne: 'seller' },
+    })
+      .select('amount createdAt type')
+      .lean(),
     loadAdminToggles(),
+    Order.find({
+      createdAt: { $gte: earliestDate },
+    })
+      .select('orderItems createdAt')
+      .populate({
+        path: 'orderItems.product',
+        select: 'category',
+      })
+      .lean(),
   ]);
 
-  const series = aggregates.reduce((acc, item) => {
-    const month = item._id.month;
-    if (!acc[month]) {
-      acc[month] = {};
-    }
-    acc[month][item._id.type] = item.amount;
-    return acc;
-  }, {});
+  revenueEvents.forEach((event) => {
+    const type = event.type || 'other';
+    applyMonthlyAmount(monthlyTimeline, event.createdAt, 'revenue', event.amount);
+    applyWeeklyAmount(weeklyTimeline, event.createdAt, 'revenue', event.amount);
 
-  const trend = Object.entries(series)
-    .sort(([a], [b]) => (a > b ? 1 : -1))
-    .map(([label, values]) => ({ label, ...values }));
+    applyMonthlyAmount(monthlyTimeline, event.createdAt, type, event.amount);
+    applyWeeklyAmount(weeklyTimeline, event.createdAt, type, event.amount);
+  });
+
+  const categoryMapMonthly = {};
+  const categoryMapWeekly = {};
+
+  marketplaceOrders.forEach((order) => {
+    if (!Array.isArray(order.orderItems) || !order.orderItems.length) {
+      return;
+    }
+
+    const orderDate = new Date(order.createdAt);
+    const isMonthly = orderDate >= earliestMonthly;
+    const isWeekly = orderDate >= earliestWeekly;
+
+    order.orderItems.forEach((item) => {
+      const status = normaliseOrderItemStatus(item.status);
+      if (status !== 'delivered') {
+        return;
+      }
+
+      const category = item.product?.category;
+      if (!category) {
+        return;
+      }
+
+      const price = Number(item.price) || 0;
+      const quantity = Number(item.quantity) || 0;
+      if (price <= 0 || quantity <= 0) {
+        return;
+      }
+
+      const commission = price * quantity * 0.15;
+
+      if (isMonthly) {
+        categoryMapMonthly[category] = (categoryMapMonthly[category] || 0) + commission;
+      }
+      if (isWeekly) {
+        categoryMapWeekly[category] = (categoryMapWeekly[category] || 0) + commission;
+      }
+    });
+  });
+
+  const marketplaceDistribution = {
+    monthly: Object.entries(categoryMapMonthly).map(([name, value]) => ({ name, value })),
+    weekly: Object.entries(categoryMapWeekly).map(([name, value]) => ({ name, value })),
+  };
+
+  const shapeTimeline = (timeline) =>
+    timeline.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      fullLabel: entry.fullLabel,
+      value: Number(entry.revenue) || 0,
+      listing: Number(entry.listing) || 0,
+      sponsorship: Number(entry.sponsorship) || 0,
+      marketplace: Number(entry.marketplace) || 0,
+    }));
+
+  const trend = {
+    monthly: shapeTimeline(monthlyTimeline),
+    weekly: shapeTimeline(weeklyTimeline),
+  };
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { trend, adminToggles }, 'Admin revenue trend fetched successfully'));
+    .json(new ApiResponse(200, { trend, marketplaceDistribution, adminToggles }, 'Admin revenue trend fetched successfully'));
 });
 
 export const getAdminMarketplace = asyncHandler(async (_req, res) => {
@@ -1406,6 +1482,9 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
     .sort({ createdAt: -1 })
     .limit(20)
     .populate({ path: 'user', select: 'name email' })
+    .populate({ path: 'seller', select: 'name email' })
+    .populate({ path: 'orderItems.seller', select: 'name email' })
+    .populate({ path: 'orderItems.product', select: 'category' })
     .lean();
 
   const [orders, adminToggles] = await Promise.all([
@@ -1413,15 +1492,31 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
     loadAdminToggles(),
   ]);
 
-  const data = orders.map((order) => ({
-    id: order._id,
-    orderNumber: order.orderNumber,
-    total: formatCurrency(order.total, 'INR'),
-    status: summariseOrderStatus(order),
-    createdAt: order.createdAt,
-    user: order.user ? { id: order.user._id, name: order.user.name, email: order.user.email } : null,
-    items: order.orderItems?.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price })) ?? [],
-  }));
+  const toContact = (entity) => (entity?._id
+    ? { id: entity._id, name: entity.name, email: entity.email }
+    : null);
+
+  const data = orders.map((order) => {
+    const fallbackSeller = order.orderItems?.find((item) => item.seller?._id)?.seller;
+    const sellerEntity = order.seller?._id ? order.seller : fallbackSeller;
+
+    return {
+      id: order._id,
+      orderNumber: order.orderNumber,
+      total: formatCurrency(order.total, 'INR'),
+      status: summariseOrderStatus(order),
+      createdAt: order.createdAt,
+      user: toContact(order.user),
+      seller: toContact(sellerEntity),
+      items: order.orderItems?.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category: item.product?.category,
+        seller: toContact(item.seller),
+      })) ?? [],
+    };
+  });
 
   return res
     .status(200)

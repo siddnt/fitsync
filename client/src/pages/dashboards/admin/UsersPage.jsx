@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -15,6 +15,48 @@ const AdminUsersPage = () => {
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const roleOptions = useMemo(() => {
+    const values = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
+    return ['all', ...values];
+  }, [recent]);
+
+  const statusOptions = useMemo(() => {
+    const values = Array.from(new Set(recent.map((user) => user.status).filter(Boolean)));
+    return ['all', ...values];
+  }, [recent]);
+
+  const filteredUsers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return recent.filter((user) => {
+      if (roleFilter !== 'all' && user.role !== roleFilter) {
+        return false;
+      }
+      if (statusFilter !== 'all' && user.status !== statusFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      const haystacks = [user.name, user.email].filter(Boolean).map((value) => value.toLowerCase());
+      return haystacks.some((value) => value.includes(query));
+    });
+  }, [recent, roleFilter, statusFilter, searchTerm]);
+
+  const filtersActive = useMemo(
+    () => Boolean(searchTerm.trim() || roleFilter !== 'all' || statusFilter !== 'all'),
+    [searchTerm, roleFilter, statusFilter],
+  );
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('all');
+    setStatusFilter('all');
+  };
 
   const handleDelete = async (user) => {
     if (!user) {
@@ -56,11 +98,11 @@ const AdminUsersPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--stacked">
         <DashboardSection title="Pending approvals">
           <SkeletonPanel lines={8} />
         </DashboardSection>
-        <DashboardSection title="Recently joined">
+        <DashboardSection title="Users">
           <SkeletonPanel lines={8} />
         </DashboardSection>
       </div>
@@ -69,7 +111,7 @@ const AdminUsersPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--stacked">
         <DashboardSection
           title="User administration"
           action={(
@@ -85,7 +127,7 @@ const AdminUsersPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--stacked">
       <DashboardSection
         title="Pending approvals"
         action={(
@@ -146,8 +188,54 @@ const AdminUsersPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Recently joined">
-        {recent.length ? (
+      <DashboardSection
+        title="Users"
+        action={(
+          <div className="users-toolbar">
+            <input
+              type="search"
+              className="inventory-toolbar__input"
+              placeholder="Search name or email"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              aria-label="Search users"
+            />
+            <select
+              className="inventory-toolbar__input inventory-toolbar__input--select"
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+              aria-label="Filter by role"
+            >
+              {roleOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === 'all' ? 'All roles' : formatStatus(option)}
+                </option>
+              ))}
+            </select>
+            <select
+              className="inventory-toolbar__input inventory-toolbar__input--select"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter by status"
+            >
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === 'all' ? 'All statuses' : formatStatus(option)}
+                </option>
+              ))}
+            </select>
+            {filtersActive ? (
+              <button type="button" className="users-toolbar__reset" onClick={resetFilters}>
+                Reset
+              </button>
+            ) : null}
+            <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>
+              Refresh
+            </button>
+          </div>
+        )}
+      >
+        {filteredUsers.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
@@ -159,9 +247,20 @@ const AdminUsersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {recent.map((user) => (
+              {filteredUsers.map((user) => (
                 <tr key={user._id}>
-                  <td>{user.name}</td>
+                  <td>
+                    <div className="dashboard-table__user">
+                      {user.profilePicture ? (
+                        <img src={user.profilePicture} alt={user.name} />
+                      ) : (
+                        <div className="dashboard-table__user-placeholder">
+                          {user.name?.charAt(0) ?? '?'}
+                        </div>
+                      )}
+                      <span>{user.name}</span>
+                    </div>
+                  </td>
                   <td>{user.email}</td>
                   <td>{formatStatus(user.role)}</td>
                   <td>{formatStatus(user.status)}</td>
@@ -171,7 +270,7 @@ const AdminUsersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="New sign-ups will appear here." />
+          <EmptyState message="No users match the current filters." />
         )}
       </DashboardSection>
     </div>
