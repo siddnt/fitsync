@@ -11,6 +11,7 @@ import {
   getGymOwnerOverview,
   getGymOwnerSponsorship,
   getGymOwnerSubscriptions,
+  getGymOwnerRoster,
   getTrainerOverview,
   getTrainerTrainees,
   getTrainerUpdates,
@@ -35,6 +36,7 @@ router.get('/gym-owner/gyms', authorizeRoles('gym-owner'), getGymOwnerGyms);
 router.get('/gym-owner/subscriptions', authorizeRoles('gym-owner'), getGymOwnerSubscriptions);
 router.get('/gym-owner/sponsorships', authorizeRoles('gym-owner'), getGymOwnerSponsorship);
 router.get('/gym-owner/analytics', authorizeRoles('gym-owner'), getGymOwnerAnalytics);
+router.get('/gym-owner/roster', authorizeRoles('gym-owner'), getGymOwnerRoster);
 
 router.get('/trainer/overview', authorizeRoles('trainer'), getTrainerOverview);
 router.get('/trainer/trainees', authorizeRoles('trainer'), getTrainerTrainees);

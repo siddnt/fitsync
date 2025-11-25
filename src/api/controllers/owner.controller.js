@@ -229,3 +229,124 @@ export const declineTrainerRequest = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, { assignmentId: String(assignment._id) }, 'Trainer request declined.'));
 });
+
+export const removeTrainerFromGym = asyncHandler(async (req, res) => {
+  const { assignmentId } = req.params;
+  const ownerId = req.user?._id;
+
+  if (!isObjectId(assignmentId)) {
+    throw new ApiError(400, 'Invalid trainer assignment id.');
+  }
+
+  const assignment = await TrainerAssignment.findById(assignmentId)
+    .populate({ path: 'gym', select: 'owner' })
+    .populate({ path: 'trainer', select: 'name' });
+
+  if (!assignment) {
+    throw new ApiError(404, 'Trainer assignment not found.');
+  }
+
+  if (String(assignment.gym?.owner) !== String(ownerId)) {
+    throw new ApiError(403, 'You do not have permission to manage this trainer.');
+  }
+
+  const traineesRemoved = assignment.trainees?.length ?? 0;
+  assignment.status = 'inactive';
+  assignment.trainees = [];
+  await assignment.save();
+
+  const updates = [
+    Gym.updateOne(
+      { _id: assignment.gym._id },
+      {
+        $inc: { 'analytics.trainers': -1 },
+        $set: { lastUpdatedBy: ownerId },
+      },
+    ),
+    GymMembership.updateMany(
+      {
+        gym: assignment.gym._id,
+        trainee: assignment.trainer._id,
+        plan: { $in: ['trainer-access', 'trainerAccess', 'trainer'] },
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          autoRenew: false,
+          endDate: new Date(),
+        },
+      },
+    ),
+    User.updateOne(
+      { _id: assignment.trainer._id },
+      {
+        $pull: { 'trainerMetrics.gyms': assignment.gym._id },
+        ...(traineesRemoved
+          ? { $inc: { 'trainerMetrics.activeTrainees': -traineesRemoved } }
+          : {}),
+      },
+    ),
+  ];
+
+  await Promise.all(updates);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { assignmentId }, 'Trainer removed from gym.'));
+});
+
+export const removeGymMember = asyncHandler(async (req, res) => {
+  const { membershipId } = req.params;
+  const ownerId = req.user?._id;
+
+  if (!isObjectId(membershipId)) {
+    throw new ApiError(400, 'Invalid membership id.');
+  }
+
+  const membership = await GymMembership.findById(membershipId)
+    .populate({ path: 'gym', select: 'owner' })
+    .populate({ path: 'trainer', select: '_id' });
+
+  if (!membership) {
+    throw new ApiError(404, 'Membership not found.');
+  }
+
+  if (String(membership.gym?.owner) !== String(ownerId)) {
+    throw new ApiError(403, 'You are not allowed to manage this membership.');
+  }
+
+  const previousStatus = membership.status;
+  membership.status = 'cancelled';
+  membership.autoRenew = false;
+  membership.endDate = new Date();
+  await membership.save();
+
+  const updates = [];
+
+  if (['active', 'paused'].includes(previousStatus)) {
+    updates.push(
+      Gym.updateOne(
+        { _id: membership.gym._id },
+        {
+          $inc: { 'analytics.memberships': -1 },
+          $set: { lastUpdatedBy: ownerId },
+        },
+      ),
+    );
+  }
+
+  if (membership.trainer) {
+    updates.push(
+      TrainerAssignment.updateOne(
+        { trainer: membership.trainer._id, gym: membership.gym._id },
+        { $pull: { trainees: { trainee: membership.trainee } } },
+      ),
+    );
+  }
+
+  await Promise.all(updates);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { membershipId }, 'Member removed from gym.'));
+});

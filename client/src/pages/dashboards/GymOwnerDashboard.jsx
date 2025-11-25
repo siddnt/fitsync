@@ -1,12 +1,8 @@
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
-import RevenueSummaryChart from './components/RevenueSummaryChart.jsx';
-import GrowthLineChart from './components/GrowthLineChart.jsx';
-import DistributionPieChart from './components/DistributionPieChart.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import {
   useGetGymOwnerOverviewQuery,
-  useGetGymOwnerAnalyticsQuery,
   useGetGymOwnerSubscriptionsQuery,
 } from '../../services/dashboardApi.js';
 import {
@@ -26,67 +22,27 @@ const GymOwnerDashboard = () => {
   } = useGetGymOwnerOverviewQuery();
 
   const {
-    data: analyticsResponse,
-    isLoading: isAnalyticsLoading,
-    isError: isAnalyticsError,
-    refetch: refetchAnalytics,
-  } = useGetGymOwnerAnalyticsQuery();
-
-  const {
     data: subscriptionsResponse,
     isLoading: isSubscriptionsLoading,
     isError: isSubscriptionsError,
     refetch: refetchSubscriptions,
   } = useGetGymOwnerSubscriptionsQuery();
 
-  const isLoading = isOverviewLoading || isAnalyticsLoading || isSubscriptionsLoading;
-  const isError = isOverviewError || isAnalyticsError || isSubscriptionsError;
+  const isLoading = isOverviewLoading || isSubscriptionsLoading;
+  const isError = isOverviewError || isSubscriptionsError;
 
   const overview = overviewResponse?.data;
-  const analytics = analyticsResponse?.data;
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
-
-  const revenueTrend = (() => {
-    const rawTrend = Array.isArray(analytics?.revenueTrend)
-      ? analytics.revenueTrend
-      : Array.isArray(analytics?.revenueTrend?.weekly)
-        ? analytics.revenueTrend.weekly
-        : [];
-    return rawTrend.map((entry) => ({
-      label: entry.label,
-      earnings: entry.profit ?? entry.value ?? 0,
-    }));
-  })();
-
-  const membershipTrend = (() => {
-    const rawTrend = Array.isArray(analytics?.membershipTrend)
-      ? analytics.membershipTrend
-      : Array.isArray(analytics?.membershipTrend?.weekly)
-        ? analytics.membershipTrend.weekly
-        : [];
-    return rawTrend.map((entry) => ({
-      label: entry.label,
-      memberships: entry.value,
-    }));
-  })();
-
-  const sponsorshipSplit = overview?.gyms
-    ?.filter((gym) => gym.sponsorship?.tier && gym.sponsorship.tier !== 'none')
-    .map((gym) => ({
-      name: gym.name,
-      value: gym.impressions ?? 0,
-    }));
 
   const refetchAll = () => {
     refetchOverview();
-    refetchAnalytics();
     refetchSubscriptions();
   };
 
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
-        {['Business snapshot', 'Revenue trend', 'Membership trend', 'Subscriptions'].map((title) => (
+  {['Business snapshot', 'Expiring subscriptions', 'Active subscriptions', 'Recent joiners'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -128,9 +84,9 @@ const GymOwnerDashboard = () => {
               <small>Across all locations</small>
             </div>
             <div className="stat-card">
-              <small>30-day revenue</small>
+              <small>30-day owner earnings</small>
               <strong>{formatCurrency(overview.stats.revenue30d)}</strong>
-              <small>{formatNumber(overview.stats.impressions30d)} impressions</small>
+              <small>Owner share (50%) · {formatNumber(overview.stats.impressions30d)} impressions</small>
             </div>
             <div className="stat-card">
               <small>Pending gyms</small>
@@ -140,49 +96,6 @@ const GymOwnerDashboard = () => {
           </div>
         ) : (
           <EmptyState message="Add your first gym to start tracking performance." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection
-        title="Revenue trend"
-        action={(
-          <button type="button" onClick={refetchAnalytics}>
-            Refresh
-          </button>
-        )}
-        className="dashboard-section--span-6"
-      >
-        {revenueTrend?.length ? (
-          <RevenueSummaryChart role="gym-owner" data={revenueTrend} valueKey="earnings" />
-        ) : (
-          <EmptyState message="We need more transactions to show revenue insights." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection title="Membership trend" className="dashboard-section--span-6">
-        {membershipTrend?.length ? (
-          <GrowthLineChart
-            role="gym-owner"
-            data={membershipTrend}
-            series={[
-              { dataKey: 'memberships', stroke: '#51cf66', label: 'Active memberships' },
-            ]}
-          />
-        ) : (
-          <EmptyState message="Membership analytics will appear as new members join." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection title="Sponsorship exposure" className="dashboard-section--span-4">
-        {sponsorshipSplit?.length ? (
-          <DistributionPieChart
-            role="gym-owner"
-            data={sponsorshipSplit}
-            valueKey="value"
-            nameKey="name"
-          />
-        ) : (
-          <EmptyState message="No sponsorship campaigns are active right now." />
         )}
       </DashboardSection>
 

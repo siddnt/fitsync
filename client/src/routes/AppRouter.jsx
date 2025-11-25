@@ -20,6 +20,7 @@ import GymOwnerGymsPage from '../pages/dashboards/gymOwner/GymsPage.jsx';
 import GymOwnerSubscriptionsPage from '../pages/dashboards/gymOwner/SubscriptionsPage.jsx';
 import GymOwnerSponsorshipPage from '../pages/dashboards/gymOwner/SponsorshipPage.jsx';
 import GymOwnerAnalyticsPage from '../pages/dashboards/gymOwner/AnalyticsPage.jsx';
+import GymOwnerRosterPage from '../pages/dashboards/gymOwner/RosterPage.jsx';
 import TrainerTraineesPage from '../pages/dashboards/trainer/TraineesPage.jsx';
 import TrainerUpdatesPage from '../pages/dashboards/trainer/UpdatesPage.jsx';
 import AdminUsersPage from '../pages/dashboards/admin/UsersPage.jsx';
@@ -59,6 +60,7 @@ const AppRouter = () => (
         <Route path="gym-owner">
           <Route index element={<GymOwnerDashboard />} />
           <Route path="gyms" element={<GymOwnerGymsPage />} />
+          <Route path="people" element={<GymOwnerRosterPage />} />
           <Route path="subscriptions" element={<GymOwnerSubscriptionsPage />} />
           <Route path="sponsorship" element={<GymOwnerSponsorshipPage />} />
           <Route path="analytics" element={<GymOwnerAnalyticsPage />} />

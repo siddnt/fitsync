@@ -2,7 +2,7 @@ import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
-import { formatDate } from '../../utils/format.js';
+import { formatCurrency, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
 
 const TrainerDashboard = () => {
@@ -59,6 +59,11 @@ const TrainerDashboard = () => {
               <small>Pending updates</small>
               <strong>{overview.totals.pendingUpdates}</strong>
               <small>Need new feedback</small>
+            </div>
+            <div className="stat-card">
+              <small>30-day earnings</small>
+              <strong>{formatCurrency(overview.totals.earnings30d)}</strong>
+              <small>Trainer share (50%)</small>
             </div>
           </div>
         ) : (

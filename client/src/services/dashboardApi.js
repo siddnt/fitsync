@@ -22,6 +22,10 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/gym-owner/overview',
       providesTags: ['Dashboard', 'Analytics', 'Subscription'],
     }),
+    getGymOwnerRoster: builder.query({
+      query: () => '/dashboards/gym-owner/roster',
+      providesTags: ['Dashboard', 'Gym'],
+    }),
     getGymOwnerGyms: builder.query({
       query: () => '/dashboards/gym-owner/gyms',
       providesTags: ['Dashboard', 'Gym'],
@@ -83,6 +87,7 @@ export const {
   useGetTraineeDietQuery,
   useGetTraineeOrdersQuery,
   useGetGymOwnerOverviewQuery,
+  useGetGymOwnerRosterQuery,
   useGetGymOwnerGymsQuery,
   useGetGymOwnerSubscriptionsQuery,
   useGetGymOwnerSponsorshipsQuery,
