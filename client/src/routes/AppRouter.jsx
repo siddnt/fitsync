@@ -34,17 +34,19 @@ import AppLayout from '../layouts/AppLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
+import AboutPage from '../pages/about/AboutPage.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
     <Routes>
-      <Route element={<AppLayout />}> 
+      <Route element={<AppLayout />}>
         <Route index element={<LandingPage />} />
+        <Route path="about" element={<AboutPage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
-  <Route path="cart" element={<CartPage />} />
-  <Route path="checkout" element={<CheckoutPage />} />
+        <Route path="cart" element={<CartPage />} />
+        <Route path="checkout" element={<CheckoutPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="auth/*" element={<AuthRoutes />} />
       </Route>
