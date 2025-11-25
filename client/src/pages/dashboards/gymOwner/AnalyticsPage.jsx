@@ -186,33 +186,31 @@ const GymOwnerAnalyticsPage = () => {
             <div className="owner-revenue-chart__metrics">
               <div className="owner-revenue-chart__metric">
                 <span>Net profit</span>
-<strong
-  className={`owner-revenue-chart__value ${
-    revenueSummary.netProfit > 0
-      ? 'owner-revenue-chart__value--positive'
-      : revenueSummary.netProfit < 0
-        ? 'owner-revenue-chart__value--negative'
-        : 'owner-revenue-chart__value--neutral'
-  }`}
->
-  {formatCurrency(revenueSummary.netProfit)}
-</strong>
-</div>
+                <strong
+                  className={`owner-revenue-chart__value ${
+                    revenueSummary.netProfit > 0
+                      ? 'owner-revenue-chart__value--positive'
+                      : revenueSummary.netProfit < 0
+                        ? 'owner-revenue-chart__value--negative'
+                        : 'owner-revenue-chart__value--neutral'
+                  }`}
+                >
+                  {formatCurrency(revenueSummary.netProfit)}
+                </strong>
+              </div>
 
-<div className="owner-revenue-chart__metric">
-  <span>Revenue</span>
-  <strong className="owner-revenue-chart__value owner-revenue-chart__value--positive">
-    {formatCurrency(revenueSummary.revenue)}
-  </strong>
-</div>
+              <div className="owner-revenue-chart__metric">
+                <span>Revenue</span>
+                <strong className="owner-revenue-chart__value owner-revenue-chart__value--positive">
+                  {formatCurrency(revenueSummary.revenue)}
+                </strong>
+              </div>
 
-<div className="owner-revenue-chart__metric">
-  <span>Marketplace spend</span>
-  <strong className="owner-revenue-chart__value owner-revenue-chart__value--negative">
-    {formatCurrency(revenueSummary.marketplaceSpend ?? revenueSummary.expenses)}
-  </strong>
-</div>
-
+              <div className="owner-revenue-chart__metric">
+                <span>Marketplace spend</span>
+                <strong className="owner-revenue-chart__value owner-revenue-chart__value--negative">
+                  {formatCurrency(revenueSummary.marketplaceSpend ?? revenueSummary.expenses)}
+                </strong>
               </div>
             </div>
           </div>
