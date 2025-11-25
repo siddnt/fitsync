@@ -9,6 +9,8 @@ import {
   listTrainerRequests,
   approveTrainerRequest,
   declineTrainerRequest,
+  removeTrainerFromGym,
+  removeGymMember,
 } from '../controllers/owner.controller.js';
 
 const router = Router();
@@ -21,5 +23,7 @@ router.post('/sponsorships/purchase', purchaseSponsorship);
 router.get('/trainers/requests', listTrainerRequests);
 router.post('/trainers/requests/:assignmentId/approve', approveTrainerRequest);
 router.post('/trainers/requests/:assignmentId/decline', declineTrainerRequest);
+router.delete('/trainers/:assignmentId', removeTrainerFromGym);
+router.delete('/memberships/:membershipId', removeGymMember);
 
 export default router;
