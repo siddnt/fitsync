@@ -33,7 +33,6 @@
     align-items: start;
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-
   .dashboard-grid--owner .dashboard-section--span-8,
   .dashboard-grid--admin .dashboard-section--span-8 {
     grid-column: span 8;
@@ -207,7 +206,6 @@
   flex: 1;
   min-width: 220px;
 }
-
 .pie-card {
   display: flex;
   flex-direction: column;
@@ -362,6 +360,23 @@
   font-size: 1.35rem;
 }
 
+.owner-revenue-chart__value {
+  color: #fff;
+  transition: color 0.2s ease;
+}
+
+.owner-revenue-chart__value--positive {
+  color: #22c55e;
+}
+
+.owner-revenue-chart__value--negative {
+  color: #f87171;
+}
+
+.owner-revenue-chart__value--neutral {
+  color: #e5e7eb;
+}
+
 .owner-revenue-chart__toggle {
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
@@ -475,6 +490,130 @@
   font-size: 0.8rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.dashboard-select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-color);
+  font-size: 0.85rem;
+  padding: 0.35rem 1.1rem;
+}
+
+.dashboard-select:focus-visible {
+  outline: 2px solid rgba(132, 94, 247, 0.6);
+  outline-offset: 2px;
+}
+
+.owner-plan-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.owner-plan-card {
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.owner-plan-card--sponsorship {
+  background: linear-gradient(135deg, rgba(132, 94, 247, 0.18), rgba(255, 255, 255, 0.02));
+}
+
+.owner-plan-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.owner-plan-card__eyebrow {
+  color: var(--muted-text-color);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.15rem;
+  text-transform: uppercase;
+}
+
+.owner-plan-card__status {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.85rem;
+  text-transform: uppercase;
+}
+
+.owner-plan-card__status--active {
+  background: rgba(81, 207, 102, 0.15);
+  color: #51cf66;
+}
+
+.owner-plan-card__status--paused {
+  background: rgba(255, 169, 77, 0.15);
+  color: #ffa94d;
+}
+
+.owner-plan-card__status--grace,
+.owner-plan-card__status--expired {
+  background: rgba(250, 82, 82, 0.15);
+  color: #fa5252;
+}
+
+.owner-plan-card__metrics {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.owner-plan-card__metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.owner-plan-card__metrics dt {
+  color: var(--muted-text-color);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.owner-plan-card__metrics dd {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.owner-plan-card__details {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 0.5rem 0.75rem;
+}
+
+.owner-plan-card__details summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.owner-plan-card__details p {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.owner-plan-card__note {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 .pie-legend {

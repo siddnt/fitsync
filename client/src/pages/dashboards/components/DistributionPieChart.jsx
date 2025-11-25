@@ -154,10 +154,14 @@ const DistributionPieChart = ({
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
-                  formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
-                />
-                {interactive || !showLegend ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
+contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none', color: '#fff' }}
+labelStyle={{ color: '#fff' }}
+itemStyle={{ color: '#fff' }}
+formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
+
+/* hide legend when interactive OR showLegend is false */
+{interactive || !showLegend ? null : <Legend wrapperStyle={{ color: '#fff' }} />}
+
               </PieChart>
             </ResponsiveContainer>
             <div className="pie-center">
@@ -197,6 +201,7 @@ DistributionPieChart.defaultProps = {
   centerLabel: 'Total',
   useSampleFallback: true,
   showLegend: true,
+
 };
 
 export default DistributionPieChart;
