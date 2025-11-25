@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -10,10 +10,85 @@ const AdminMarketplacePage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
   const rawOrders = data?.data?.orders;
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
   const orders = useMemo(
     () => (Array.isArray(rawOrders) ? rawOrders : []),
     [rawOrders],
   );
+
+  const statusOptions = useMemo(() => {
+    const unique = new Set();
+    orders.forEach((order) => {
+      if (order?.status) {
+        unique.add(order.status.toString().toLowerCase());
+      }
+    });
+    return ['all', ...unique];
+  }, [orders]);
+
+  const categoryOptions = useMemo(() => {
+    const unique = new Set();
+    orders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        if (item?.category) {
+          unique.add(item.category.toString().toLowerCase());
+        }
+      });
+    });
+    return ['all', ...unique];
+  }, [orders]);
+
+  const filtersActive = useMemo(
+    () => Boolean(searchTerm.trim() || statusFilter !== 'all' || categoryFilter !== 'all'),
+    [searchTerm, statusFilter, categoryFilter],
+  );
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setCategoryFilter('all');
+  };
+
+  const filteredOrders = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return orders.filter((order) => {
+      const normalisedStatus = order?.status?.toString().toLowerCase() || 'processing';
+      if (statusFilter !== 'all' && normalisedStatus !== statusFilter) {
+        return false;
+      }
+
+      if (categoryFilter !== 'all') {
+        const categories = (order.items || [])
+          .map((item) => item?.category?.toString().toLowerCase())
+          .filter(Boolean);
+        if (!categories.some((category) => category === categoryFilter)) {
+          return false;
+        }
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const searchableFields = [
+        order.orderNumber,
+        order.id,
+        order.user?.name,
+        order.user?.email,
+        order.seller?.name,
+        order.seller?.email,
+        ...(order.items || []).map((item) => item?.name),
+      ]
+        .filter(Boolean)
+        .map((value) => value.toString().toLowerCase());
+
+      return searchableFields.some((value) => value.includes(query));
+    });
+  }, [orders, searchTerm, statusFilter, categoryFilter]);
 
   const summary = useMemo(() => {
     if (!orders.length) {
@@ -57,11 +132,11 @@ const AdminMarketplacePage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
-        <DashboardSection title="Marketplace overview">
+      <div className="dashboard-grid dashboard-grid--admin">
+        <DashboardSection title="Marketplace overview" className="dashboard-section--span-12">
           <SkeletonPanel lines={8} />
         </DashboardSection>
-        <DashboardSection title="Order feed">
+        <DashboardSection title="Order feed" className="dashboard-section--span-12">
           <SkeletonPanel lines={8} />
         </DashboardSection>
       </div>
@@ -70,9 +145,10 @@ const AdminMarketplacePage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--admin">
         <DashboardSection
           title="Marketplace overview"
+          className="dashboard-section--span-12"
           action={(
             <button type="button" onClick={() => refetch()}>
               Retry
@@ -86,9 +162,10 @@ const AdminMarketplacePage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--admin">
       <DashboardSection
         title="Marketplace overview"
+        className="dashboard-section--span-12"
         action={(
           <button type="button" onClick={() => refetch()}>
             Refresh
@@ -118,51 +195,121 @@ const AdminMarketplacePage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Order feed">
-        {orders.length ? (
+      <DashboardSection
+        title="Orders"
+        className="dashboard-section--span-12"
+        action={(
+          <div className="users-toolbar">
+            <input
+              type="search"
+              className="inventory-toolbar__input"
+              placeholder="Search order, buyer, seller"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              aria-label="Search orders"
+            />
+            <select
+              className="inventory-toolbar__input inventory-toolbar__input--select"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter by status"
+            >
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === 'all' ? 'All statuses' : formatStatus(option)}
+                </option>
+              ))}
+            </select>
+            <select
+              className="inventory-toolbar__input inventory-toolbar__input--select"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              aria-label="Filter by category"
+            >
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option === 'all' ? 'All categories' : formatStatus(option)}
+                </option>
+              ))}
+            </select>
+            {filtersActive ? (
+              <button type="button" className="users-toolbar__reset" onClick={resetFilters}>
+                Reset
+              </button>
+            ) : null}
+            <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>
+              Refresh
+            </button>
+          </div>
+        )}
+      >
+        {filteredOrders.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Order</th>
+                <th>Order ID</th>
                 <th>Buyer</th>
+                <th>Seller</th>
+                <th>Items</th>
+                <th>Category</th>
                 <th>Status</th>
                 <th>Total</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <strong>{order.orderNumber ?? order.id}</strong>
-                    <div>
-                      <small>{formatDateTime(order.createdAt)}</small>
-                    </div>
-                  </td>
-                  <td>{order.user?.name ?? '—'}</td>
-                  <td>{formatStatus(order.status)}</td>
-                  <td>{formatCurrency(order.total)}</td>
-                </tr>
-              ))}
+              {filteredOrders.map((order) => {
+                const itemList = order.items ?? [];
+                const categories = [...new Set(itemList.map((i) => i.category).filter(Boolean))];
+                const categoryDisplay = categories.length > 1 ? 'Mixed' : (categories[0] || '—');
+                
+                return (
+                  <tr key={order.id}>
+                    <td>
+                      <strong>{order.orderNumber ?? order.id}</strong>
+                      <div>
+                        <small>{formatDateTime(order.createdAt)}</small>
+                      </div>
+                    </td>
+                    <td>
+                      {order.user?.name ?? '—'}
+                      <div><small>{order.user?.email}</small></div>
+                    </td>
+                    <td>
+                      {order.seller?.name ?? '—'}
+                      <div><small>{order.seller?.email}</small></div>
+                    </td>
+                    <td>
+                      {itemList.length} items
+                      <div><small>{itemList.map((i) => i.name).slice(0, 2).join(', ')}{itemList.length > 2 ? '...' : ''}</small></div>
+                    </td>
+                    <td>{formatStatus(categoryDisplay)}</td>
+                    <td>{formatStatus(order.status)}</td>
+                    <td>{formatCurrency(order.total)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No orders yet." />
+          <EmptyState message={filtersActive ? 'No orders match the current filters.' : 'No orders yet.'} />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Top products">
+      <DashboardSection title="Top Selling Products" className="dashboard-section--span-12">
         {topProducts.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Units sold</th>
+                <th>Product Name</th>
+                <th>Units Sold</th>
               </tr>
             </thead>
             <tbody>
-              {topProducts.map((product) => (
+              {topProducts.map((product, index) => (
                 <tr key={product.name}>
-                  <td>{product.name}</td>
+                  <td>
+                    <strong>{index + 1}. {product.name}</strong>
+                  </td>
                   <td>{product.quantity}</td>
                 </tr>
               ))}

@@ -1,8 +1,15 @@
-import { useMemo } from 'react';
+// ...existing code...
+import { useMemo, useState } from 'react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 import DashboardSection from './components/DashboardSection.jsx';
-import GrowthLineChart from './components/GrowthLineChart.jsx';
-import DistributionPieChart from './components/DistributionPieChart.jsx';
-import GeoDensityMap from './components/GeoDensityMap.jsx';
 import DemographicsSummary from './components/DemographicsSummary.jsx';
 import NotificationsPanel from './components/NotificationsPanel.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
@@ -13,10 +20,11 @@ import {
   useGetAdminMarketplaceQuery,
   useGetAdminInsightsQuery,
 } from '../../services/dashboardApi.js';
-import { formatCurrency, formatNumber, formatStatus, formatDate } from '../../utils/format.js';
+import { formatCurrency, formatNumber, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
 
 const AdminDashboard = () => {
+  const [timeframe, setTimeframe] = useState('weekly');
   const {
     data: overviewResponse,
     isLoading: isOverviewLoading,
@@ -47,42 +55,26 @@ const AdminDashboard = () => {
   const recentOrders = marketplaceResponse?.data?.orders ?? [];
   const insights = insightsResponse?.data;
 
-  const revenueTrend = useMemo(
-    () => (Array.isArray(rawRevenueTrend) ? rawRevenueTrend : []),
-    [rawRevenueTrend],
-  );
-
   const revenueSeries = useMemo(() => {
-    const trend = Array.isArray(revenueTrend) ? revenueTrend : [];
-    return trend.map((entry) => ({
-      ...entry,
-      total: ['listing', 'sponsorship', 'marketplace'].reduce(
-        (sum, key) => sum + (Number(entry?.[key]) || 0),
-        0,
-      ),
-    }));
-  }, [revenueTrend]);
+    if (!rawRevenueTrend) return [];
+    return Array.isArray(rawRevenueTrend[timeframe]) ? rawRevenueTrend[timeframe] : [];
+  }, [rawRevenueTrend, timeframe]);
 
-  const revenueBreakdown = useMemo(() => {
-    const revenue = Array.isArray(overview?.revenue) ? overview.revenue : [];
-    return revenue.map((item) => ({
-      name: formatStatus(item?.type),
-      value: Number(item?.amount?.amount ?? item?.amount ?? 0),
-    }));
-  }, [overview?.revenue]);
-
-  const geoDensity = insights?.geoDensity ?? { totalGyms: 0, totalImpressions: 0, points: [], topLocations: [] };
   const demographics = insights?.demographics ?? { gender: [], ageBuckets: [] };
   const notifications = insights?.notifications ?? [];
-  const capturedAt = insights?.capturedAt ? new Date(insights.capturedAt) : null;
 
   const isLoading = isOverviewLoading || isRevenueLoading || isMarketplaceLoading || isInsightsLoading;
   const hasError = isOverviewError || isRevenueError || isMarketplaceError || isInsightsError;
 
+  const totalUsers = useMemo(() => {
+    if (!overview?.users) return 0;
+    return (overview.users.trainer || 0) + (overview.users.trainee || 0) + (overview.users['gym-owner'] || 0);
+  }, [overview?.users]);
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--stacked">
-        {['Platform performance', 'Revenue trend', 'Income mix', 'Recent marketplace activity', 'Geographic reach', 'User demographics', 'Monetisation timeline'].map((section) => (
+        {['Platform performance', 'Revenue trend', 'Recent marketplace activity', 'User demographics', 'Monetisation timeline'].map((section) => (
           <DashboardSection key={section} title={section}>
             <SkeletonPanel lines={8} />
           </DashboardSection>
@@ -120,9 +112,9 @@ const AdminDashboard = () => {
           <div className="stat-grid">
             <div className="stat-card">
               <small>Total users</small>
-              <strong>{formatNumber(Object.values(overview.users || {}).reduce((sum, count) => sum + count, 0))}</strong>
+              <strong>{formatNumber(totalUsers)}</strong>
               <small>
-                Trainers {formatNumber(overview.users?.trainer ?? 0)} · Trainees {formatNumber(overview.users?.trainee ?? 0)}
+                Trainers {formatNumber(overview.users?.trainer ?? 0)} · Trainees {formatNumber(overview.users?.trainee ?? 0)} · Gym Owners {formatNumber(overview.users?.['gym-owner'] ?? 0)}
               </small>
             </div>
             <div className="stat-card">
@@ -133,8 +125,8 @@ const AdminDashboard = () => {
               </small>
             </div>
             <div className="stat-card">
-              <small>Marketplace revenue</small>
-              <strong>{formatCurrency(overview.marketplace?.totalRevenue)}</strong>
+              <small>Total listed items</small>
+              <strong>{formatNumber(overview.marketplace?.totalItems ?? 0)}</strong>
               <small>{formatNumber(overview.marketplace?.totalOrders ?? 0)} total orders</small>
             </div>
           </div>
@@ -143,27 +135,22 @@ const AdminDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Revenue trend">
-        {revenueSeries.length ? (
-          <GrowthLineChart
-            role="admin"
-            data={revenueSeries}
-            series={[
-              { dataKey: 'listing', stroke: '#ff6b6b', label: 'Listing' },
-              { dataKey: 'sponsorship', stroke: '#845ef7', label: 'Sponsorship' },
-              { dataKey: 'marketplace', stroke: '#51cf66', label: 'Marketplace' },
-            ]}
-          />
+      <DashboardSection title="Revenue Overview">
+        {overview?.revenue ? (
+          <div className="stat-grid">
+            {overview.revenue.map((item) => (
+              <div className="stat-card" key={item.type}>
+                <small>{item.type === 'marketplace' ? 'Marketplace' : item.type === 'listing' ? 'Listing Plans' : item.type === 'sponsorship' ? 'Sponsorships' : item.type} Revenue</small>
+                <strong>{formatCurrency(item.amount)}</strong>
+              </div>
+            ))}
+             <div className="stat-card">
+              <small>Total Revenue</small>
+              <strong>{formatCurrency(overview.revenue.reduce((sum, item) => sum + (Number(item.amount?.amount) || 0), 0))}</strong>
+            </div>
+          </div>
         ) : (
           <EmptyState message="Revenue data will appear once transactions start flowing." />
-        )}
-      </DashboardSection>
-
-      <DashboardSection title="Income mix">
-        {revenueBreakdown.length ? (
-          <DistributionPieChart role="admin" data={revenueBreakdown} valueKey="value" nameKey="name" />
-        ) : (
-          <EmptyState message="Income sources will populate here." />
         )}
       </DashboardSection>
 
@@ -206,26 +193,6 @@ const AdminDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection
-        title="Geographic reach"
-        action={(
-          <button type="button" onClick={() => refetchInsights()}>
-            Refresh
-          </button>
-        )}
-      >
-        {geoDensity.points?.length ? (
-          <>
-            {capturedAt ? (
-              <p className="geo-map__timestamp">Snapshot {capturedAt.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-            ) : null}
-            <GeoDensityMap points={geoDensity.points} totals={geoDensity} topLocations={geoDensity.topLocations} />
-          </>
-        ) : (
-          <EmptyState message="We will map gym coverage once listings go live across India." />
-        )}
-      </DashboardSection>
-
       <DashboardSection title="User demographics">
         {demographics.gender?.length || demographics.ageBuckets?.length ? (
           <DemographicsSummary gender={demographics.gender} ageBuckets={demographics.ageBuckets} />
@@ -242,3 +209,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

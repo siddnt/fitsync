@@ -205,7 +205,7 @@ const SellerDashboard = () => {
       </DashboardSection>
 
       <DashboardSection title="Analytics" className="seller-overview__analytics">
-        <SellerCharts orders={orders} products={products} />
+        <SellerCharts orders={orders} deliveredOrders={deliveredOrders} products={products} />
       </DashboardSection>
 
       <DashboardSection

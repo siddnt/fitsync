@@ -99,6 +99,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
+
       <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-6">
         {overview?.expiringSubscriptions?.length ? (
           <table className="dashboard-table">

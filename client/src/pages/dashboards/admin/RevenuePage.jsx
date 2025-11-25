@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
-import RevenueSummaryChart from '../components/RevenueSummaryChart.jsx';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import DistributionPieChart from '../components/DistributionPieChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -8,6 +7,12 @@ import EmptyState from '../components/EmptyState.jsx';
 import { useGetAdminRevenueQuery, useGetAdminOverviewQuery } from '../../../services/dashboardApi.js';
 import { formatCurrency, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const STREAM_COLORS = {
+  Listing: '#845ef7',
+  Sponsorship: '#4dabf7',
+  Marketplace: '#51cf66',
+};
 
 const AdminRevenuePage = () => {
   const [granularity, setGranularity] = useState('monthly'); // 'weekly' or 'monthly'
@@ -20,36 +25,21 @@ const AdminRevenuePage = () => {
   const { data: revenueResponse, isLoading, isError, refetch } = useGetAdminRevenueQuery();
   const { data: overviewResponse } = useGetAdminOverviewQuery();
   const rawTrend = revenueResponse?.data?.trend;
+  const rawMarketplaceDistribution = revenueResponse?.data?.marketplaceDistribution;
   const overview = overviewResponse?.data;
 
   // Aggregate data based on granularity
   const trend = useMemo(() => {
-    const sourceTrend = Array.isArray(rawTrend) ? rawTrend : [];
-
-    if (granularity === 'monthly' || sourceTrend.length === 0) {
-      return sourceTrend;
-    }
-
-    // For weekly granularity, split monthly data into ~4 weeks
-    const weeklyData = [];
-    sourceTrend.forEach((monthEntry) => {
-      const weeksInMonth = 4;
-      const weeklyListing = (Number(monthEntry.listing) || 0) / weeksInMonth;
-      const weeklySponsorship = (Number(monthEntry.sponsorship) || 0) / weeksInMonth;
-      const weeklyMarketplace = (Number(monthEntry.marketplace) || 0) / weeksInMonth;
-
-      for (let week = 1; week <= weeksInMonth; week++) {
-        weeklyData.push({
-          label: `${monthEntry.label} W${week}`,
-          listing: Math.round(weeklyListing),
-          sponsorship: Math.round(weeklySponsorship),
-          marketplace: Math.round(weeklyMarketplace),
-        });
-      }
-    });
-
-    return weeklyData;
+    if (!rawTrend) return [];
+    return Array.isArray(rawTrend[granularity]) ? rawTrend[granularity] : [];
   }, [rawTrend, granularity]);
+
+  const marketplaceCategoryData = useMemo(() => {
+    if (!rawMarketplaceDistribution) return [];
+    return Array.isArray(rawMarketplaceDistribution[granularity])
+      ? rawMarketplaceDistribution[granularity]
+      : [];
+  }, [rawMarketplaceDistribution, granularity]);
 
   const toggleStream = (stream) => {
     setVisibleStreams((prev) => ({ ...prev, [stream]: !prev[stream] }));
@@ -77,41 +67,50 @@ const AdminRevenuePage = () => {
     [trend],
   );
 
-  const distribution = useMemo(
-    () =>
-      ['listing', 'sponsorship', 'marketplace']
-        .map((key) => ({ key, value: totals[key] }))
-        .filter((item) => item.value > 0)
-        .map((item) => ({ name: formatStatus(item.key), value: item.value })),
-    [totals],
+  const hasActiveStreams = useMemo(
+    () => Object.values(visibleStreams).some(Boolean),
+    [visibleStreams],
   );
 
-  const recentMonths = [...trend]
-    .slice(-6)
-    .reverse()
-    .map((entry) => ({
-      label: entry.label,
-      listing: formatCurrency({ amount: entry.listing }),
-      sponsorship: formatCurrency({ amount: entry.sponsorship }),
-      marketplace: formatCurrency({ amount: entry.marketplace }),
-      total: formatCurrency({ amount: ['listing', 'sponsorship', 'marketplace'].reduce((sum, key) => sum + (Number(entry[key]) || 0), 0) }),
-    }));
-
-  const filteredSeries = useMemo(
+  const marketplacePieData = useMemo(
     () =>
-      summarySeries.filter((entry) =>
-        (visibleStreams.listing && entry.listing > 0) ||
-        (visibleStreams.sponsorship && entry.sponsorship > 0) ||
-        (visibleStreams.marketplace && entry.marketplace > 0),
-      ),
-    [summarySeries, visibleStreams],
+      marketplaceCategoryData
+        .map((entry) => ({
+          name: formatStatus(entry.name),
+          value: Number(entry.value) || 0,
+        }))
+        .filter((entry) => entry.value > 0),
+    [marketplaceCategoryData],
   );
+
+  const topMarketplaceCategory = useMemo(
+    () =>
+      marketplacePieData.reduce((best, entry) => {
+        if (!best || entry.value > best.value) {
+          return entry;
+        }
+        return best;
+      }, null),
+    [marketplacePieData],
+  );
+
+  const revenueStreamDistribution = useMemo(
+    () =>
+      [
+        { name: 'Listing', value: Number(totals.listing) || 0 },
+        { name: 'Sponsorship', value: Number(totals.sponsorship) || 0 },
+        { name: 'Marketplace', value: Number(totals.marketplace) || 0 },
+      ].filter((entry) => entry.value > 0),
+    [totals.listing, totals.sponsorship, totals.marketplace],
+  );
+
+  const totalRevenueValue = totals.listing + totals.sponsorship + totals.marketplace;
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
-        {['Revenue summary', 'Revenue trend', 'Income distribution', 'Recent months'].map((section) => (
-          <DashboardSection key={section} title={section}>
+      <div className="dashboard-grid dashboard-grid--admin">
+        {['Revenue summary', 'Revenue trend', 'Recent months'].map((section) => (
+          <DashboardSection key={section} title={section} className="dashboard-section--span-12">
             <SkeletonPanel lines={8} />
           </DashboardSection>
         ))}
@@ -121,9 +120,10 @@ const AdminRevenuePage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--admin">
         <DashboardSection
           title="Revenue analytics"
+          className="dashboard-section--span-12"
           action={(
             <button type="button" onClick={() => refetch()}>
               Retry
@@ -137,11 +137,36 @@ const AdminRevenuePage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      {/* Analytics Controls */}
+    <div className="dashboard-grid dashboard-grid--admin">
+      {/* Row 1: Overview */}
       <DashboardSection 
-        title="Revenue Analytics" 
-        action={
+        title="Revenue Overview" 
+        className="dashboard-section--span-12"
+      >
+        <div className="stat-grid">
+          <div className="stat-card">
+            <small>Total revenue</small>
+            <strong>{formatCurrency({ amount: totals.listing + totals.sponsorship + totals.marketplace })}</strong>
+            <small>Listing {formatCurrency({ amount: totals.listing })}</small>
+          </div>
+          <div className="stat-card">
+            <small>Sponsorship</small>
+            <strong>{formatCurrency({ amount: totals.sponsorship })}</strong>
+            <small>{formatNumber(overview?.gyms?.sponsored ?? 0)} sponsored gyms</small>
+          </div>
+          <div className="stat-card">
+            <small>Marketplace</small>
+            <strong>{formatCurrency({ amount: totals.marketplace })}</strong>
+            <small>{formatNumber(overview?.marketplace?.totalOrders ?? 0)} total orders</small>
+          </div>
+        </div>
+      </DashboardSection>
+
+      {/* Row 2: Trend Chart */}
+      <DashboardSection
+        title="Revenue Trend"
+        className="dashboard-section--span-12"
+        action={(
           <div className="dashboard-controls">
             <div className="dashboard-controls__toggle">
               <button
@@ -172,90 +197,101 @@ const AdminRevenuePage = () => {
               ))}
             </div>
           </div>
-        }
-      >
-        <p className="dashboard-section__hint">
-          Showing {granularity} revenue breakdown. Toggle streams to compare specific income sources.
-        </p>
-      </DashboardSection>
-
-      <DashboardSection title="Revenue summary">
-        <div className="stat-grid">
-          <div className="stat-card">
-            <small>Total revenue</small>
-            <strong>{formatCurrency({ amount: totals.listing + totals.sponsorship + totals.marketplace })}</strong>
-            <small>Listing {formatCurrency({ amount: totals.listing })}</small>
-          </div>
-          <div className="stat-card">
-            <small>Sponsorship</small>
-            <strong>{formatCurrency({ amount: totals.sponsorship })}</strong>
-            <small>{formatNumber(overview?.gyms?.sponsored ?? 0)} sponsored gyms</small>
-          </div>
-          <div className="stat-card">
-            <small>Marketplace</small>
-            <strong>{formatCurrency({ amount: totals.marketplace })}</strong>
-            <small>{formatNumber(overview?.marketplace?.totalOrders ?? 0)} total orders</small>
-          </div>
-        </div>
-        {summarySeries.length ? (
-          <RevenueSummaryChart role="admin" data={summarySeries} valueKey="total" labelKey="label" />
-        ) : (
-          <EmptyState message="No revenue recorded yet." />
         )}
-      </DashboardSection>
-
-      <DashboardSection title="Revenue trend">
-        {filteredSeries.length ? (
+      >
+        {hasActiveStreams && summarySeries.length ? (
           <GrowthLineChart
             role="admin"
-            data={filteredSeries}
+            data={summarySeries}
             series={[
-              visibleStreams.listing && { dataKey: 'listing', stroke: '#ff6b6b', label: 'Listing' },
-              visibleStreams.sponsorship && { dataKey: 'sponsorship', stroke: '#845ef7', label: 'Sponsorship' },
-              visibleStreams.marketplace && { dataKey: 'marketplace', stroke: '#51cf66', label: 'Marketplace' },
+              visibleStreams.listing && { dataKey: 'listing', stroke: '#fcc419', label: 'Listing' },
+              visibleStreams.sponsorship && { dataKey: 'sponsorship', stroke: '#51cf66', label: 'Sponsorship' },
+              visibleStreams.marketplace && { dataKey: 'marketplace', stroke: '#22b8cf', label: 'Marketplace' },
             ].filter(Boolean)}
           />
         ) : (
-          <EmptyState message="Select at least one revenue stream to display the trend chart." />
+          <EmptyState message="Enable at least one revenue stream to display the trend chart." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Income distribution">
-        {distribution.length ? (
-          <DistributionPieChart role="admin" data={distribution} valueKey="value" nameKey="name" />
+      {/* Row 3: Pie charts */}
+      <DashboardSection
+        title="Marketplace categories"
+        className="dashboard-section--span-6"
+        action={<span className="dashboard-timeframe-label">Commission captured by item type</span>}
+      >
+        {marketplacePieData.length ? (
+          <div className="pie-card">
+            <DistributionPieChart
+              role="admin"
+              data={marketplacePieData}
+              interactive
+              valueFormatter={(amount) => formatCurrency(amount)}
+              centerLabel="Marketplace"
+              useSampleFallback={false}
+              showLegend={false}
+            />
+            <div className="pie-card__meta">
+              <div className="pie-card__stat">
+                <span>Top category</span>
+                <strong>{topMarketplaceCategory?.name ?? '—'}</strong>
+                <small>{formatCurrency(topMarketplaceCategory?.value ?? 0)}</small>
+              </div>
+              <div className="pie-card__stat">
+                <span>Categories tracked</span>
+                <strong>{marketplacePieData.length}</strong>
+                <small>Active during selected period</small>
+              </div>
+            </div>
+          </div>
         ) : (
-          <EmptyState message="Revenue distribution will appear here." />
+          <EmptyState message="No marketplace revenue recorded for this period." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Recent months">
-        {recentMonths.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Listing</th>
-                <th>Sponsorship</th>
-                <th>Marketplace</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentMonths.map((month) => (
-                <tr key={month.label}>
-                  <td>{month.label}</td>
-                  <td>{month.listing}</td>
-                  <td>{month.sponsorship}</td>
-                  <td>{month.marketplace}</td>
-                  <td>{month.total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <DashboardSection
+        title="Revenue distribution"
+        className="dashboard-section--span-6"
+        action={<span className="dashboard-timeframe-label">Share of total platform revenue</span>}
+      >
+        {revenueStreamDistribution.length ? (
+          <div className="pie-card">
+            <DistributionPieChart
+              role="admin"
+              data={revenueStreamDistribution}
+              interactive={false}
+              valueFormatter={(amount) => formatCurrency(amount)}
+              centerLabel="Total revenue"
+              useSampleFallback={false}
+              showLegend={false}
+            />
+            <div className="pie-card__meta">
+              <div className="pie-card__stat">
+                <span>Combined revenue</span>
+                <strong>{formatCurrency(totalRevenueValue)}</strong>
+                <small>Listing + Sponsorship + Marketplace</small>
+              </div>
+              <div className="pie-card__legend">
+                {revenueStreamDistribution.map((stream) => (
+                  <div key={stream.name} className="pie-card__legend-item">
+                    <span
+                      className="pie-card__dot"
+                      style={{ backgroundColor: STREAM_COLORS[stream.name] || '#868e96' }}
+                    />
+                    <div>
+                      <strong>{stream.name}</strong>
+                      <small>{formatCurrency(stream.value)}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
-          <EmptyState message="Once revenue is recorded, we will list month-on-month details here." />
+          <EmptyState message="Revenue data not available for this window." />
         )}
       </DashboardSection>
+
     </div>
   );
 };

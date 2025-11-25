@@ -137,6 +137,14 @@ const normaliseStatus = (status) => {
   return ORDER_STATUS_KEYS.includes(value) ? value : 'processing';
 };
 
+const isDeliveredOrder = (order) => {
+  const items = order?.items || [];
+  if (!items.length) {
+    return false;
+  }
+  return items.every((item) => normaliseStatus(item?.status) === 'delivered');
+};
+
 function buildOrderStatusBreakdown(orders = []) {
   const counts = new Map(ORDER_STATUS_KEYS.map((key) => [key, 0]));
 
@@ -294,13 +302,20 @@ const RevenueLine = ({ data, timeframe, onChange }) => {
   );
 };
 
-const SellerCharts = ({ orders = [], products = [] }) => {
+const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null, products = [] }) => {
   const [timeframe, setTimeframe] = useState('weekly');
   const [hiddenCategoryKeys, setHiddenCategoryKeys] = useState([]);
   const [hiddenStatusKeys, setHiddenStatusKeys] = useState([]);
 
-  const revenueWeekly = useMemo(() => buildRevenueSeriesByDay(orders, 7), [orders]);
-  const revenueMonthly = useMemo(() => buildRevenueSeriesByMonth(orders, 12), [orders]);
+  const deliveredOrders = useMemo(() => {
+    if (Array.isArray(deliveredOrdersProp)) {
+      return deliveredOrdersProp;
+    }
+    return (orders || []).filter((order) => isDeliveredOrder(order));
+  }, [orders, deliveredOrdersProp]);
+
+  const revenueWeekly = useMemo(() => buildRevenueSeriesByDay(deliveredOrders, 7), [deliveredOrders]);
+  const revenueMonthly = useMemo(() => buildRevenueSeriesByMonth(deliveredOrders, 12), [deliveredOrders]);
 
   const revenueSeries = timeframe === 'weekly' ? revenueWeekly : revenueMonthly;
 

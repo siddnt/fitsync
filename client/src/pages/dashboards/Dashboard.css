@@ -12,7 +12,14 @@
   width: 100%;
 }
 
+.dashboard-grid--admin {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2.25rem;
+  width: 100%;
+}
+
 .dashboard-grid--owner .dashboard-section,
+.dashboard-grid--admin .dashboard-section,
 .dashboard-section--span-12,
 .dashboard-section--span-8,
 .dashboard-section--span-6,
@@ -21,20 +28,23 @@
 }
 
 @media (min-width: 900px) {
-  .dashboard-grid--owner {
+  .dashboard-grid--owner,
+  .dashboard-grid--admin {
     align-items: start;
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-
-  .dashboard-grid--owner .dashboard-section--span-8 {
+  .dashboard-grid--owner .dashboard-section--span-8,
+  .dashboard-grid--admin .dashboard-section--span-8 {
     grid-column: span 8;
   }
 
-  .dashboard-grid--owner .dashboard-section--span-6 {
+  .dashboard-grid--owner .dashboard-section--span-6,
+  .dashboard-grid--admin .dashboard-section--span-6 {
     grid-column: span 6;
   }
 
-  .dashboard-grid--owner .dashboard-section--span-4 {
+  .dashboard-grid--owner .dashboard-section--span-4,
+  .dashboard-grid--admin .dashboard-section--span-4 {
     grid-column: span 4;
   }
 }
@@ -146,6 +156,32 @@
   min-height: 260px;
 }
 
+.dual-chart-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.dual-chart-grid__panel {
+  background: transparent;
+  flex: 1 1 320px;
+  min-width: 280px;
+}
+
+.dual-chart-grid__heading {
+  margin-bottom: 0.75rem;
+}
+
+.dual-chart-grid__heading strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+}
+
+.dual-chart-grid__heading small {
+  color: var(--muted-text-color);
+}
+
 .chart-container--donut {
   height: auto;
   min-height: 220px;
@@ -169,6 +205,73 @@
 .pie-layout__legend {
   flex: 1;
   min-width: 220px;
+}
+.pie-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.pie-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.pie-card__stat {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  flex: 1 1 180px;
+  padding: 0.9rem 1.1rem;
+}
+
+.pie-card__stat span {
+  color: var(--muted-text-color);
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.pie-card__stat strong {
+  color: var(--text-color);
+  display: block;
+  font-size: 1.1rem;
+}
+
+.pie-card__stat small {
+  color: var(--muted-text-color);
+}
+
+.pie-card__legend {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.pie-card__legend-item {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+}
+
+.pie-card__legend-item strong {
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.pie-card__legend-item small {
+  color: var(--muted-text-color);
+}
+
+.pie-card__dot {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  height: 12px;
+  width: 12px;
 }
 
 .pie-center {
@@ -1018,6 +1121,58 @@
   background-size: 6px 6px;
   background-repeat: no-repeat;
   padding-right: 2.25rem;
+}
+
+.users-toolbar {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  flex: 1 1 360px;
+  justify-content: flex-end;
+}
+
+.users-toolbar .inventory-toolbar__input {
+  flex: 1 1 180px;
+  min-width: 180px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.users-toolbar__reset,
+.users-toolbar__refresh {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.95rem;
+  transition: background 0.2s ease, border 0.2s ease, color 0.2s ease;
+}
+
+.users-toolbar__reset:hover,
+.users-toolbar__refresh:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.users-toolbar__reset {
+  color: var(--muted-text-color);
+}
+
+.users-toolbar__refresh {
+  background: rgba(132, 94, 247, 0.35);
+  border-color: rgba(132, 94, 247, 0.4);
+}
+
+@media (max-width: 768px) {
+  .users-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .inventory-price {

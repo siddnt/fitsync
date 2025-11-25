@@ -15,7 +15,14 @@ const DemographicsSummary = ({ gender, ageBuckets }) => {
     <div className="demographics-grid">
       <div className="demographics-card">
         <h4>Gender breakdown</h4>
-        <DistributionPieChart role="admin" data={gender} valueKey="value" nameKey="label" />
+        <DistributionPieChart
+          role="admin"
+          data={gender}
+          valueKey="value"
+          nameKey="label"
+          interactive
+          centerLabel="Users"
+        />
       </div>
 
       <div className="demographics-card">
@@ -23,12 +30,28 @@ const DemographicsSummary = ({ gender, ageBuckets }) => {
         {ageHasData ? (
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={ageBuckets}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" />
-                <XAxis dataKey="label" stroke="rgba(255, 255, 255, 0.65)" tickLine={false} axisLine={false} />
-                <YAxis stroke="rgba(255, 255, 255, 0.65)" tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }} />
-                <Bar dataKey="value" fill="#845ef7" radius={[6, 6, 0, 0]} />
+              <BarChart data={ageBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  stroke="rgba(255, 255, 255, 0.45)"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 12 }}
+                  dy={10}
+                />
+                <YAxis
+                  stroke="rgba(255, 255, 255, 0.45)"
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                />
+                <Bar dataKey="value" fill="#845ef7" radius={[4, 4, 0, 0]} barSize={32} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -61,3 +84,4 @@ DemographicsSummary.defaultProps = {
 };
 
 export default DemographicsSummary;
+

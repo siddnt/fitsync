@@ -31,6 +31,7 @@ const sampleData = {
   ],
 };
 
+
 const formatAxisTick = (value) => {
   if (!Number.isFinite(value)) {
     return value;
