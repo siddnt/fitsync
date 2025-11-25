@@ -208,6 +208,7 @@ const applyWeeklyAmount = (timeline, date, key, amount) => {
 const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
 
 const REVENUE_EARNING_TYPES = ['membership', 'enrollment', 'renewal'];
+const TRAINER_PLAN_CODES = ['trainer-access', 'trainerAccess', 'trainer'];
 
 const normaliseOrderItemStatus = (status) => {
   if (!status) {
@@ -526,7 +527,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
     membershipBillings,
   ] = await Promise.all([
     GymMembership.aggregate([
-      { $match: { gym: { $in: gymIds }, status: 'active' } },
+      { $match: { gym: { $in: gymIds }, status: 'active', plan: { $nin: TRAINER_PLAN_CODES } } },
       { $group: { _id: '$gym', activeMembers: { $sum: 1 } } },
     ]),
     GymListingSubscription.find({ owner: ownerFilter, status: { $in: ['active', 'grace'] } })
@@ -542,7 +543,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
     ]),
-    GymMembership.find({ gym: { $in: gymIds }, status: 'active' })
+    GymMembership.find({ gym: { $in: gymIds }, status: 'active', plan: { $nin: TRAINER_PLAN_CODES } })
       .sort({ createdAt: -1 })
       .limit(10)
       .populate({ path: 'trainee', select: 'name email profilePicture' })
@@ -552,6 +553,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       gym: { $in: gymIds },
       status: { $in: ['active', 'paused'] },
       createdAt: { $gte: thirtyDaysAgo },
+      plan: { $nin: TRAINER_PLAN_CODES },
       'billing.status': 'paid',
       'billing.amount': { $gt: 0 },
     })
@@ -651,7 +653,7 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
   const gymIds = gyms.map((gym) => gym._id);
 
   const membershipAggregates = await GymMembership.aggregate([
-    { $match: { gym: { $in: gymIds }, status: { $in: ['active', 'paused'] } } },
+    { $match: { gym: { $in: gymIds }, status: { $in: ['active', 'paused'] }, plan: { $nin: TRAINER_PLAN_CODES } } },
     {
       $group: {
         _id: '$gym',
@@ -729,7 +731,11 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
     TrainerAssignment.find({ gym: { $in: gymIds }, status: { $in: ['pending', 'active'] } })
       .populate({ path: 'trainer', select: 'name email profilePicture status role' })
       .lean(),
-    GymMembership.find({ gym: { $in: gymIds }, status: { $in: ['pending', 'active', 'paused'] } })
+    GymMembership.find({
+      gym: { $in: gymIds },
+      status: { $in: ['pending', 'active', 'paused'] },
+      plan: { $nin: TRAINER_PLAN_CODES },
+    })
       .populate({ path: 'trainee', select: 'name email profilePicture role' })
       .populate({ path: 'trainer', select: 'name email profilePicture role' })
       .lean(),
@@ -880,6 +886,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       gym: { $in: gymIds },
       status: { $in: ['active', 'paused'] },
       startDate: { $gte: earliestDate },
+      plan: { $nin: TRAINER_PLAN_CODES },
     })
       .select('startDate createdAt billing')
       .lean(),

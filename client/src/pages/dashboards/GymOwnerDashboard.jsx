@@ -99,7 +99,7 @@ const GymOwnerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-4">
+      <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-6">
         {overview?.expiringSubscriptions?.length ? (
           <table className="dashboard-table">
             <thead>
@@ -120,11 +120,11 @@ const GymOwnerDashboard = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="All sponsorships are in good standing." />
+          <EmptyState message="No listing plans are close to expiring." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active subscriptions" className="dashboard-section--span-4">
+      <DashboardSection title="Active subscriptions" className="dashboard-section--span-6">
         {subscriptions.length ? (
           <table className="dashboard-table">
             <thead>

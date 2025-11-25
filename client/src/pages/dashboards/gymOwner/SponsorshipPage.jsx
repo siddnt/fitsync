@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { SubmissionError, reset as resetForm } from 'redux-form';
 import { useDispatch } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
@@ -13,7 +14,7 @@ import {
 } from '../../../services/ownerApi.js';
 import SponsorshipForm from '../../../features/monetisation/SponsorshipForm.jsx';
 import { setLastReceipt, selectGym, selectSponsorshipTier } from '../../../features/monetisation/monetisationSlice.js';
-import { formatNumber, formatStatus } from '../../../utils/format.js';
+import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const GymOwnerSponsorshipPage = () => {
@@ -45,6 +46,20 @@ const GymOwnerSponsorshipPage = () => {
   const sponsorships = sponsorshipResponse?.data?.sponsorships ?? [];
   const gymOptions = gymsResponse?.data?.gyms ?? [];
   const packages = monetisationResponse?.data?.sponsorshipPackages ?? [];
+
+  const [sponsorshipGymFilter, setSponsorshipGymFilter] = useState('all');
+
+  const sponsorshipGymOptions = useMemo(() => {
+    const visibleGyms = gymOptions.map((gym) => ({ value: gym.id, label: gym.name ?? 'Unnamed gym' }));
+    return [{ value: 'all', label: 'All gyms' }, ...visibleGyms];
+  }, [gymOptions]);
+
+  const filteredSponsorships = useMemo(() => {
+    if (sponsorshipGymFilter === 'all') {
+      return sponsorships;
+    }
+    return sponsorships.filter((item) => item.id === sponsorshipGymFilter);
+  }, [sponsorships, sponsorshipGymFilter]);
 
   const isLoading = isSponsorshipLoading || isGymsLoading || isPackagesLoading;
   const isError = isSponsorshipError || isGymsError || isPackagesError;
@@ -127,30 +142,66 @@ const GymOwnerSponsorshipPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active sponsorships" className="dashboard-section--span-6">
-        {sponsorships.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Gym</th>
-                <th>Tier</th>
-                <th>Budget</th>
-                <th>Impressions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sponsorships.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.name}</td>
-                  <td>{formatStatus(item.sponsorship?.tier)}</td>
-                  <td>{item.sponsorship?.monthlyBudget ? `${formatNumber(item.sponsorship.monthlyBudget)} credits` : '—'}</td>
-                  <td>{formatNumber(item.impressions ?? 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <DashboardSection
+        title="Active sponsorships"
+        className="dashboard-section--span-6"
+        action={(
+          <select
+            className="dashboard-select"
+            value={sponsorshipGymFilter}
+            onChange={(event) => setSponsorshipGymFilter(event.target.value)}
+            aria-label="Filter sponsorships by gym"
+          >
+            {sponsorshipGymOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
+      >
+        {filteredSponsorships.length ? (
+          <div className="owner-plan-grid">
+            {filteredSponsorships.map((item) => (
+              <article key={item.id} className="owner-plan-card owner-plan-card--sponsorship">
+                <header className="owner-plan-card__header">
+                  <div>
+                    <p className="owner-plan-card__eyebrow">{item.city ?? 'Location pending'}</p>
+                    <h4>{item.name}</h4>
+                    <small>{formatStatus(item.sponsorship?.tier)}</small>
+                  </div>
+                  <span className="owner-plan-card__status">
+                    {item.sponsorship?.monthlyBudget ? `${formatNumber(item.sponsorship.monthlyBudget)} credits` : 'Custom budget'}
+                  </span>
+                </header>
+                <dl className="owner-plan-card__metrics">
+                  <div>
+                    <dt>Impressions</dt>
+                    <dd>{formatNumber(item.impressions ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Started</dt>
+                    <dd>{formatDate(item.sponsorship?.startDate)}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{formatStatus(item.sponsorship?.status ?? item.sponsorship?.tier)}</dd>
+                  </div>
+                </dl>
+                {item.sponsorship?.notes ? (
+                  <p className="owner-plan-card__note">{item.sponsorship.notes}</p>
+                ) : (
+                  <p className="owner-plan-card__note">Keep engagement high by refreshing creatives monthly.</p>
+                )}
+              </article>
+            ))}
+          </div>
         ) : (
-          <EmptyState message="Launch a sponsorship to feature your gym across FitSync." />
+          <EmptyState
+            message={sponsorshipGymFilter === 'all'
+              ? 'Launch a sponsorship to feature your gym across FitSync.'
+              : 'No sponsorship found for this gym.'}
+          />
         )}
       </DashboardSection>
 

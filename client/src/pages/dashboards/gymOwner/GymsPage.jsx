@@ -50,11 +50,6 @@ const GymOwnerGymsPage = () => {
     [gyms],
   );
 
-  const pendingGyms = useMemo(
-    () => displayGyms.filter((gym) => gym.status !== 'active' || !gym.isPublished),
-    [displayGyms],
-  );
-
   const activeGym = useMemo(() => gyms.find((gym) => gym.id === activeGymId), [gyms, activeGymId]);
 
   const {
@@ -340,11 +335,12 @@ const GymOwnerGymsPage = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
-        {['Registered gyms', 'Pending approvals'].map((title) => (
-          <DashboardSection key={title} title={title}>
-            <SkeletonPanel lines={6} />
-          </DashboardSection>
-        ))}
+        <DashboardSection title="Registered gyms">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
+        <DashboardSection title="Trainer approvals">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
       </div>
     );
   }
@@ -567,19 +563,6 @@ const GymOwnerGymsPage = () => {
           )}
         </DashboardSection>
 
-        <DashboardSection title="Pending approvals" className="dashboard-section--span-6">
-          {pendingGyms.length ? (
-            <ul>
-              {pendingGyms.map((gym) => (
-                <li key={`${gym.id}-pending`}>
-                  <strong>{gym.name}</strong> · {formatStatus(gym.status)} · Last updated {formatDate(gym.updatedAt)}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState message="All gyms are active and visible." />
-          )}
-        </DashboardSection>
       </div>
 
       {isOverlayOpen ? (
