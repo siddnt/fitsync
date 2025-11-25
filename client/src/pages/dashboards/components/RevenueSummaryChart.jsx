@@ -31,6 +31,25 @@ const sampleData = {
   ],
 };
 
+const formatAxisTick = (value) => {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+
+  const abs = Math.abs(value);
+  const trim = (num) => num.replace(/\.0+$/, '');
+
+  if (abs >= 100000) {
+    return `${trim((value / 100000).toFixed(abs >= 1000000 ? 1 : 2))}L`;
+  }
+
+  if (abs >= 1000) {
+    return `${trim((value / 1000).toFixed(abs >= 10000 ? 0 : 1))}k`;
+  }
+
+  return value.toString();
+};
+
 const RevenueSummaryChart = ({ role, data, valueKey, labelKey, series }) => {
   const fallbackData = sampleData[role] ?? sampleData.trainee;
   const resolvedData = data?.length ? data : fallbackData;
@@ -71,7 +90,7 @@ const RevenueSummaryChart = ({ role, data, valueKey, labelKey, series }) => {
           )}
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.12)" />
           <XAxis dataKey={resolvedLabelKey} stroke="rgba(255,255,255,0.55)" />
-          <YAxis stroke="rgba(255,255,255,0.55)" />
+          <YAxis stroke="rgba(255,255,255,0.55)" tickFormatter={formatAxisTick} width={60} />
           <Tooltip contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }} />
           {hasCustomSeries && <Legend verticalAlign="top" height={26} iconType="circle" />}
           {resolvedSeries.map((serie) => (

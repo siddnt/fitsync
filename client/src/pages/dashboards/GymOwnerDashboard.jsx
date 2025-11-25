@@ -120,7 +120,7 @@ const GymOwnerDashboard = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No listing plans are close to expiring." />
+          <EmptyState message="All sponsorships are in good standing." />
         )}
       </DashboardSection>
 

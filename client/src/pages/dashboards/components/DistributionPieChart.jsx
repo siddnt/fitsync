@@ -144,7 +144,9 @@ const DistributionPieChart = ({ role, data, valueKey, nameKey, interactive, valu
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none' }}
+                  contentStyle={{ background: 'rgba(18,18,18,0.95)', border: 'none', color: '#fff' }}
+                  labelStyle={{ color: '#fff' }}
+                  itemStyle={{ color: '#fff' }}
                   formatter={(value, name, payload) => [formatter(value), payload?.payload?.name ?? name]}
                 />
                 {interactive ? null : <Legend wrapperStyle={{ color: '#fff' }} />}

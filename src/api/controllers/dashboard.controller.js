@@ -85,29 +85,21 @@ const buildSponsorshipExpenseEntries = (gyms = []) => {
 
   gyms.forEach((gym) => {
     const sponsorship = gym?.sponsorship;
-    if (!sponsorship || !sponsorship?.monthlyBudget) {
+    if (!sponsorship) {
       return;
     }
 
-    const start = toDate(sponsorship.startDate) || toDate(gym?.createdAt);
-    const end = toDate(sponsorship.endDate) || new Date();
-
-    if (!start || !end) {
+    const when = toDate(sponsorship.startDate) || toDate(gym?.createdAt);
+    if (!when) {
       return;
     }
 
-    const monthlyBudget = Number(sponsorship.monthlyBudget) || 0;
-    if (monthlyBudget <= 0) {
+    const paidAmount = Number(sponsorship.amount ?? sponsorship.monthlyBudget) || 0;
+    if (paidAmount <= 0) {
       return;
     }
 
-    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-
-    while (cursor <= endMonth) {
-      entries.push({ amount: monthlyBudget, date: new Date(cursor), source: 'sponsorship' });
-      cursor.setMonth(cursor.getMonth() + 1, 1);
-    }
+    entries.push({ amount: paidAmount, date: when, source: 'sponsorship' });
   });
 
   return entries;
@@ -153,7 +145,7 @@ const createWeeklyTimeline = (weeks, referenceDate = new Date()) => {
     weekStart.setHours(0, 0, 0, 0);
     weekEnd.setHours(23, 59, 59, 999);
 
-    const label = `${weekStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+    const label = `${weekEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
     const fullLabel = `${weekStart.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'long',

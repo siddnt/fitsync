@@ -445,7 +445,7 @@ const GymOwnerGymsPage = () => {
               Refresh
             </button>
           )}
-          className="dashboard-section--span-6"
+          className="dashboard-section--span-12"
         >
           {trainerActionError ? (
             <p className="dashboard-message dashboard-message--error">{trainerActionError}</p>

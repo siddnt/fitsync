@@ -257,6 +257,23 @@
   font-size: 1.35rem;
 }
 
+.owner-revenue-chart__value {
+  color: #fff;
+  transition: color 0.2s ease;
+}
+
+.owner-revenue-chart__value--positive {
+  color: #22c55e;
+}
+
+.owner-revenue-chart__value--negative {
+  color: #f87171;
+}
+
+.owner-revenue-chart__value--neutral {
+  color: #e5e7eb;
+}
+
 .owner-revenue-chart__toggle {
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
