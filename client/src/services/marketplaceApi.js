@@ -3,7 +3,10 @@ import { apiSlice } from './apiSlice.js';
 export const marketplaceApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getMarketplaceCatalog: builder.query({
-      query: () => '/marketplace/products',
+      query: (params = {}) => ({
+        url: '/marketplace/products',
+        params,
+      }),
       providesTags: (result) => {
         const products = result?.data?.products ?? [];
         if (!products.length) {
@@ -15,6 +18,13 @@ export const marketplaceApi = apiSlice.injectEndpoints({
           { type: 'Marketplace', id: 'CATALOG' },
         ];
       },
+    }),
+    getMarketplaceProduct: builder.query({
+      query: (productId) => `/marketplace/products/${productId}`,
+      providesTags: (_result, _error, productId) => [
+        { type: 'Marketplace', id: productId },
+        { type: 'Marketplace', id: 'CATALOG' },
+      ],
     }),
     createMarketplaceOrder: builder.mutation({
       query: (payload) => ({
@@ -33,5 +43,6 @@ export const marketplaceApi = apiSlice.injectEndpoints({
 
 export const {
   useGetMarketplaceCatalogQuery,
+  useGetMarketplaceProductQuery,
   useCreateMarketplaceOrderMutation,
 } = marketplaceApi;
