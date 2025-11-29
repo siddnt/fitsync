@@ -12,11 +12,20 @@
 }
 
 .app-header__brand a {
-  color: var(--primary-color);
-  font-weight: 700;
-  letter-spacing: 0.12rem;
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  text-transform: uppercase;
+  gap: 0.75rem;
+  color: var(--light-text-color);
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.app-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
 }
 
 .app-header__nav {
@@ -80,7 +89,7 @@
   gap: 0.75rem;
 }
 
-.app-header__cta > * {
+.app-header__cta>* {
   flex-shrink: 0;
 }
 
