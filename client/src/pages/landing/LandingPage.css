@@ -32,6 +32,14 @@ body {
   overflow-x: hidden;
 }
 
+/* Landing Container */
+.landing {
+  display: flex;
+  flex-direction: column;
+  gap: 8rem;
+  padding-bottom: 0;
+}
+
 /* Cinematic Noise Overlay */
 .noise-overlay {
   position: fixed;
@@ -39,10 +47,8 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12rem;
-  padding-bottom: 10rem;
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Animations */
@@ -325,9 +331,9 @@ body {
 }
 
 .landing-roles h2 {
-  font-size: 4rem;
+  font-size: 3.5rem;
   text-align: center;
-  margin-bottom: 6rem;
+  margin-bottom: 4rem;
   font-weight: 800;
   letter-spacing: -2px;
   animation: maskReveal 1s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -335,8 +341,20 @@ body {
 
 .landing-roles__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 3rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+@media (max-width: 1024px) {
+  .landing-roles__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-roles__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Focus Interaction: Dim siblings on hover */
@@ -440,60 +458,73 @@ body {
 
 .landing-streams {
   max-width: 1800px;
-  margin: 15rem auto 0;
+  margin: 0 auto;
   padding: 0 6rem;
   display: flex;
   flex-direction: column;
-  gap: 5rem;
+  gap: 4rem;
+}
+
+.landing-streams__header {
+  text-align: center;
+  max-width: 700px;
+  margin: 0 auto 3rem;
 }
 
 .landing-streams h2 {
-  font-size: 4rem;
-  margin-bottom: 1.5rem;
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
   line-height: 1.1;
   font-weight: 800;
   letter-spacing: -2px;
 }
 
 .landing-streams p {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   color: var(--brand-muted);
   line-height: 1.6;
 }
 
 .landing-streams__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .landing-streams__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-streams__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stream-card {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--glass-border);
   border-radius: 2px;
-  padding: 3rem;
+  padding: 2rem;
   transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
   position: relative;
   overflow: hidden;
   backdrop-filter: blur(10px);
 }
 
-.stream-card:first-child {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
-}
-
 .stream-icon-wrapper {
-  width: 70px;
-  height: 70px;
+  width: 56px;
+  height: 56px;
   background: rgba(229, 9, 20, 0.1);
   border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 0.5rem;
   transition: transform 0.4s;
 }
 
@@ -507,30 +538,29 @@ body {
 }
 
 .stream-icon {
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   color: var(--brand-red);
   transition: color 0.4s;
 }
 
 .stream-content h3 {
-  font-size: 1.75rem;
-  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
   font-weight: 700;
   color: white;
 }
 
 .stream-content p {
   color: var(--brand-muted);
-  line-height: 1.7;
-  font-size: 1.1rem;
+  line-height: 1.6;
+  font-size: 0.95rem;
 }
 
 /* CTA Section */
 .landing__cta {
   text-align: center;
-  padding: 12rem 2rem;
+  padding: 8rem 2rem;
   position: relative;
-  margin-top: 6rem;
   overflow: hidden;
 }
 
@@ -548,17 +578,17 @@ body {
 }
 
 .landing__cta h2 {
-  font-size: clamp(3.5rem, 6vw, 5.5rem);
-  margin-bottom: 2rem;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  margin-bottom: 1.5rem;
   font-weight: 800;
   letter-spacing: -2px;
 }
 
 .landing__cta p {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: var(--brand-muted);
-  margin-bottom: 4rem;
-  max-width: 700px;
+  margin-bottom: 3rem;
+  max-width: 600px;
   margin-left: auto;
   margin-right: auto;
 }
