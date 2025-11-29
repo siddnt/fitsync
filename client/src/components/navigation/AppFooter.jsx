@@ -6,6 +6,7 @@ const AppFooter = () => (
     <div className="app-footer__links">
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
+      <a href="/contact">Contact</a>
       <a href="/support">Support</a>
     </div>
   </footer>
