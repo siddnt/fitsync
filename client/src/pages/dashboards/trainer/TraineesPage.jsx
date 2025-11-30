@@ -13,6 +13,7 @@ import {
 } from '../../../services/trainerApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+import '../TrainerDashboard.css';
 
 const defaultAttendance = () => ({
   date: new Date().toISOString().slice(0, 10),
@@ -182,7 +183,7 @@ const TrainerTraineesPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="trainer-trainees-page">
         <DashboardSection title="Active trainees">
           <SkeletonPanel lines={8} />
         </DashboardSection>
@@ -195,7 +196,7 @@ const TrainerTraineesPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="trainer-trainees-page">
         <DashboardSection
           title="Trainer workspace"
           action={(
@@ -204,14 +205,31 @@ const TrainerTraineesPage = () => {
             </button>
           )}
         >
-          <EmptyState message="We could not load your trainee assignments." />
+          <div className="trainer-empty-state">
+            <div className="trainer-empty-state__icon">⚠️</div>
+            <h3 className="trainer-empty-state__title">Unable to load trainees</h3>
+            <p className="trainer-empty-state__message">
+              We could not load your trainee assignments. Please try again.
+            </p>
+          </div>
         </DashboardSection>
       </div>
     );
   }
 
+  const renderGoals = (goals) => {
+    if (!goals?.length) return <span className="trainer-table__gym">—</span>;
+    return (
+      <div className="trainer-table__goals">
+        {goals.map((goal, i) => (
+          <span key={i} className="trainer-goal-tag">{goal}</span>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="dashboard-grid">
+    <div className="trainer-trainees-page">
       <DashboardSection
         title="Active trainees"
         action={(
@@ -221,7 +239,7 @@ const TrainerTraineesPage = () => {
         )}
       >
         {trainees.length ? (
-          <table className="dashboard-table">
+          <table className="trainer-table">
             <thead>
               <tr>
                 <th>Trainee</th>
@@ -238,136 +256,152 @@ const TrainerTraineesPage = () => {
                   <tr
                     key={`${trainee.id}-${trainee.assignmentId}`}
                     onClick={() => setSelectedTraineeId(trainee.id)}
-                    style={{
-                      cursor: 'pointer',
-                      background: isSelected ? 'rgba(255,255,255,0.06)' : 'transparent',
-                    }}
+                    className={isSelected ? 'trainer-table__row--selected' : ''}
                   >
-                    <td>{trainee.name ?? '—'}</td>
-                    <td>{trainee.gym?.name ?? '—'}</td>
-                    <td>{formatStatus(trainee.status)}</td>
-                    <td>{formatDate(trainee.assignedAt)}</td>
-                    <td>{trainee.goals?.join(', ') || '—'}</td>
+                    <td className="trainer-table__name">{trainee.name ?? '—'}</td>
+                    <td className="trainer-table__gym">{trainee.gym?.name ?? '—'}</td>
+                    <td><span className={`trainer-checkin-item__status trainer-checkin-item__status--${trainee.status === 'active' ? 'done' : 'due'}`}>{formatStatus(trainee.status)}</span></td>
+                    <td className="trainer-table__date">{formatDate(trainee.assignedAt)}</td>
+                    <td>{renderGoals(trainee.goals)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         ) : (
-          <EmptyState message="Assignments will appear once a gym owner pairs trainees with you." />
+          <div className="trainer-empty-state">
+            <div className="trainer-empty-state__icon">👥</div>
+            <h3 className="trainer-empty-state__title">No trainees assigned yet</h3>
+            <p className="trainer-empty-state__message">
+              Assignments will appear here once a gym owner pairs trainees with you.
+            </p>
+          </div>
         )}
       </DashboardSection>
 
       <DashboardSection title="Update trainee records">
         {selectedTrainee ? (
-          <div className="dashboard-form">
+          <div className="trainer-forms">
+            <div className="trainer-selected-indicator">
+              <div className="trainer-selected-indicator__avatar">
+                {selectedTrainee.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?'}
+              </div>
+              <div className="trainer-selected-indicator__info">
+                <p className="trainer-selected-indicator__name">{selectedTrainee.name}</p>
+                <p className="trainer-selected-indicator__meta">{selectedTrainee.gym?.name || 'No gym'}</p>
+              </div>
+            </div>
+
             {(notice || errorNotice) && (
-              <div className={`status-pill ${errorNotice ? 'status-pill--warning' : 'status-pill--success'}`}>
+              <div className={`trainer-notice ${errorNotice ? 'trainer-notice--error' : 'trainer-notice--success'}`}>
                 {errorNotice || notice}
               </div>
             )}
 
-            <form onSubmit={handleAttendanceSubmit} className="dashboard-form">
-              <div className="form-grid">
-                <div>
-                  <label htmlFor="attendance-date">Attendance date</label>
-                  <input
-                    id="attendance-date"
-                    type="date"
-                    value={attendanceForm.date}
-                    onChange={(event) => setAttendanceForm((prev) => ({ ...prev, date: event.target.value }))}
-                    required
+            <div className="trainer-form-card">
+              <h3 className="trainer-form-card__title">Log Attendance</h3>
+              <form onSubmit={handleAttendanceSubmit}>
+                <div className="trainer-form-grid">
+                  <div className="trainer-form-field">
+                    <label htmlFor="attendance-date">Date</label>
+                    <input
+                      id="attendance-date"
+                      type="date"
+                      value={attendanceForm.date}
+                      onChange={(event) => setAttendanceForm((prev) => ({ ...prev, date: event.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="trainer-form-field">
+                    <label htmlFor="attendance-status">Status</label>
+                    <select
+                      id="attendance-status"
+                      value={attendanceForm.status}
+                      onChange={(event) =>
+                        setAttendanceForm((prev) => ({ ...prev, status: event.target.value }))
+                      }
+                    >
+                      <option value="present">Present</option>
+                      <option value="late">Late</option>
+                      <option value="absent">Absent</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="trainer-form-field">
+                  <label htmlFor="attendance-notes">Notes</label>
+                  <textarea
+                    id="attendance-notes"
+                    placeholder="Optional check-in notes"
+                    value={attendanceForm.notes}
+                    onChange={(event) => setAttendanceForm((prev) => ({ ...prev, notes: event.target.value }))}
                   />
                 </div>
-                <div>
-                  <label htmlFor="attendance-status">Status</label>
-                  <select
-                    id="attendance-status"
-                    value={attendanceForm.status}
-                    onChange={(event) =>
-                      setAttendanceForm((prev) => ({ ...prev, status: event.target.value }))
-                    }
-                  >
-                    <option value="present">Present</option>
-                    <option value="late">Late</option>
-                    <option value="absent">Absent</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label htmlFor="attendance-notes">Notes</label>
-                <textarea
-                  id="attendance-notes"
-                  placeholder="Optional check-in notes"
-                  value={attendanceForm.notes}
-                  onChange={(event) => setAttendanceForm((prev) => ({ ...prev, notes: event.target.value }))}
-                />
-              </div>
-              <div className="button-row">
-                <button type="submit" disabled={isLoggingAttendance}>
+                <button type="submit" className="trainer-form-btn" disabled={isLoggingAttendance}>
                   {isLoggingAttendance ? 'Saving…' : 'Log attendance'}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
 
-            <form onSubmit={handleProgressSubmit} className="dashboard-form">
-              <div className="form-grid">
-                <div>
-                  <label htmlFor="progress-metric">Metric</label>
-                  <input
-                    id="progress-metric"
-                    type="text"
-                    placeholder="E.g. Body fat %"
-                    value={progressForm.metric}
-                    onChange={(event) => setProgressForm((prev) => ({ ...prev, metric: event.target.value }))}
-                    required
-                  />
+            <div className="trainer-form-card">
+              <h3 className="trainer-form-card__title">Record Progress</h3>
+              <form onSubmit={handleProgressSubmit}>
+                <div className="trainer-form-grid">
+                  <div className="trainer-form-field">
+                    <label htmlFor="progress-metric">Metric</label>
+                    <input
+                      id="progress-metric"
+                      type="text"
+                      placeholder="E.g. Body fat %"
+                      value={progressForm.metric}
+                      onChange={(event) => setProgressForm((prev) => ({ ...prev, metric: event.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="trainer-form-field">
+                    <label htmlFor="progress-value">Value</label>
+                    <input
+                      id="progress-value"
+                      type="number"
+                      step="0.01"
+                      placeholder="Enter value"
+                      value={progressForm.value}
+                      onChange={(event) => setProgressForm((prev) => ({ ...prev, value: event.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="trainer-form-field">
+                    <label htmlFor="progress-unit">Unit</label>
+                    <input
+                      id="progress-unit"
+                      type="text"
+                      placeholder="Optional"
+                      value={progressForm.unit}
+                      onChange={(event) => setProgressForm((prev) => ({ ...prev, unit: event.target.value }))}
+                    />
+                  </div>
+                  <div className="trainer-form-field">
+                    <label htmlFor="progress-recorded">Recorded at</label>
+                    <input
+                      id="progress-recorded"
+                      type="datetime-local"
+                      value={progressForm.recordedAt}
+                      onChange={(event) =>
+                        setProgressForm((prev) => ({ ...prev, recordedAt: event.target.value }))
+                      }
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="progress-value">Value</label>
-                  <input
-                    id="progress-value"
-                    type="number"
-                    step="0.01"
-                    placeholder="Enter value"
-                    value={progressForm.value}
-                    onChange={(event) => setProgressForm((prev) => ({ ...prev, value: event.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="progress-unit">Unit</label>
-                  <input
-                    id="progress-unit"
-                    type="text"
-                    placeholder="Optional unit"
-                    value={progressForm.unit}
-                    onChange={(event) => setProgressForm((prev) => ({ ...prev, unit: event.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="progress-recorded">Recorded at</label>
-                  <input
-                    id="progress-recorded"
-                    type="datetime-local"
-                    value={progressForm.recordedAt}
-                    onChange={(event) =>
-                      setProgressForm((prev) => ({ ...prev, recordedAt: event.target.value }))
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <div className="button-row">
-                <button type="submit" disabled={isRecordingProgress}>
+                <button type="submit" className="trainer-form-btn" disabled={isRecordingProgress}>
                   {isRecordingProgress ? 'Saving…' : 'Add progress metric'}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
 
-            <form onSubmit={handleDietSubmit} className="dashboard-form">
-              <div className="form-grid">
-                <div>
+            <div className="trainer-form-card">
+              <h3 className="trainer-form-card__title">Assign Diet Plan</h3>
+              <form onSubmit={handleDietSubmit}>
+                <div className="trainer-form-field">
                   <label htmlFor="diet-week">Week starting</label>
                   <input
                     id="diet-week"
@@ -377,36 +411,35 @@ const TrainerTraineesPage = () => {
                     required
                   />
                 </div>
-              </div>
-              <div>
-                <label htmlFor="diet-meals">Meals (one per line, "Meal - details")</label>
-                <textarea
-                  id="diet-meals"
-                  placeholder="Breakfast - Oats with berries"
-                  value={dietForm.mealsText}
-                  onChange={(event) => setDietForm((prev) => ({ ...prev, mealsText: event.target.value }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="diet-notes">Notes</label>
-                <textarea
-                  id="diet-notes"
-                  placeholder="Highlight calorie targets or hydration goals"
-                  value={dietForm.notes}
-                  onChange={(event) => setDietForm((prev) => ({ ...prev, notes: event.target.value }))}
-                />
-              </div>
-              <div className="button-row">
-                <button type="submit" disabled={isAssigningDiet}>
+                <div className="trainer-form-field">
+                  <label htmlFor="diet-meals">Meals (one per line, "Meal - details")</label>
+                  <textarea
+                    id="diet-meals"
+                    placeholder="Breakfast - Oats with berries"
+                    value={dietForm.mealsText}
+                    onChange={(event) => setDietForm((prev) => ({ ...prev, mealsText: event.target.value }))}
+                  />
+                </div>
+                <div className="trainer-form-field">
+                  <label htmlFor="diet-notes">Notes</label>
+                  <textarea
+                    id="diet-notes"
+                    placeholder="Highlight calorie targets or hydration goals"
+                    value={dietForm.notes}
+                    onChange={(event) => setDietForm((prev) => ({ ...prev, notes: event.target.value }))}
+                  />
+                </div>
+                <button type="submit" className="trainer-form-btn" disabled={isAssigningDiet}>
                   {isAssigningDiet ? 'Saving…' : 'Save diet plan'}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
 
-            <form onSubmit={handleFeedbackSubmit} className="dashboard-form">
-              <div className="form-grid">
-                <div>
-                  <label htmlFor="feedback-category">Feedback category</label>
+            <div className="trainer-form-card">
+              <h3 className="trainer-form-card__title">Share Feedback</h3>
+              <form onSubmit={handleFeedbackSubmit}>
+                <div className="trainer-form-field">
+                  <label htmlFor="feedback-category">Category</label>
                   <select
                     id="feedback-category"
                     value={feedbackForm.category}
@@ -420,26 +453,30 @@ const TrainerTraineesPage = () => {
                     <option value="general">General</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label htmlFor="feedback-message">Message</label>
-                <textarea
-                  id="feedback-message"
-                  placeholder="Share feedback or next steps with the trainee"
-                  value={feedbackForm.message}
-                  onChange={(event) => setFeedbackForm((prev) => ({ ...prev, message: event.target.value }))}
-                  required
-                />
-              </div>
-              <div className="button-row">
-                <button type="submit" disabled={isSharingFeedback}>
+                <div className="trainer-form-field">
+                  <label htmlFor="feedback-message">Message</label>
+                  <textarea
+                    id="feedback-message"
+                    placeholder="Share feedback or next steps with the trainee"
+                    value={feedbackForm.message}
+                    onChange={(event) => setFeedbackForm((prev) => ({ ...prev, message: event.target.value }))}
+                    required
+                  />
+                </div>
+                <button type="submit" className="trainer-form-btn" disabled={isSharingFeedback}>
                   {isSharingFeedback ? 'Sending…' : 'Send feedback'}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         ) : (
-          <EmptyState message="Select a trainee to log attendance, progress, and feedback." />
+          <div className="trainer-empty-state">
+            <div className="trainer-empty-state__icon">📋</div>
+            <h3 className="trainer-empty-state__title">Select a trainee</h3>
+            <p className="trainer-empty-state__message">
+              Choose a trainee from the list to log attendance, track progress, and share feedback.
+            </p>
+          </div>
         )}
       </DashboardSection>
     </div>
