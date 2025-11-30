@@ -4,6 +4,7 @@ import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
+import './TrainerDashboard.css';
 
 const TrainerDashboard = () => {
   const { data, isLoading, isError, refetch } = useGetTrainerOverviewQuery();
@@ -13,7 +14,7 @@ const TrainerDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="trainer-dashboard">
         {['Team snapshot', 'Active trainees', 'Upcoming check-ins'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -25,7 +26,7 @@ const TrainerDashboard = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="trainer-dashboard">
         <DashboardSection
           title="Trainer dashboard unavailable"
           action={(
@@ -40,30 +41,41 @@ const TrainerDashboard = () => {
     );
   }
 
+  const renderGoals = (goals) => {
+    if (!goals?.length) return <span className="trainer-table__gym">—</span>;
+    return (
+      <div className="trainer-table__goals">
+        {goals.map((goal, i) => (
+          <span key={i} className="trainer-goal-tag">{goal}</span>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="dashboard-grid">
+    <div className="trainer-dashboard">
       <DashboardSection title="Team snapshot">
         {overview?.totals ? (
-          <div className="stat-grid">
-            <div className="stat-card">
-              <small>Gyms</small>
-              <strong>{overview.totals.gyms}</strong>
-              <small>Locations you cover</small>
+          <div className="trainer-stat-grid">
+            <div className="trainer-stat-card trainer-stat-card--gyms">
+              <span className="trainer-stat-card__label">Gyms</span>
+              <span className="trainer-stat-card__value">{overview.totals.gyms}</span>
+              <span className="trainer-stat-card__hint">Locations you cover</span>
             </div>
-            <div className="stat-card">
-              <small>Active trainees</small>
-              <strong>{overview.totals.activeTrainees}</strong>
-              <small>Currently training</small>
+            <div className="trainer-stat-card trainer-stat-card--trainees">
+              <span className="trainer-stat-card__label">Active trainees</span>
+              <span className="trainer-stat-card__value">{overview.totals.activeTrainees}</span>
+              <span className="trainer-stat-card__hint">Currently training</span>
             </div>
-            <div className="stat-card">
-              <small>Pending updates</small>
-              <strong>{overview.totals.pendingUpdates}</strong>
-              <small>Need new feedback</small>
+            <div className="trainer-stat-card trainer-stat-card--pending">
+              <span className="trainer-stat-card__label">Pending updates</span>
+              <span className="trainer-stat-card__value">{overview.totals.pendingUpdates}</span>
+              <span className="trainer-stat-card__hint">Need new feedback</span>
             </div>
-            <div className="stat-card">
-              <small>30-day earnings</small>
-              <strong>{formatCurrency(overview.totals.earnings30d)}</strong>
-              <small>Trainer share (50%)</small>
+            <div className="trainer-stat-card trainer-stat-card--earnings">
+              <span className="trainer-stat-card__label">30-day earnings</span>
+              <span className="trainer-stat-card__value">{formatCurrency(overview.totals.earnings30d)}</span>
+              <span className="trainer-stat-card__hint">Trainer share (50%)</span>
             </div>
           </div>
         ) : (
@@ -73,7 +85,7 @@ const TrainerDashboard = () => {
 
       <DashboardSection title="Active trainees">
         {assignments.length ? (
-          <table className="dashboard-table">
+          <table className="trainer-table">
             <thead>
               <tr>
                 <th>Trainee</th>
@@ -85,10 +97,10 @@ const TrainerDashboard = () => {
             <tbody>
               {assignments.map((assignment, index) => (
                 <tr key={`${assignment.trainee}-${index}`}>
-                  <td>{assignment.trainee?.name ?? '—'}</td>
-                  <td>{assignment.gym?.name ?? '—'}</td>
-                  <td>{formatDate(assignment.assignedAt)}</td>
-                  <td>{assignment.goals?.join(', ') || '—'}</td>
+                  <td className="trainer-table__name">{assignment.trainee?.name ?? '—'}</td>
+                  <td className="trainer-table__gym">{assignment.gym?.name ?? '—'}</td>
+                  <td className="trainer-table__date">{formatDate(assignment.assignedAt)}</td>
+                  <td>{renderGoals(assignment.goals)}</td>
                 </tr>
               ))}
             </tbody>
@@ -100,11 +112,16 @@ const TrainerDashboard = () => {
 
       <DashboardSection title="Upcoming check-ins">
         {upcoming.length ? (
-          <ul>
+          <ul className="trainer-checkins">
             {upcoming.map((item, index) => (
-              <li key={`${item.trainee?._id ?? index}-checkin`}>
-                <strong>{item.trainee?.name ?? 'Trainee'}</strong> · Last attendance {formatDate(item.latestAttendance?.date)} ·{' '}
-                {item.nextFeedback ? `Feedback logged ${formatDate(item.nextFeedback.createdAt)}` : 'Feedback due'}
+              <li key={`${item.trainee?._id ?? index}-checkin`} className="trainer-checkin-item">
+                <span className="trainer-checkin-item__name">{item.trainee?.name ?? 'Trainee'}</span>
+                <div className="trainer-checkin-item__details">
+                  <span>Last attendance: {formatDate(item.latestAttendance?.date)}</span>
+                  <span className={`trainer-checkin-item__status ${item.nextFeedback ? 'trainer-checkin-item__status--done' : 'trainer-checkin-item__status--due'}`}>
+                    {item.nextFeedback ? `Logged ${formatDate(item.nextFeedback.createdAt)}` : 'Feedback due'}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
