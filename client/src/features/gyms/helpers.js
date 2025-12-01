@@ -1,8 +1,4 @@
-export const normalizeTags = (value) =>
-  value
-    ?.split(',')
-    .map((item) => item.trim())
-    .filter(Boolean) ?? [];
+import { AMENITY_OPTIONS } from '../../constants/amenities.js';
 
 const trimToUndefined = (value) => {
   if (value === undefined || value === null) {
@@ -26,48 +22,97 @@ const normaliseAmount = (value) => {
   return numeric;
 };
 
+const coerceToList = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  return String(value).split(',');
+};
+
+const AMENITY_SET = new Set(AMENITY_OPTIONS);
+
+export const normalizeTags = (value) => {
+  const tokens = coerceToList(value)
+    .map((token) => (typeof token === 'string' ? token.trim() : String(token ?? '').trim()))
+    .filter(Boolean);
+
+  return tokens.length ? tokens : undefined;
+};
+
+const buildSection = (entries) => {
+  const section = entries.reduce((acc, [key, val]) => {
+    if (val !== undefined) {
+      acc[key] = val;
+    }
+    return acc;
+  }, {});
+
+  return Object.keys(section).length ? section : undefined;
+};
+
 export const transformGymPayload = (values) => {
-  const mrp = normaliseAmount(values?.pricing?.mrp) ?? 0;
-  const discountedRaw = normaliseAmount(values?.pricing?.discounted);
-  const discounted = discountedRaw && mrp && discountedRaw < mrp ? discountedRaw : undefined;
+  const payload = {};
 
-  const location = {};
-  const city = trimToUndefined(values?.location?.city);
-  const state = trimToUndefined(values?.location?.state);
-  if (city !== undefined) location.city = city;
-  if (state !== undefined) location.state = state;
+  const name = trimToUndefined(values?.name);
+  if (name !== undefined) {
+    payload.name = name;
+  }
 
-  const contact = {};
-  const phone = trimToUndefined(values?.contact?.phone);
-  if (phone !== undefined) contact.phone = phone;
+  const description = trimToUndefined(values?.description);
+  if (description !== undefined) {
+    payload.description = description;
+  }
 
-  const schedule = {};
-  const opens = trimToUndefined(values?.schedule?.open);
-  const closes = trimToUndefined(values?.schedule?.close);
-  if (opens !== undefined) schedule.open = opens;
-  if (closes !== undefined) schedule.close = closes;
-
-  const payload = {
-    name: trimToUndefined(values.name),
-    description: trimToUndefined(values.description),
-    pricing: {
-      mrp,
-      ...(discounted ? { discounted } : {}),
-    },
-    keyFeatures: normalizeTags(values.keyFeatures),
-    tags: normalizeTags(values.tags),
-  };
-
-  if (Object.keys(location).length) {
+  const location = buildSection([
+    ['city', trimToUndefined(values?.location?.city)],
+    ['state', trimToUndefined(values?.location?.state)],
+  ]);
+  if (location) {
     payload.location = location;
   }
 
-  if (Object.keys(contact).length) {
+  const contact = buildSection([
+    ['phone', trimToUndefined(values?.contact?.phone)],
+  ]);
+  if (contact) {
     payload.contact = contact;
   }
 
-  if (Object.keys(schedule).length) {
+  const schedule = buildSection([
+    ['open', trimToUndefined(values?.schedule?.open)],
+    ['close', trimToUndefined(values?.schedule?.close)],
+  ]);
+  if (schedule) {
     payload.schedule = schedule;
+  }
+
+  const mrp = normaliseAmount(values?.pricing?.mrp);
+  const discounted = normaliseAmount(values?.pricing?.discounted);
+  const pricing = buildSection([
+    ['mrp', mrp],
+    ['discounted', discounted !== undefined && (mrp === undefined || discounted < mrp) ? discounted : undefined],
+  ]);
+  if (pricing) {
+    payload.pricing = pricing;
+  }
+
+  const keyFeatures = normalizeTags(values?.keyFeatures ?? values?.amenities);
+  if (keyFeatures) {
+    const curated = keyFeatures.filter((feature) => AMENITY_SET.has(feature));
+    if (curated.length) {
+      payload.keyFeatures = curated;
+      payload.amenities = curated;
+    }
+  }
+
+  const tags = normalizeTags(values?.tags);
+  if (tags) {
+    payload.tags = tags;
   }
 
   return payload;
