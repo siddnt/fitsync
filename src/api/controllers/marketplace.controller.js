@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Product from '../../models/product.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
+import ProductReview from '../../models/productReview.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -131,6 +132,8 @@ const normaliseCategory = (value) => {
   return lower;
 };
 
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const canTransitionStatus = (currentStatus, nextStatus) => {
   const current = normaliseItemStatus(currentStatus);
   const next = normaliseItemStatus(nextStatus);
@@ -218,6 +221,92 @@ const mapCatalogueProduct = (product) => {
   };
 };
 
+const toIdString = (value) => (value ? value.toString() : null);
+
+const collectProductSalesStats = async (productIds, { recentWindowDays = 30 } = {}) => {
+  if (!productIds?.length) {
+    return new Map();
+  }
+
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - recentWindowDays);
+
+  const stats = await Order.aggregate([
+    { $match: { 'orderItems.product': { $in: productIds } } },
+    { $project: { createdAt: 1, orderItems: 1 } },
+    { $unwind: '$orderItems' },
+    {
+      $match: {
+        'orderItems.product': { $in: productIds },
+        'orderItems.status': 'delivered',
+      },
+    },
+    {
+      $group: {
+        _id: '$orderItems.product',
+        totalSold: { $sum: '$orderItems.quantity' },
+        soldLast30Days: {
+          $sum: {
+            $cond: [{ $gte: ['$createdAt', sinceDate] }, '$orderItems.quantity', 0],
+          },
+        },
+      },
+    },
+  ]);
+
+  const map = new Map();
+  stats.forEach((entry) => {
+    map.set(String(entry._id), {
+      totalSold: Number(entry.totalSold) || 0,
+      soldLast30Days: Number(entry.soldLast30Days) || 0,
+    });
+  });
+  return map;
+};
+
+const collectProductReviewStats = async (productIds) => {
+  if (!productIds?.length) {
+    return new Map();
+  }
+
+  const stats = await ProductReview.aggregate([
+    { $match: { product: { $in: productIds } } },
+    {
+      $group: {
+        _id: '$product',
+        reviewCount: { $sum: 1 },
+        averageRating: { $avg: '$rating' },
+      },
+    },
+  ]);
+
+  const map = new Map();
+  stats.forEach((entry) => {
+    const averageRating = Number(entry.averageRating ?? 0);
+    map.set(String(entry._id), {
+      reviewCount: Number(entry.reviewCount) || 0,
+      averageRating: averageRating > 0 ? Math.round(averageRating * 10) / 10 : 0,
+    });
+  });
+  return map;
+};
+
+const shapeMarketplaceProduct = (product, salesStats = {}, reviewStats = {}) => {
+  const base = mapCatalogueProduct(product);
+  return {
+    ...base,
+    stats: {
+      soldLast30Days: salesStats.soldLast30Days ?? 0,
+      totalSold: salesStats.totalSold ?? 0,
+      inStock: product.stock > 0 && product.status === 'available',
+    },
+    reviews: {
+      count: reviewStats.reviewCount ?? 0,
+      averageRating: reviewStats.averageRating ?? 0,
+    },
+  };
+};
+
 const mapBuyerOrder = (order) => ({
   id: order._id,
   orderNumber: order.orderNumber,
@@ -258,19 +347,148 @@ const generateOrderNumber = async () => {
   return `${ORDER_NUMBER_PREFIX}-${Date.now()}`;
 };
 
-export const listMarketplaceCatalogue = asyncHandler(async (_req, res) => {
-  const products = await Product.find({
-    isPublished: true,
-    status: 'available',
-    stock: { $gt: 0 },
-  })
-    .sort({ updatedAt: -1 })
+export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
+  const {
+    search,
+    category,
+    minPrice,
+    maxPrice,
+    inStock,
+    sort = 'featured',
+    page = 1,
+    pageSize = 24,
+  } = req.query ?? {};
+
+  const filters = { isPublished: true };
+
+  if (category && category !== 'all') {
+    filters.category = normaliseCategory(category);
+  }
+
+  if (parseBoolean(inStock, false)) {
+    filters.status = 'available';
+    filters.stock = { $gt: 0 };
+  }
+
+  const minPriceValue = minPrice !== undefined ? toNumber(minPrice, NaN) : NaN;
+  const maxPriceValue = maxPrice !== undefined ? toNumber(maxPrice, NaN) : NaN;
+
+  if (Number.isFinite(minPriceValue) && minPriceValue >= 0) {
+    filters.price = { ...(filters.price ?? {}), $gte: minPriceValue };
+  }
+  if (Number.isFinite(maxPriceValue) && maxPriceValue >= 0) {
+    filters.price = { ...(filters.price ?? {}), $lte: maxPriceValue };
+  }
+
+  if (search && search.trim()) {
+    const term = escapeRegex(search.trim());
+    filters.$or = [
+      { name: { $regex: term, $options: 'i' } },
+      { description: { $regex: term, $options: 'i' } },
+    ];
+  }
+
+  const resolvedPageSize = Math.min(Math.max(Number(pageSize) || 24, 6), 60);
+  const resolvedPage = Math.max(Number(page) || 1, 1);
+  const skip = (resolvedPage - 1) * resolvedPageSize;
+
+  let sortStage = { updatedAt: -1 };
+  if (sort === 'priceLow') {
+    sortStage = { price: 1 };
+  } else if (sort === 'priceHigh') {
+    sortStage = { price: -1 };
+  } else if (sort === 'newest') {
+    sortStage = { createdAt: -1 };
+  }
+
+  const baseQuery = Product.find(filters)
     .populate({ path: 'seller', select: 'name firstName lastName email role' })
+    .sort(sortStage)
+    .skip(skip)
+    .limit(resolvedPageSize)
     .lean();
+
+  const [products, total] = await Promise.all([
+    baseQuery,
+    Product.countDocuments(filters),
+  ]);
+
+  const productIds = products.map((product) => product._id);
+  const [salesStats, reviewStats] = await Promise.all([
+    collectProductSalesStats(productIds),
+    collectProductReviewStats(productIds),
+  ]);
+
+  const enriched = products.map((product) => {
+    const key = String(product._id);
+    return shapeMarketplaceProduct(product, salesStats.get(key), reviewStats.get(key));
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { products: products.map(mapCatalogueProduct) }, 'Marketplace catalogue fetched successfully'));
+    .json(new ApiResponse(200, {
+      products: enriched,
+      pagination: {
+        page: resolvedPage,
+        pageSize: resolvedPageSize,
+        total,
+        totalPages: Math.ceil(total / resolvedPageSize) || 0,
+      },
+    }, 'Marketplace catalogue fetched successfully'));
+});
+
+export const getMarketplaceProduct = asyncHandler(async (req, res) => {
+  const productId = toObjectId(req.params.productId, 'Product id');
+
+  const product = await Product.findOne({ _id: productId, isPublished: true })
+    .populate({ path: 'seller', select: 'name firstName lastName email role profilePicture' })
+    .lean();
+
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  const key = String(product._id);
+  const [salesStats, reviewStats, reviewItems] = await Promise.all([
+    collectProductSalesStats([product._id]),
+    collectProductReviewStats([product._id]),
+    ProductReview.find({ product: productId })
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .populate({ path: 'user', select: 'name profilePicture role' })
+      .lean(),
+  ]);
+
+  const shaped = shapeMarketplaceProduct(product, salesStats.get(key), reviewStats.get(key));
+
+  const reviewPayload = reviewItems.map((review) => ({
+    id: review._id,
+    rating: review.rating,
+    title: review.title || null,
+    comment: review.comment || '',
+    createdAt: review.createdAt,
+    isVerifiedPurchase: review.isVerifiedPurchase,
+    user: review.user
+      ? {
+          id: review.user._id,
+          name: review.user.name,
+          avatar: review.user.profilePicture ?? null,
+          role: review.user.role ?? null,
+        }
+      : null,
+  }));
+
+  const productPayload = {
+    ...shaped,
+    reviews: {
+      ...shaped.reviews,
+      items: reviewPayload,
+    },
+  };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { product: productPayload }, 'Marketplace product fetched successfully'));
 });
 
 export const createMarketplaceOrder = asyncHandler(async (req, res) => {

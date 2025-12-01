@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
 import { useLogoutMutation } from '../../services/authApi.js';
+import logo from '../../assets/logo.png';
 import './AppHeader.css';
 
 const AppHeader = () => {
@@ -29,10 +30,14 @@ const AppHeader = () => {
   return (
     <header className="app-header">
       <div className="app-header__brand">
-        <Link to="/">FitSync</Link>
+        <Link to="/">
+          <img src={logo} alt="FitSync" className="app-logo" />
+          <span>FitSync</span>
+        </Link>
       </div>
       <nav className="app-header__nav">
         <NavLink to="/gyms">Gyms</NavLink>
+        <NavLink to="/about">About Us</NavLink>
         <NavLink to="/marketplace">Marketplace</NavLink>
         <NavLink
           to="/cart"
