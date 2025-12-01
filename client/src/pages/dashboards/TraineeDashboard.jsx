@@ -10,7 +10,6 @@ import {
 import {
   formatCurrency,
   formatDate,
-  formatDateTime,
   formatDaysRemaining,
   formatStatus,
 } from '../../utils/format.js';
@@ -43,8 +42,6 @@ const TraineeDashboard = () => {
   const progress = progressData?.data;
 
   const membership = overview?.membership ?? null;
-  const diet = overview?.diet ?? null;
-  const orders = overview?.recentOrders ?? [];
   const attendanceRecords = progress?.rawAttendance ?? progress?.attendance?.records ?? EMPTY_ATTENDANCE;
   const enrollmentStart = membership?.startDate ?? null;
 
@@ -99,10 +96,6 @@ const TraineeDashboard = () => {
         </div>
         <div className="dashboard-row row-streak">
           <SkeletonPanel lines={8} />
-        </div>
-        <div className="dashboard-row row-split">
-          <SkeletonPanel lines={6} />
-          <SkeletonPanel lines={6} />
         </div>
       </div>
     );
@@ -215,70 +208,6 @@ const TraineeDashboard = () => {
           enrollmentStart={enrollmentStart}
           attendanceMap={attendanceMap}
         />
-      </div>
-
-      {/* Row 3: Diet & Orders */}
-      <div className="dashboard-row row-split">
-        <DashboardSection title="Diet plan">
-          {diet ? (
-            <div>
-              <div className="pill-row">
-                <span className="pill">Week of {formatDate(diet.weekOf)}</span>
-                {diet.nextPlanDueIn ? (
-                  <span className="pill">Next update in {formatDaysRemaining(diet.nextPlanDueIn)}</span>
-                ) : null}
-              </div>
-              <table className="dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Meal</th>
-                    <th>Description</th>
-                    <th>Calories</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(diet.meals ?? []).map((meal, index) => (
-                    <tr key={`${meal.name}-${index}`}>
-                      <td>{meal.name}</td>
-                      <td>{meal.description ?? '—'}</td>
-                      <td>{meal.calories ? `${meal.calories} kcal` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {diet.notes ? <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>{diet.notes}</p> : null}
-            </div>
-          ) : (
-            <EmptyState message="No diet plan has been assigned yet." />
-          )}
-        </DashboardSection>
-
-        <DashboardSection title="Recent orders">
-          {orders.length ? (
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Placed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id}>
-                    <td>{order.orderNumber ?? '—'}</td>
-                    <td>{formatCurrency(order.total)}</td>
-                    <td>{formatStatus(order.status)}</td>
-                    <td>{formatDateTime(order.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState message="You have not placed any marketplace orders yet." />
-          )}
-        </DashboardSection>
       </div>
     </div>
   );

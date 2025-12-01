@@ -41,8 +41,8 @@ const TrainerDashboard = () => {
   }
 
   return (
-    <div className="dashboard-grid">
-      <DashboardSection title="Team snapshot">
+    <div className="dashboard-grid dashboard-grid--trainer">
+      <DashboardSection title="Team snapshot" className="dashboard-section--span-12">
         {overview?.totals ? (
           <div className="stat-grid">
             <div className="stat-card">
@@ -71,7 +71,7 @@ const TrainerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Active trainees">
+      <DashboardSection title="Active trainees" className="dashboard-section--span-8">
         {assignments.length ? (
           <table className="dashboard-table">
             <thead>
@@ -98,7 +98,7 @@ const TrainerDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Upcoming check-ins">
+      <DashboardSection title="Upcoming check-ins" className="dashboard-section--span-4">
         {upcoming.length ? (
           <ul>
             {upcoming.map((item, index) => (
