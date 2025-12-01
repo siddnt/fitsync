@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
@@ -11,10 +12,17 @@ import {
   formatDate,
   formatDateTime,
   formatDaysRemaining,
-  formatPercentage,
   formatStatus,
 } from '../../utils/format.js';
+import {
+  buildAttendanceMap,
+  getAttendanceStats,
+  getAttendanceTotals,
+  getMaxStreak,
+} from '../../utils/attendance.js';
 import './Dashboard.css';
+
+const EMPTY_ATTENDANCE = [];
 
 const TraineeDashboard = () => {
   const {
@@ -37,7 +45,42 @@ const TraineeDashboard = () => {
   const membership = overview?.membership ?? null;
   const diet = overview?.diet ?? null;
   const orders = overview?.recentOrders ?? [];
-  const attendanceRecords = progress?.attendance?.records ?? [];
+  const attendanceRecords = progress?.rawAttendance ?? progress?.attendance?.records ?? EMPTY_ATTENDANCE;
+  const enrollmentStart = membership?.startDate ?? null;
+
+  const attendanceMap = useMemo(
+    () => buildAttendanceMap(attendanceRecords, enrollmentStart),
+    [attendanceRecords, enrollmentStart],
+  );
+
+  const attendanceStats = useMemo(
+    () => getAttendanceStats(attendanceMap, enrollmentStart, 30),
+    [attendanceMap, enrollmentStart],
+  );
+
+  const attendanceTotals = useMemo(
+    () => getAttendanceTotals(attendanceMap, enrollmentStart),
+    [attendanceMap, enrollmentStart],
+  );
+
+  const maxStreak = useMemo(
+    () => getMaxStreak(attendanceMap, enrollmentStart),
+    [attendanceMap, enrollmentStart],
+  );
+
+  const totalsCounts = attendanceTotals.counts ?? { present: 0, late: 0, absent: 0 };
+  const totalsSinceLabel = attendanceTotals.range?.start ? formatDate(attendanceTotals.range.start) : null;
+  const totalsContext = totalsSinceLabel ? `Since ${totalsSinceLabel}` : 'Tracking begins after your trainer logs attendance.';
+  const attendanceWindowLabel = attendanceStats.totalDays
+    ? `last ${attendanceStats.totalDays} day${attendanceStats.totalDays === 1 ? '' : 's'}`
+    : null;
+  const windowCounts = attendanceStats.counts ?? { present: 0, late: 0, absent: 0 };
+  const presentWindowLine = attendanceWindowLabel ? `${attendanceWindowLabel}: ${windowCounts.present} present` : null;
+  const lateWindowLine = attendanceWindowLabel ? `${attendanceWindowLabel}: ${windowCounts.late} late` : null;
+  const absentWindowLine = attendanceWindowLabel ? `${attendanceWindowLabel}: ${windowCounts.absent} absent` : null;
+  const currentStreak = overview?.progress?.streak ?? 0;
+  const lastCheckInLabel = overview?.progress?.lastCheckIn ? formatDate(overview.progress.lastCheckIn) : 'No check-ins yet';
+  const hasProgressSummary = Boolean(overview?.progress) || attendanceTotals.totalDays > 0;
 
   const isLoading = isOverviewLoading || isProgressLoading;
   const isError = isOverviewError || isProgressError;
@@ -111,6 +154,20 @@ const TraineeDashboard = () => {
                 <strong>{membership.billing ? formatCurrency(membership.billing) : '—'}</strong>
                 <small>Started {formatDate(membership.startDate)}</small>
               </div>
+              <div className="stat-card">
+                <small>Training at</small>
+                <strong>{membership.gym?.name ?? 'Not enrolled yet'}</strong>
+                <small>{membership.gym?.city ? membership.gym.city : 'Gym assignment pending'}</small>
+              </div>
+              <div className="stat-card">
+                <small>Trainer</small>
+                <strong>{membership.trainer?.name ?? 'Trainer not assigned'}</strong>
+                <small>
+                  {membership.trainer?.name
+                    ? `Assigned under ${membership.gym?.name ?? 'active gym'}`
+                    : 'You will be matched soon'}
+                </small>
+              </div>
             </div>
           ) : (
             <EmptyState message="You do not have an active membership yet." />
@@ -118,22 +175,31 @@ const TraineeDashboard = () => {
         </DashboardSection>
 
         <DashboardSection title="Progress overview">
-          {overview?.progress ? (
+          {hasProgressSummary ? (
             <div className="stat-grid">
               <div className="stat-card">
-                <small>Attendance streak</small>
-                <strong>{overview.progress.streak ?? 0} days</strong>
-                <small>Last check-in {formatDate(overview.progress.lastCheckIn)}</small>
+                <small>Max streak</small>
+                <strong>{maxStreak} days</strong>
+                <small>Current streak {currentStreak} days</small>
+                <small>Last check-in {lastCheckInLabel}</small>
               </div>
               <div className="stat-card">
-                <small>Presence (30 days)</small>
-                <strong>{formatPercentage(overview.progress.attendance?.presentPercentage ?? 0)}</strong>
-                <small>{formatPercentage(overview.progress.attendance?.latePercentage ?? 0)} late</small>
+                <small>Total present</small>
+                <strong>{totalsCounts.present}</strong>
+                <small>{totalsContext}</small>
+                {presentWindowLine ? <small>{presentWindowLine}</small> : null}
               </div>
               <div className="stat-card">
-                <small>Feedback received</small>
-                <strong>{overview.progress.feedback?.length ?? 0}</strong>
-                <small>Latest {formatDate(overview.progress.feedback?.[0]?.createdAt)}</small>
+                <small>Total late</small>
+                <strong>{totalsCounts.late}</strong>
+                <small>{totalsContext}</small>
+                {lateWindowLine ? <small>{lateWindowLine}</small> : null}
+              </div>
+              <div className="stat-card">
+                <small>Total absent</small>
+                <strong>{totalsCounts.absent}</strong>
+                <small>{totalsContext}</small>
+                {absentWindowLine ? <small>{absentWindowLine}</small> : null}
               </div>
             </div>
           ) : (
@@ -144,7 +210,11 @@ const TraineeDashboard = () => {
 
       {/* Row 2: Attendance Streak Graph */}
       <div className="dashboard-row row-streak">
-        <StreakGraph data={attendanceRecords} />
+        <StreakGraph
+          data={attendanceRecords}
+          enrollmentStart={enrollmentStart}
+          attendanceMap={attendanceMap}
+        />
       </div>
 
       {/* Row 3: Diet & Orders */}

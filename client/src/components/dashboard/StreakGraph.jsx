@@ -1,23 +1,26 @@
 import React, { useMemo } from 'react';
-import { formatDate } from '../../utils/format';
 import './StreakGraph.css';
+import { buildAttendanceMap, getDateKey } from '../../utils/attendance.js';
 
-const StreakGraph = ({ data = [] }) => {
+const StreakGraph = ({ data = [], enrollmentStart = null, attendanceMap: providedMap = null }) => {
     // Process data to group by month for the last year
     const months = useMemo(() => {
         const today = new Date();
+        const todayYear = today.getUTCFullYear();
+        const todayMonth = today.getUTCMonth();
         const result = [];
 
         // Go back 11 months + current month
         for (let i = 11; i >= 0; i--) {
-            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const monthName = d.toLocaleString('default', { month: 'short' });
-            const year = d.getFullYear();
-            const daysInMonth = new Date(year, d.getMonth() + 1, 0).getDate();
+            const monthDate = new Date(Date.UTC(todayYear, todayMonth - i, 1));
+            const monthName = monthDate.toLocaleString('default', { month: 'short' });
+            const year = monthDate.getUTCFullYear();
+            const monthIndex = monthDate.getUTCMonth();
+            const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
 
             const days = [];
             // Calculate offset for the first day (0 = Sunday, 1 = Monday, etc.)
-            const firstDayOfWeek = d.getDay(); // 0 = Sunday
+            const firstDayOfWeek = monthDate.getUTCDay(); // 0 = Sunday
 
             // Add empty placeholders for days before the 1st of the month to align columns
             for (let j = 0; j < firstDayOfWeek; j++) {
@@ -25,8 +28,8 @@ const StreakGraph = ({ data = [] }) => {
             }
 
             for (let day = 1; day <= daysInMonth; day++) {
-                const dateObj = new Date(year, d.getMonth(), day);
-                const dateStr = dateObj.toISOString().split('T')[0];
+                const dateObj = new Date(Date.UTC(year, monthIndex, day));
+                const dateStr = getDateKey(dateObj);
                 days.push({
                     date: dateStr,
                     dayOfMonth: day,
@@ -44,25 +47,42 @@ const StreakGraph = ({ data = [] }) => {
 
     // Create a map of date -> status
     const attendanceMap = useMemo(() => {
-        const map = {};
-        data.forEach(record => {
-            const dateStr = new Date(record.date).toISOString().split('T')[0];
-            map[dateStr] = record.status;
-        });
-        return map;
-    }, [data]);
+        if (providedMap) {
+            return providedMap;
+        }
+        return buildAttendanceMap(data, enrollmentStart);
+    }, [providedMap, data, enrollmentStart]);
+
+    const getAttendanceAttributes = (status) => {
+        switch (status) {
+            case 'present':
+                return { variant: 'present', label: 'Present' };
+            case 'late':
+                return { variant: 'late', label: 'Late' };
+            case 'absent':
+                return { variant: 'absent', label: 'Absent' };
+            default:
+                return { variant: 'empty', label: 'No activity' };
+        }
+    };
 
     return (
         <div className="streak-graph-container">
             <div className="streak-graph-header">
                 <h3>Attendance Activity</h3>
-                <div className="streak-legend">
-                    <span>Less</span>
-                    <div className="legend-box level-0"></div>
-                    <div className="legend-box level-1"></div>
-                    <div className="legend-box level-2"></div>
-                    <div className="legend-box level-3"></div>
-                    <span>More</span>
+                <div className="streak-legend" aria-label="Attendance legend">
+                    <div className="legend-item">
+                        <span className="legend-box legend-absent" aria-hidden="true"></span>
+                        <span>Absent</span>
+                    </div>
+                    <div className="legend-item">
+                        <span className="legend-box legend-late" aria-hidden="true"></span>
+                        <span>Late</span>
+                    </div>
+                    <div className="legend-item">
+                        <span className="legend-box legend-present" aria-hidden="true"></span>
+                        <span>Present</span>
+                    </div>
                 </div>
             </div>
 
@@ -77,26 +97,15 @@ const StreakGraph = ({ data = [] }) => {
                                         return <div key={`empty-${dayIndex}`} className="streak-box empty-placeholder"></div>;
                                     }
 
-                                    const status = attendanceMap[dayObj.date];
-                                    let level = 'level-0';
-                                    let title = `${dayObj.date}: No activity`;
-
-                                    if (status === 'present') {
-                                        level = 'level-3';
-                                        title = `${dayObj.date}: Present`;
-                                    } else if (status === 'late') {
-                                        level = 'level-2';
-                                        title = `${dayObj.date}: Late`;
-                                    } else if (status === 'absent') {
-                                        level = 'level-1';
-                                        title = `${dayObj.date}: Absent`;
-                                    }
+                                    const attendanceEntry = attendanceMap[dayObj.date];
+                                    const { variant, label } = getAttendanceAttributes(attendanceEntry?.status);
+                                    const note = attendanceEntry?.notes ? `\nNote: ${attendanceEntry.notes}` : '';
 
                                     return (
                                         <div
                                             key={dayObj.date}
-                                            className={`streak-box ${level}`}
-                                            title={title}
+                                            className={`streak-box ${variant}`}
+                                            title={`${dayObj.date}: ${label}${note}`}
                                         ></div>
                                     );
                                 })}

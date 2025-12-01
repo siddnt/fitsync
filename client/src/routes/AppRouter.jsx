@@ -15,7 +15,6 @@ import AdminDashboard from '../pages/dashboards/AdminDashboard.jsx';
 import SellerDashboard from '../pages/dashboards/SellerDashboard.jsx';
 import TraineeProgressPage from '../pages/dashboards/trainee/ProgressPage.jsx';
 import TraineeDietPage from '../pages/dashboards/trainee/DietPage.jsx';
-import TraineeAttendancePage from '../pages/dashboards/trainee/AttendancePage.jsx';
 import TraineeOrdersPage from '../pages/dashboards/trainee/OrdersPage.jsx';
 import GymOwnerGymsPage from '../pages/dashboards/gymOwner/GymsPage.jsx';
 import GymOwnerSubscriptionsPage from '../pages/dashboards/gymOwner/SubscriptionsPage.jsx';
@@ -60,7 +59,6 @@ const AppRouter = () => (
           <Route index element={<TraineeDashboard />} />
           <Route path="progress" element={<TraineeProgressPage />} />
           <Route path="diet" element={<TraineeDietPage />} />
-          <Route path="attendance" element={<TraineeAttendancePage />} />
           <Route path="orders" element={<TraineeOrdersPage />} />
         </Route>
         <Route path="gym-owner">
