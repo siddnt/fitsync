@@ -4,7 +4,6 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetTraineeProgressQuery } from '../../../services/dashboardApi.js';
 import {
   formatDate,
-  formatPercentage,
   formatStatus,
 } from '../../../utils/format.js';
 import '../Dashboard.css';
@@ -12,7 +11,6 @@ import '../Dashboard.css';
 const TraineeProgressPage = () => {
   const { data, isLoading, isError, refetch } = useGetTraineeProgressQuery();
   const progress = data?.data;
-  const attendance = progress?.attendance;
 
   if (isLoading) {
     return (
@@ -45,35 +43,6 @@ const TraineeProgressPage = () => {
 
   return (
     <div className="dashboard-grid">
-      <DashboardSection title="Attendance insights">
-        {attendance ? (
-          <div className="stat-grid">
-            <div className="stat-card">
-              <small>Current streak</small>
-              <strong>{attendance.streak ?? 0} days</strong>
-              <small>Consecutive presents logged</small>
-            </div>
-            <div className="stat-card">
-              <small>Present</small>
-              <strong>{formatPercentage(attendance.presentPercentage ?? 0)}</strong>
-              <small>Past 30 days</small>
-            </div>
-            <div className="stat-card">
-              <small>Late</small>
-              <strong>{formatPercentage(attendance.latePercentage ?? 0)}</strong>
-              <small>Past 30 days</small>
-            </div>
-            <div className="stat-card">
-              <small>Absent</small>
-              <strong>{formatPercentage(attendance.absentPercentage ?? 0)}</strong>
-              <small>Past 30 days</small>
-            </div>
-          </div>
-        ) : (
-          <EmptyState message="We do not have attendance data for you yet." />
-        )}
-      </DashboardSection>
-
       <DashboardSection title="Performance metrics">
         {progress?.metrics?.length ? (
           <div className="stat-grid">

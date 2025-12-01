@@ -15,7 +15,6 @@ import AdminDashboard from '../pages/dashboards/AdminDashboard.jsx';
 import SellerDashboard from '../pages/dashboards/SellerDashboard.jsx';
 import TraineeProgressPage from '../pages/dashboards/trainee/ProgressPage.jsx';
 import TraineeDietPage from '../pages/dashboards/trainee/DietPage.jsx';
-import TraineeAttendancePage from '../pages/dashboards/trainee/AttendancePage.jsx';
 import TraineeOrdersPage from '../pages/dashboards/trainee/OrdersPage.jsx';
 import GymOwnerGymsPage from '../pages/dashboards/gymOwner/GymsPage.jsx';
 import GymOwnerSubscriptionsPage from '../pages/dashboards/gymOwner/SubscriptionsPage.jsx';
@@ -29,6 +28,7 @@ import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
 import AdminSettingsPage from '../pages/dashboards/admin/SettingsPage.jsx';
+import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
@@ -60,7 +60,6 @@ const AppRouter = () => (
           <Route index element={<TraineeDashboard />} />
           <Route path="progress" element={<TraineeProgressPage />} />
           <Route path="diet" element={<TraineeDietPage />} />
-          <Route path="attendance" element={<TraineeAttendancePage />} />
           <Route path="orders" element={<TraineeOrdersPage />} />
         </Route>
         <Route path="gym-owner">
@@ -87,6 +86,7 @@ const AppRouter = () => (
           <Route path="gyms" element={<AdminGymsPage />} />
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
+          <Route path="messages" element={<AdminMessagesPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
