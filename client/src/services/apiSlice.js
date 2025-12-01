@@ -29,6 +29,7 @@ export const apiSlice = createApi({
     'Dashboard',
     'AdminSettings',
     'TrainerRequest',
+    'Contact',
   ],
   endpoints: () => ({}),
 });

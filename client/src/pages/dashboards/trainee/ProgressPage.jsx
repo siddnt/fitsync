@@ -17,7 +17,7 @@ const TraineeProgressPage = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid">
-        {['Attendance insights', 'Performance metrics', 'Trainer feedback', 'Attendance log'].map((title) => (
+        {['Attendance insights', 'Performance metrics', 'Trainer feedback'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -108,30 +108,7 @@ const TraineeProgressPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Attendance log">
-        {progress?.rawAttendance?.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {progress.rawAttendance.map((entry, index) => (
-                <tr key={`${entry.date}-${index}`}>
-                  <td>{formatDate(entry.date)}</td>
-                  <td>{formatStatus(entry.status)}</td>
-                  <td>{entry.notes ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState message="We will show your attendance history here." />
-        )}
-      </DashboardSection>
+
     </div>
   );
 };
