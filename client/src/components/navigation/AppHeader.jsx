@@ -37,6 +37,7 @@ const AppHeader = () => {
       </div>
       <nav className="app-header__nav">
         <NavLink to="/gyms">Gyms</NavLink>
+        <NavLink to="/about">About Us</NavLink>
         <NavLink to="/marketplace">Marketplace</NavLink>
         <NavLink
           to="/cart"
