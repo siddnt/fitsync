@@ -8,6 +8,16 @@
   --muted-text-color: rgba(255, 255, 255, 0.68);
   --danger-color: #ff6b6b;
   --success-color: #51cf66;
+
+  /* New Dashboard Variables */
+  --bg-secondary: var(--surface-color);
+  --bg-tertiary: var(--surface-elevated-color);
+  --text-primary: var(--light-text-color);
+  --text-secondary: var(--muted-text-color);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 body {

@@ -29,8 +29,6 @@ import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
 import AdminSettingsPage from '../pages/dashboards/admin/SettingsPage.jsx';
-import ContactPage from '../pages/contact/ContactPage.jsx';
-import MessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
@@ -41,15 +39,14 @@ import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 const AppRouter = () => (
   <BrowserRouter>
     <Routes>
-      <Route element={<AppLayout />}>
+      <Route element={<AppLayout />}> 
         <Route index element={<LandingPage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="marketplace/products/:productId" element={<MarketplaceProductPage />} />
-        <Route path="cart" element={<CartPage />} />
-        <Route path="checkout" element={<CheckoutPage />} />
-        <Route path="contact" element={<ContactPage />} />
+  <Route path="cart" element={<CartPage />} />
+  <Route path="checkout" element={<CheckoutPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="auth/*" element={<AuthRoutes />} />
       </Route>
@@ -86,7 +83,6 @@ const AppRouter = () => (
           <Route path="gyms" element={<AdminGymsPage />} />
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
-          <Route path="messages" element={<MessagesPage />} />
           <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
