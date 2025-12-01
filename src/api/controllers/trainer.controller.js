@@ -17,6 +17,8 @@ const toObjectId = (value, name) => {
   }
 };
 
+const DIET_MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
+
 const resolveGymId = (assignment, membership) => {
   if (assignment?.gym) {
     return assignment.gym;
@@ -119,6 +121,7 @@ const ensureProgressDocument = async (trainerId, traineeId, gymId) => {
   ensureArray(progress, 'attendance');
   ensureArray(progress, 'progressMetrics');
   ensureArray(progress, 'dietPlans');
+  ensureArray(progress, 'bodyMetrics');
 
   return progress;
 };
@@ -156,7 +159,68 @@ export const logTraineeAttendance = asyncHandler(async (req, res) => {
 export const recordProgressMetric = asyncHandler(async (req, res) => {
   const trainerId = req.user?._id;
   const traineeId = toObjectId(req.params.traineeId, 'Trainee id');
-  const { metric, value, unit, recordedAt } = req.body ?? {};
+  const {
+    metric,
+    value,
+    unit,
+    recordedAt,
+    weightKg,
+    heightCm,
+  } = req.body ?? {};
+
+  const hasBodyMetricsPayload = weightKg !== undefined || heightCm !== undefined;
+
+  if (hasBodyMetricsPayload) {
+    if (weightKg === undefined || heightCm === undefined) {
+      throw new ApiError(400, 'Weight and height are both required to compute BMI.');
+    }
+
+    const normalizedWeight = Number(weightKg);
+    const normalizedHeight = Number(heightCm);
+    if (!Number.isFinite(normalizedWeight) || normalizedWeight <= 0) {
+      throw new ApiError(400, 'Weight must be a positive number.');
+    }
+    if (!Number.isFinite(normalizedHeight) || normalizedHeight <= 0) {
+      throw new ApiError(400, 'Height must be a positive number.');
+    }
+
+    const timestamp = recordedAt ? new Date(recordedAt) : new Date();
+    if (Number.isNaN(timestamp.getTime())) {
+      throw new ApiError(400, 'Recorded date is invalid.');
+    }
+
+    const heightMeters = normalizedHeight / 100;
+    if (heightMeters <= 0) {
+      throw new ApiError(400, 'Height must be greater than zero.');
+    }
+    const bmiValue = normalizedWeight / (heightMeters * heightMeters);
+    if (!Number.isFinite(bmiValue) || bmiValue <= 0) {
+      throw new ApiError(400, 'BMI could not be calculated from the provided measurements.');
+    }
+    const bmi = Number(bmiValue.toFixed(1));
+
+    const { assignment, membership } = await findActiveAssignment(trainerId, traineeId);
+    const progress = await ensureProgressDocument(
+      trainerId,
+      traineeId,
+      resolveGymId(assignment, membership),
+    );
+
+    const bodyEntry = {
+      weightKg: normalizedWeight,
+      heightCm: normalizedHeight,
+      bmi,
+      recordedAt: timestamp,
+    };
+
+    progress.bodyMetrics.push(bodyEntry);
+    progress.markModified('bodyMetrics');
+    await progress.save();
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, { bodyMetric: bodyEntry }, 'Body metrics recorded.'));
+  }
 
   if (!metric) {
     throw new ApiError(400, 'Metric name is required.');
@@ -203,28 +267,85 @@ export const upsertDietPlan = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Week start date is invalid.');
   }
 
-  const normalizedMeals = Array.isArray(meals)
-    ? meals
-        .map((meal) => {
-          if (!meal) return null;
-          if (typeof meal === 'string') {
-            return { name: meal, description: meal };
-          }
-          return {
-            name: meal.name ?? '',
-            description: meal.description,
-            calories: meal.calories,
-            macros: meal.macros,
-          };
-        })
-        .filter(Boolean)
-    : [];
+  const mealSlots = DIET_MEAL_SLOTS;
+  const parseMacro = (value, label) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      throw new ApiError(400, `${label} must be a non-negative number.`);
+    }
+    return parsed;
+  };
+
+  const normalizedMeals = mealSlots
+    .map((slot) => {
+      const entry = meals?.[slot];
+      if (!entry || !entry.item) {
+        return null;
+      }
+
+      return {
+        mealType: slot,
+        item: entry.item.trim(),
+        calories: parseMacro(entry.calories, `${slot} calories`),
+        protein: parseMacro(entry.protein, `${slot} protein`),
+        fat: parseMacro(entry.fat, `${slot} fat`),
+        notes: entry.notes?.trim() || undefined,
+      };
+    })
+    .filter(Boolean);
+
+  if (!normalizedMeals.length) {
+    throw new ApiError(400, 'Please provide at least one meal entry.');
+  }
 
   const progress = await ensureProgressDocument(
     trainerId,
     traineeId,
     resolveGymId(assignment, membership),
   );
+
+  const normaliseLegacyMeal = (meal, index) => {
+    if (!meal) {
+      return null;
+    }
+    if (meal.mealType && meal.item) {
+      return meal;
+    }
+
+    const legacyMacros = meal.macros ?? {};
+    const parseNumber = (value) => {
+      if (value === undefined || value === null || value === '') {
+        return undefined;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const normalizedItem = (meal.item ?? meal.name ?? meal.description ?? '').trim();
+    if (!normalizedItem) {
+      return null;
+    }
+
+    return {
+      mealType: meal.mealType ?? meal.slot ?? mealSlots[index] ?? `custom-${index + 1}`,
+      item: normalizedItem,
+      calories: parseNumber(meal.calories ?? legacyMacros.calories),
+      protein: parseNumber(meal.protein ?? legacyMacros.protein ?? legacyMacros.proteinGrams),
+      fat: parseNumber(meal.fat ?? legacyMacros.fat ?? legacyMacros.fatGrams),
+      notes: meal.notes ?? meal.description ?? undefined,
+    };
+  };
+
+  progress.dietPlans = (progress.dietPlans || []).map((plan) => ({
+    weekOf: plan.weekOf,
+    meals: (plan.meals || [])
+      .map((meal, index) => normaliseLegacyMeal(meal, index))
+      .filter(Boolean),
+    notes: plan.notes,
+  }));
 
   progress.dietPlans = (progress.dietPlans || []).filter(
     (plan) => new Date(plan.weekOf).toISOString() !== planDate.toISOString(),

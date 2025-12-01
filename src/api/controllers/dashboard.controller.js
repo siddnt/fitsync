@@ -44,6 +44,12 @@ const toDate = (value) => {
 
 const OWNER_REVENUE_SHARE = 0.5;
 const TRAINER_REVENUE_SHARE = 0.5;
+const DIET_MEAL_SLOTS = [
+  { key: 'breakfast', label: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'snack', label: 'Snack' },
+  { key: 'dinner', label: 'Dinner' },
+];
 
 const calculateRevenueShare = (amount = 0, ratio = OWNER_REVENUE_SHARE) => {
   const value = Number(amount) || 0;
@@ -113,6 +119,29 @@ const collectOwnerExpenseEntries = ({ subscriptions = [], gyms = [] } = {}) => {
   ];
 
   return entries.filter((entry) => entry.amount > 0 && entry.date instanceof Date);
+};
+
+const mapDietMeals = (meals = []) => {
+  const lookup = meals.reduce((acc, meal) => {
+    if (!meal?.mealType) {
+      return acc;
+    }
+    acc[meal.mealType] = meal;
+    return acc;
+  }, {});
+
+  return DIET_MEAL_SLOTS.map((slot) => {
+    const entry = lookup[slot.key] ?? null;
+    return {
+      mealType: slot.key,
+      label: slot.label,
+      item: entry?.item ?? null,
+      calories: entry?.calories ?? null,
+      protein: entry?.protein ?? null,
+      fat: entry?.fat ?? null,
+      notes: entry?.notes ?? null,
+    };
+  });
 };
 
 const createMonthlyTimeline = (months, referenceDate = new Date()) => {
@@ -293,27 +322,107 @@ const buildAttendanceSummary = (attendance = []) => {
   };
 };
 
-const groupProgressMetrics = (metrics = []) => {
+const buildBodyMetricSummaries = (bodyMetrics = []) => {
+  if (!Array.isArray(bodyMetrics) || !bodyMetrics.length) {
+    return [];
+  }
+
+  const sorted = [...bodyMetrics].sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
+  const limitedHistory = sorted.slice(0, 20);
+
+  const toHistory = (selector, unit) =>
+    limitedHistory
+      .filter((entry) => selector(entry) !== undefined && selector(entry) !== null)
+      .map((entry) => ({
+        value: selector(entry),
+        unit,
+        recordedAt: entry.recordedAt,
+      }));
+
+  const latest = sorted[0];
+
+  const summaries = [
+    {
+      metric: 'weight',
+      latestValue: latest?.weightKg,
+      unit: 'kg',
+      recordedAt: latest?.recordedAt,
+      history: toHistory((entry) => entry.weightKg, 'kg'),
+    },
+    {
+      metric: 'height',
+      latestValue: latest?.heightCm,
+      unit: 'cm',
+      recordedAt: latest?.recordedAt,
+      history: toHistory((entry) => entry.heightCm, 'cm'),
+    },
+    {
+      metric: 'bmi',
+      latestValue: latest?.bmi,
+      unit: '',
+      recordedAt: latest?.recordedAt,
+      history: toHistory((entry) => entry.bmi, ''),
+    },
+  ];
+
+  return summaries.filter((summary) => summary.latestValue !== undefined && summary.latestValue !== null);
+};
+
+const serializeBodyMetrics = (bodyMetrics = []) => {
+  if (!Array.isArray(bodyMetrics) || !bodyMetrics.length) {
+    return [];
+  }
+
+  return [...bodyMetrics]
+    .filter((entry) => entry?.recordedAt)
+    .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt))
+    .map((entry) => ({
+      weightKg: entry.weightKg,
+      heightCm: entry.heightCm,
+      bmi: entry.bmi,
+      recordedAt: entry.recordedAt,
+    }));
+};
+
+const groupProgressMetrics = (metrics = [], bodyMetrics = []) => {
   const grouped = metrics.reduce((acc, metricEntry) => {
     if (!metricEntry.metric) return acc;
-    if (!acc[metricEntry.metric]) {
-      acc[metricEntry.metric] = [];
+    const key = metricEntry.metric.toLowerCase();
+    if (!acc[key]) {
+      acc[key] = { metric: metricEntry.metric, entries: [] };
     }
-    acc[metricEntry.metric].push(metricEntry);
+    acc[key].entries.push(metricEntry);
     return acc;
   }, {});
 
-  return Object.entries(grouped).map(([metric, entries]) => {
-    const sorted = entries.sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
+  const summaries = Object.values(grouped).map((group) => {
+    const sorted = group.entries.sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
     const latest = sorted[0];
     return {
-      metric,
+      metric: group.metric,
       latestValue: latest?.value ?? 0,
       unit: latest?.unit ?? '',
       recordedAt: latest?.recordedAt,
       history: sorted.slice(0, 10),
     };
   });
+
+  const upsertSummary = (entry) => {
+    if (!entry?.metric) {
+      return;
+    }
+    const key = entry.metric.toLowerCase();
+    const existingIndex = summaries.findIndex((item) => item.metric?.toLowerCase() === key);
+    if (existingIndex >= 0) {
+      summaries[existingIndex] = entry;
+    } else {
+      summaries.push(entry);
+    }
+  };
+
+  buildBodyMetricSummaries(bodyMetrics).forEach(upsertSummary);
+
+  return summaries;
 };
 
 export const getTraineeOverview = asyncHandler(async (req, res) => {
@@ -385,7 +494,8 @@ export const getTraineeOverview = asyncHandler(async (req, res) => {
           ? [...progressDoc.attendance].sort((a, b) => new Date(b.date) - new Date(a.date))[0].date
           : null,
         attendance: attendanceSummary,
-        metrics: groupProgressMetrics(progressDoc.progressMetrics || []).slice(0, 3),
+        metrics: groupProgressMetrics(progressDoc.progressMetrics || [], progressDoc.bodyMetrics || []).slice(0, 3),
+        bodyMetrics: serializeBodyMetrics(progressDoc.bodyMetrics || []),
         feedback: progressDoc.feedback
           ?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           .slice(0, 3),
@@ -402,9 +512,8 @@ export const getTraineeOverview = asyncHandler(async (req, res) => {
     diet: latestDiet
       ? {
           weekOf: latestDiet.weekOf,
-          meals: latestDiet.meals ?? [],
+          meals: mapDietMeals(latestDiet.meals || []),
           notes: latestDiet.notes,
-          nextPlanDueIn: Math.max(0, daysBetween(new Date(), latestDiet.weekOf)),
         }
       : null,
     recentOrders: buildOrderSummary(orders),
@@ -426,7 +535,8 @@ export const getTraineeProgress = asyncHandler(async (req, res) => {
   }
 
   const attendance = buildAttendanceSummary(progress.attendance || []);
-  const metrics = groupProgressMetrics(progress.progressMetrics || []);
+  const metrics = groupProgressMetrics(progress.progressMetrics || [], progress.bodyMetrics || []);
+  const bodyMetrics = serializeBodyMetrics(progress.bodyMetrics || []);
   const feedback = (progress.feedback || [])
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((entry) => ({ message: entry.message, category: entry.category, createdAt: entry.createdAt }))
@@ -435,6 +545,7 @@ export const getTraineeProgress = asyncHandler(async (req, res) => {
   const response = {
     attendance,
     metrics,
+    bodyMetrics,
     rawAttendance: (progress.attendance || []).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 60),
     feedback,
   };
@@ -448,24 +559,28 @@ export const getTraineeDiet = asyncHandler(async (req, res) => {
 
   if (!progress || !(progress.dietPlans?.length)) {
     return res.status(200).json(
-      new ApiResponse(200, { latest: null, upcoming: null, history: [] }, 'No diet plans assigned yet.'),
+      new ApiResponse(200, { latest: null, history: [] }, 'No diet plans assigned yet.'),
     );
   }
 
   const sorted = [...progress.dietPlans].sort((a, b) => new Date(b.weekOf) - new Date(a.weekOf));
   const latest = sorted[0];
-  const upcoming = sorted.find((plan) => new Date(plan.weekOf) > new Date(latest.weekOf)) || null;
 
-  const history = sorted.slice(1, 8).map((plan) => ({
+  const history = sorted.slice(1, 6).map((plan) => ({
     weekOf: plan.weekOf,
-    mealsCount: plan.meals?.length ?? 0,
+    meals: mapDietMeals(plan.meals || []),
     notes: plan.notes,
   }));
 
   return res.status(200).json(
     new ApiResponse(200, {
-      latest,
-      upcoming,
+      latest: latest
+        ? {
+            weekOf: latest.weekOf,
+            meals: mapDietMeals(latest.meals || []),
+            notes: latest.notes,
+          }
+        : null,
       history,
     }, 'Diet plans fetched successfully'),
   );
@@ -1253,7 +1368,7 @@ export const getTrainerUpdates = asyncHandler(async (req, res) => {
     trainee: doc.trainee,
     pendingFeedback: (doc.feedback || []).filter((feedback) => !feedback.reviewedAt),
     attendance: doc.attendance?.slice(-5) ?? [],
-    metrics: groupProgressMetrics(doc.progressMetrics || []).slice(0, 5),
+    metrics: groupProgressMetrics(doc.progressMetrics || [], doc.bodyMetrics || []).slice(0, 5),
   }));
 
   return res

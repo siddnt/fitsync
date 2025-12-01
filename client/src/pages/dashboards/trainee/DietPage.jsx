@@ -8,16 +8,28 @@ import '../Dashboard.css';
 const combineMacros = (meals = []) => {
   const macroTotals = {};
   meals.forEach((meal) => {
-    if (!meal.macros) return;
+    if (!meal) {
+      return;
+    }
+    if (meal.macros) {
+      const entries = meal.macros instanceof Map ? Object.fromEntries(meal.macros) : meal.macros;
+      Object.entries(entries).forEach(([key, value]) => {
+        macroTotals[key] = (macroTotals[key] || 0) + Number(value || 0);
+      });
+      return;
+    }
 
-    if (meal.macros instanceof Map) {
-      meal.macros.forEach((value, key) => {
-        macroTotals[key] = (macroTotals[key] || 0) + Number(value || 0);
-      });
-    } else {
-      Object.entries(meal.macros).forEach(([key, value]) => {
-        macroTotals[key] = (macroTotals[key] || 0) + Number(value || 0);
-      });
+    if (meal.calories !== undefined) {
+      macroTotals.calories = (macroTotals.calories || 0) + Number(meal.calories || 0);
+    }
+    if (meal.protein !== undefined) {
+      macroTotals.protein = (macroTotals.protein || 0) + Number(meal.protein || 0);
+    }
+    if (meal.fat !== undefined) {
+      macroTotals.fat = (macroTotals.fat || 0) + Number(meal.fat || 0);
+    }
+    if (meal.carbs !== undefined) {
+      macroTotals.carbs = (macroTotals.carbs || 0) + Number(meal.carbs || 0);
     }
   });
   return macroTotals;
@@ -25,36 +37,84 @@ const combineMacros = (meals = []) => {
 
 const MacroList = ({ macros }) => (
   <div className="pill-row" style={{ marginTop: '0.75rem' }}>
-    {Object.entries(macros).map(([macro, value]) => (
-      <span key={macro} className="pill">
-        {macro}: {Math.round(value)} g
-      </span>
-    ))}
+    {Object.entries(macros).map(([macro, value]) => {
+      const label = macro.charAt(0).toUpperCase() + macro.slice(1);
+      const unit = macro.toLowerCase() === 'calories' ? 'kcal' : 'g';
+      return (
+        <span key={macro} className="pill">
+          {label}: {Math.round(value)} {unit}
+        </span>
+      );
+    })}
   </div>
 );
+
+const mealDisplayLabel = (meal) => meal.label ?? meal.mealType ?? meal.name ?? 'Meal';
+
+const DietPlanCard = ({ plan }) => {
+  if (!plan) {
+    return null;
+  }
+
+  const macros = combineMacros(plan.meals ?? []);
+
+  return (
+    <div className="diet-plan-card">
+      <div className="pill-row">
+        <span className="pill">Week of {plan.weekOf ? formatDate(plan.weekOf) : '—'}</span>
+        <span className="pill">Meals {plan.meals?.length ?? 0}</span>
+      </div>
+      <div className="diet-plan-grid">
+        <div className="diet-plan-grid__row diet-plan-grid__header">
+          <span>Meal</span>
+          <span>Item</span>
+          <span>Calories</span>
+          <span>Protein</span>
+          <span>Fat</span>
+        </div>
+        {(plan.meals ?? []).map((meal) => (
+          <div key={`${meal.mealType ?? meal.name ?? meal.label}`}
+            className="diet-plan-grid__row"
+          >
+            <strong>{mealDisplayLabel(meal)}</strong>
+            <div className="diet-plan-grid__item">
+              {meal.item ? <span>{meal.item}</span> : <span className="muted">—</span>}
+              {meal.notes ? <small>{meal.notes}</small> : null}
+            </div>
+            <span>{meal.calories !== undefined && meal.calories !== null ? `${meal.calories} kcal` : '—'}</span>
+            <span>{meal.protein !== undefined && meal.protein !== null ? `${meal.protein} g` : '—'}</span>
+            <span>{meal.fat !== undefined && meal.fat !== null ? `${meal.fat} g` : '—'}</span>
+          </div>
+        ))}
+      </div>
+      {Object.keys(macros).length ? <MacroList macros={macros} /> : null}
+      {plan.notes ? <p className="diet-plan-notes">{plan.notes}</p> : null}
+    </div>
+  );
+};
 
 const TraineeDietPage = () => {
   const { data, isLoading, isError, refetch } = useGetTraineeDietQuery();
   const dietPlans = data?.data;
   const latest = dietPlans?.latest;
-  const upcoming = dietPlans?.upcoming;
   const history = dietPlans?.history ?? [];
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
-        {['Current meal plan', 'Upcoming adjustments', 'Previous plans'].map((title) => (
-          <DashboardSection key={title} title={title}>
-            <SkeletonPanel lines={6} />
-          </DashboardSection>
-        ))}
+      <div className="dashboard-grid dashboard-grid--stacked">
+        <DashboardSection title="Current meal plan">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
+        <DashboardSection title="Previous plans">
+          <SkeletonPanel lines={6} />
+        </DashboardSection>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--stacked">
         <DashboardSection
           title="Unable to load diet plans"
           action={(
@@ -69,77 +129,25 @@ const TraineeDietPage = () => {
     );
   }
 
-  const currentMacros = latest ? combineMacros(latest.meals ?? []) : {};
-
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--stacked">
       <DashboardSection title="Current meal plan">
         {latest ? (
-          <div>
-            <div className="pill-row">
-              <span className="pill">Week of {formatDate(latest.weekOf)}</span>
-              <span className="pill">Meals {latest.meals?.length ?? 0}</span>
-            </div>
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th>Meal</th>
-                  <th>Description</th>
-                  <th>Calories</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(latest.meals ?? []).map((meal, index) => (
-                  <tr key={`${meal.name}-${index}`}>
-                    <td>{meal.name}</td>
-                    <td>{meal.description ?? '—'}</td>
-                    <td>{meal.calories ? `${meal.calories} kcal` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {Object.keys(currentMacros).length ? <MacroList macros={currentMacros} /> : null}
-            {latest.notes ? <p>{latest.notes}</p> : null}
-          </div>
+          <DietPlanCard plan={latest} />
         ) : (
           <EmptyState message="Your trainer has not assigned a meal plan yet." />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Upcoming adjustments">
-        {upcoming ? (
-          <div>
-            <div className="pill-row">
-              <span className="pill">Week of {formatDate(upcoming.weekOf)}</span>
-              <span className="pill">Meals {upcoming.meals?.length ?? 0}</span>
-            </div>
-            {upcoming.notes ? <p>{upcoming.notes}</p> : <EmptyState message="No notes from your trainer yet." />}
-          </div>
-        ) : (
-          <EmptyState message="There are no scheduled adjustments yet." />
-        )}
-      </DashboardSection>
-
       <DashboardSection title="Previous plans">
         {history.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Week of</th>
-                <th>Meals</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((entry) => (
-                <tr key={entry.weekOf}>
-                  <td>{formatDate(entry.weekOf)}</td>
-                  <td>{entry.mealsCount}</td>
-                  <td>{entry.notes ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="diet-plan-history">
+            {history.map((entry) => (
+              <div key={entry._id ?? entry.weekOf ?? entry.id} className="diet-plan-history__card">
+                <DietPlanCard plan={entry} />
+              </div>
+            ))}
+          </div>
         ) : (
           <EmptyState message="Prior plans will appear here after your next revision." />
         )}
