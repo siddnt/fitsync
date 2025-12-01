@@ -7,7 +7,6 @@ const dashboardLinksByRole = {
     { to: '/dashboard/trainee', label: 'Overview' },
     { to: '/dashboard/trainee/progress', label: 'Progress' },
     { to: '/dashboard/trainee/diet', label: 'Diet Plan' },
-    { to: '/dashboard/trainee/attendance', label: 'Attendance' },
     { to: '/dashboard/trainee/orders', label: 'Orders' },
   ],
   'gym-owner': [

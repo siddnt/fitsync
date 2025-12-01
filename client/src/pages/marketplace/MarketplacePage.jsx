@@ -120,6 +120,11 @@ const MarketplacePage = () => {
     setPage(1);
   };
 
+  const handleSearchSubmit = useCallback((event) => {
+    event.preventDefault();
+    setSearchQuery(searchInput.trim());
+  }, [searchInput]);
+
   const addProductToCart = useCallback((product) => {
     if (!product?.id) {
       return;
@@ -154,21 +159,17 @@ const MarketplacePage = () => {
   return (
     <div className="marketplace-page">
       <header className="marketplace-hero">
-        <div>
-          <p className="eyebrow">FitSync marketplace</p>
-          <h1>Everything you need for the gym bag</h1>
-          <p>Shop curated supplements, gear, and accessories vetted by our coaching team.</p>
-        </div>
-        <div className="marketplace-search">
+        <form className="marketplace-search-simple" onSubmit={handleSearchSubmit}>
           <input
+            id="marketplace-search"
             type="search"
             placeholder="Search for protein, straps, or sellers"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             aria-label="Search marketplace catalogue"
           />
-          <span className="marketplace-search__hint">{ isFetching && !isLoading ? 'Updating results…' : 'Press Enter to search faster' }</span>
-        </div>
+          <button type="submit">Search</button>
+        </form>
       </header>
 
       {feedback ? (
