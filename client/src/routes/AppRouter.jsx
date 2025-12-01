@@ -36,6 +36,7 @@ import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 import AboutPage from '../pages/about/AboutPage.jsx';
+import ContactPage from '../pages/contact/ContactPage.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -43,6 +44,7 @@ const AppRouter = () => (
       <Route element={<AppLayout />}>
         <Route index element={<LandingPage />} />
         <Route path="about" element={<AboutPage />} />
+        <Route path="contact" element={<ContactPage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
