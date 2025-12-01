@@ -35,7 +35,7 @@ const GymHighlight = ({
     <article className="gym-highlight">
       {isSponsored && (
         <div className="gym-highlight__sponsored-banner">
-          <span className="gym-highlight__sponsored-icon">⭐</span>
+          <span className="gym-highlight__sponsored-icon"></span>
           <span>Sponsored Listing</span>
           <span className="gym-highlight__sponsored-tier">{gym.sponsorship.tier}</span>
         </div>
