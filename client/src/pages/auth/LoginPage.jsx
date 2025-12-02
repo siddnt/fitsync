@@ -8,9 +8,22 @@ import { authActions } from '../../features/auth/authSlice.js';
 import { useLoginMutation } from '../../services/authApi.js';
 import './AuthPage.css';
 
+const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s])(?!.*\s).{8,}$/;
+
 const schema = yup.object({
-  email: yup.string().email('Enter a valid email').required('Email is required'),
-  password: yup.string().min(6, 'Password must have at least 6 characters').required('Password is required'),
+  email: yup
+    .string()
+    .required('Email is required')
+    .matches(emailPattern, 'Enter a valid email address'),
+  password: yup
+    .string()
+    .min(8, 'Password must have at least 8 characters')
+    .matches(
+      passwordPattern,
+      'Password needs upper, lower, number, special char, and no spaces'
+    )
+    .required('Password is required'),
 });
 
 const LoginPage = () => {
