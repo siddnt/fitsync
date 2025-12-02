@@ -24,6 +24,7 @@ const GymExplorerPage = () => {
 
   const user = useSelector((state) => state.auth.user);
   const userRole = user?.role ?? null;
+  const userId = user?._id ?? user?.id ?? null;
   const isAuthenticated = Boolean(user);
   const canManageMembership = ['trainee', 'trainer'].includes(userRole);
 
@@ -130,6 +131,7 @@ const GymExplorerPage = () => {
           actionError={actionError}
           userRole={userRole}
           trainers={trainers}
+          userId={userId}
         />
       </section>
     </div>

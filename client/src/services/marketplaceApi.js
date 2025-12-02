@@ -38,6 +38,19 @@ export const marketplaceApi = apiSlice.injectEndpoints({
         'Dashboard',
       ],
     }),
+    submitProductReview: builder.mutation({
+      query: ({ productId, ...payload }) => ({
+        url: `/marketplace/products/${productId}/reviews`,
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: (_result, _error, { productId }) => [
+        { type: 'Marketplace', id: productId },
+        { type: 'Marketplace', id: 'CATALOG' },
+        'Marketplace',
+        'Dashboard',
+      ],
+    }),
   }),
 });
 
@@ -45,4 +58,5 @@ export const {
   useGetMarketplaceCatalogQuery,
   useGetMarketplaceProductQuery,
   useCreateMarketplaceOrderMutation,
+  useSubmitProductReviewMutation,
 } = marketplaceApi;

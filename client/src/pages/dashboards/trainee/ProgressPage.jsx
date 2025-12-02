@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
-import { useGetTraineeProgressQuery } from '../../../services/dashboardApi.js';
+import { useGetTraineeProgressQuery, useSubmitTrainerFeedbackMutation } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import '../Dashboard.css';
@@ -65,6 +65,23 @@ const TraineeProgressPage = () => {
   const metrics = progress?.metrics ?? [];
   const bodyMetrics = progress?.bodyMetrics ?? [];
   const [timeframe, setTimeframe] = useState('weekly');
+  const trainerOptions = Array.isArray(progress?.trainerFeedbackTargets)
+    ? progress.trainerFeedbackTargets
+    : [];
+  const trainerFeedbackHistory = Array.isArray(progress?.trainerFeedbackHistory)
+    ? progress.trainerFeedbackHistory
+    : [];
+  const [selectedTrainerId, setSelectedTrainerId] = useState('');
+  const [trainerFeedbackMessage, setTrainerFeedbackMessage] = useState('');
+  const [trainerFeedbackNotice, setTrainerFeedbackNotice] = useState(null);
+
+  const [submitTrainerFeedback, { isLoading: isSubmittingTrainerFeedback }] = useSubmitTrainerFeedbackMutation();
+
+  useEffect(() => {
+    if (!selectedTrainerId && trainerOptions.length) {
+      setSelectedTrainerId(trainerOptions[0].trainerId);
+    }
+  }, [trainerOptions, selectedTrainerId]);
 
   const normalizedBodyMetrics = useMemo(() => {
     if (Array.isArray(bodyMetrics) && bodyMetrics.length) {
@@ -150,6 +167,33 @@ const TraineeProgressPage = () => {
     }));
   }, [progress?.feedback]);
 
+  const handleTrainerFeedbackSubmit = async (event) => {
+    event.preventDefault();
+    if (!selectedTrainerId) {
+      setTrainerFeedbackNotice({ type: 'error', message: 'Select a trainer to share feedback with.' });
+      return;
+    }
+
+    const trimmedMessage = trainerFeedbackMessage.trim();
+    if (!trimmedMessage) {
+      setTrainerFeedbackNotice({ type: 'error', message: 'Tell us what stood out about your trainer.' });
+      return;
+    }
+
+    try {
+      setTrainerFeedbackNotice(null);
+      await submitTrainerFeedback({
+        trainerId: selectedTrainerId,
+        message: trimmedMessage,
+      }).unwrap();
+      setTrainerFeedbackNotice({ type: 'success', message: 'Thanks! Your trainer has received the feedback.' });
+      setTrainerFeedbackMessage('');
+      await refetch();
+    } catch (error) {
+      setTrainerFeedbackNotice({ type: 'error', message: error?.data?.message ?? 'Could not submit feedback.' });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid">
@@ -180,9 +224,10 @@ const TraineeProgressPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--trainee">
       <DashboardSection
         title="Body metrics"
+        className="dashboard-section--span-6"
         action={(
           <div className="body-metrics-toggle" role="group" aria-label="Select timeframe">
             {['weekly', 'monthly'].map((option) => (
@@ -237,7 +282,7 @@ const TraineeProgressPage = () => {
         </div>
       </DashboardSection>
 
-      <DashboardSection title="Trainer feedback">
+      <DashboardSection title="Trainer feedback" className="dashboard-section--span-6">
         {groupedFeedback.length ? (
           <div className="feedback-groups">
             {groupedFeedback.map((group) => (
@@ -262,7 +307,72 @@ const TraineeProgressPage = () => {
         )}
       </DashboardSection>
 
+      <DashboardSection title="Share trainer feedback" className="dashboard-section--span-12">
+        {trainerOptions.length ? (
+          <div className="trainer-feedback-form">
+            <form onSubmit={handleTrainerFeedbackSubmit}>
+              <label htmlFor="trainer-feedback-trainer">Trainer</label>
+              <select
+                id="trainer-feedback-trainer"
+                value={selectedTrainerId}
+                onChange={(event) => setSelectedTrainerId(event.target.value)}
+              >
+                {trainerOptions.map((option) => (
+                  <option key={option.trainerId} value={option.trainerId}>
+                    {option.trainerName}
+                    {option.gymName ? ` · ${option.gymName}` : ''}
+                  </option>
+                ))}
+              </select>
 
+              <label htmlFor="trainer-feedback-message">Your feedback</label>
+              <textarea
+                id="trainer-feedback-message"
+                rows={4}
+                maxLength={500}
+                placeholder="Share a quick note about your experience"
+                value={trainerFeedbackMessage}
+                onChange={(event) => setTrainerFeedbackMessage(event.target.value)}
+                required
+              />
+
+              {trainerFeedbackNotice && (
+                <p
+                  className={`trainer-feedback-form__notice trainer-feedback-form__notice--${trainerFeedbackNotice.type}`}
+                >
+                  {trainerFeedbackNotice.message}
+                </p>
+              )}
+
+              <button type="submit" disabled={isSubmittingTrainerFeedback}>
+                {isSubmittingTrainerFeedback ? 'Sharing feedback…' : 'Send feedback'}
+              </button>
+            </form>
+
+            {trainerFeedbackHistory.length ? (
+              <div className="trainer-feedback-history">
+                <h4>Recent submissions</h4>
+                <ul>
+                  {trainerFeedbackHistory.slice(0, 5).map((entry) => (
+                    <li key={entry.id}>
+                      <header>
+                        <div>
+                          <strong>{entry.trainerName}</strong>
+                          {entry.gymName && <small>{entry.gymName}</small>}
+                        </div>
+                        <small>{formatDate(entry.createdAt)}</small>
+                      </header>
+                      <p>{entry.message}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <EmptyState message="Assign a trainer to share feedback." />
+        )}
+      </DashboardSection>
     </div>
   );
 };

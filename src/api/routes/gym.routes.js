@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { listGyms, getGymById, recordImpression, createGym, updateGym } from '../controllers/gym.controller.js';
+import {
+	listGyms,
+	getGymById,
+	recordImpression,
+	createGym,
+	updateGym,
+	submitGymReview,
+	listGymReviews,
+} from '../controllers/gym.controller.js';
 import { joinGym, leaveGym, getMyGymMembership, listGymTrainers } from '../controllers/gymMembership.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 
@@ -21,6 +29,13 @@ router.delete(
 	authorizeRoles('trainee', 'trainer', 'gym-owner', 'admin'),
 	leaveGym,
 );
+router.post(
+	'/:gymId/reviews',
+	verifyJWT,
+	authorizeRoles('trainee'),
+	submitGymReview,
+);
+router.get('/:gymId/reviews', listGymReviews);
 router.get('/:gymId', getGymById);
 router.post('/:gymId/impressions', recordImpression);
 router.put('/:gymId', verifyJWT, authorizeRoles('gym-owner', 'admin'), updateGym);
