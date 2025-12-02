@@ -613,6 +613,83 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, { order: mapBuyerOrder(populated) }, 'Order placed successfully'));
 });
 
+export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
+  ensureMarketplaceBuyerEligible(req.user);
+
+  const userId = req.user?._id;
+  const productId = toObjectId(req.params.productId, 'Product id');
+  const {
+    orderId,
+    rating,
+    title,
+    comment,
+  } = req.body ?? {};
+
+  if (!orderId) {
+    throw new ApiError(400, 'A delivered order is required to submit a review.');
+  }
+
+  const ratingValue = Number(rating);
+  if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) {
+    throw new ApiError(400, 'Rating must be between 1 and 5 stars.');
+  }
+  const resolvedRating = Math.min(5, Math.max(1, Math.round(ratingValue)));
+
+  const resolvedTitle = title ? String(title).trim().slice(0, 120) : '';
+  const resolvedComment = comment ? String(comment).trim().slice(0, 1000) : '';
+  const trimmedTitle = resolvedTitle || undefined;
+  const trimmedComment = resolvedComment || undefined;
+
+  const orderObjectId = toObjectId(orderId, 'Order id');
+
+  const productExists = await Product.exists({ _id: productId });
+  if (!productExists) {
+    throw new ApiError(404, 'Product not found.');
+  }
+
+  const order = await Order.findOne({ _id: orderObjectId, user: userId, 'orderItems.product': productId }).lean();
+
+  if (!order) {
+    throw new ApiError(400, 'We could not find this product in your order history.');
+  }
+
+  const matchingItem = (order.orderItems || []).find((item) => {
+    const itemProductId = item.product?._id ?? item.product;
+    return itemProductId && String(itemProductId) === String(productId);
+  });
+
+  if (!matchingItem) {
+    throw new ApiError(400, 'This item is not part of the selected order.');
+  }
+
+  const normalisedStatus = normaliseItemStatus(matchingItem.status);
+  if (normalisedStatus !== 'delivered') {
+    throw new ApiError(400, 'You can only review items after they are delivered.');
+  }
+
+  const review = await ProductReview.findOneAndUpdate(
+    { product: productId, user: userId },
+    {
+      $set: {
+        rating: resolvedRating,
+        title: trimmedTitle,
+        comment: trimmedComment,
+        order: order._id,
+        isVerifiedPurchase: true,
+      },
+      $setOnInsert: {
+        product: productId,
+        user: userId,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, { reviewId: review._id }, 'Review submitted successfully.'));
+});
+
 export const listSellerProducts = asyncHandler(async (req, res) => {
   ensureSellerActive(req.user);
 

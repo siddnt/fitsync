@@ -7,6 +7,7 @@ import GymListingSubscription from '../../models/gymListingSubscription.model.js
 import Revenue from '../../models/revenue.model.js';
 import Order from '../../models/order.model.js';
 import Product from '../../models/product.model.js';
+import ProductReview from '../../models/productReview.model.js';
 import User from '../../models/user.model.js';
 import {
   loadAdminToggles,
@@ -248,6 +249,7 @@ const normaliseOrderItemStatus = (status) => {
   }
   return 'processing';
 };
+
 
 const summariseOrderStatus = (order) => {
   const items = order?.orderItems || [];
@@ -526,28 +528,66 @@ export const getTraineeOverview = asyncHandler(async (req, res) => {
 
 export const getTraineeProgress = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const progress = await TrainerProgress.findOne({ trainee: userId }).lean();
+  const progressDocs = await TrainerProgress.find({ trainee: userId })
+    .sort({ updatedAt: -1 })
+    .populate({ path: 'trainer', select: 'name profilePicture' })
+    .populate({ path: 'gym', select: 'name location.city' })
+    .lean();
 
-  if (!progress) {
+  if (!progressDocs.length) {
     return res
       .status(200)
-      .json(new ApiResponse(200, { attendance: null, metrics: [], feedback: [] }, 'No progress data yet.'));
+      .json(new ApiResponse(200, { attendance: null, metrics: [], feedback: [], trainerFeedbackTargets: [], trainerFeedbackHistory: [] }, 'No progress data yet.'));
   }
 
-  const attendance = buildAttendanceSummary(progress.attendance || []);
-  const metrics = groupProgressMetrics(progress.progressMetrics || [], progress.bodyMetrics || []);
-  const bodyMetrics = serializeBodyMetrics(progress.bodyMetrics || []);
-  const feedback = (progress.feedback || [])
+  const primaryProgress = progressDocs[0];
+
+  const attendance = buildAttendanceSummary(primaryProgress.attendance || []);
+  const metrics = groupProgressMetrics(primaryProgress.progressMetrics || [], primaryProgress.bodyMetrics || []);
+  const bodyMetrics = serializeBodyMetrics(primaryProgress.bodyMetrics || []);
+  const feedback = (primaryProgress.feedback || [])
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((entry) => ({ message: entry.message, category: entry.category, createdAt: entry.createdAt }))
     .slice(0, 10);
+
+  const trainerFeedbackTargets = progressDocs
+    .filter((doc) => doc.trainer)
+    .map((doc) => ({
+      trainerId: doc.trainer?._id ? String(doc.trainer._id) : doc.trainer ? String(doc.trainer) : null,
+      trainerName: doc.trainer?.name ?? 'Trainer',
+      gymId: doc.gym?._id ? String(doc.gym._id) : doc.gym ? String(doc.gym) : null,
+      gymName: doc.gym?.name ?? null,
+    }))
+    .filter((entry) => entry.trainerId);
+
+  const trainerFeedbackHistory = progressDocs
+    .flatMap((doc) => {
+      const trainerId = doc.trainer?._id ? String(doc.trainer._id) : doc.trainer ? String(doc.trainer) : null;
+      const trainerName = doc.trainer?.name ?? 'Trainer';
+      const gymName = doc.gym?.name ?? null;
+      if (!trainerId || !Array.isArray(doc.traineeFeedback)) {
+        return [];
+      }
+      return doc.traineeFeedback.map((entry) => ({
+        id: entry._id ? String(entry._id) : `${trainerId}-${entry.createdAt?.toISOString?.() ?? Date.now()}`,
+        trainerId,
+        trainerName,
+        gymName,
+        message: entry.message,
+        createdAt: entry.createdAt,
+      }));
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 20);
 
   const response = {
     attendance,
     metrics,
     bodyMetrics,
-    rawAttendance: (progress.attendance || []).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 60),
+    rawAttendance: (primaryProgress.attendance || []).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 60),
     feedback,
+    trainerFeedbackTargets,
+    trainerFeedbackHistory,
   };
 
   return res.status(200).json(new ApiResponse(200, response, 'Trainee progress fetched successfully'));
@@ -588,12 +628,174 @@ export const getTraineeDiet = asyncHandler(async (req, res) => {
 
 export const getTraineeOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 }).limit(20).lean();
+  const orders = await Order.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .populate({ path: 'orderItems.product', select: 'name image' })
+    .lean();
+
+  const productIds = orders.flatMap((order) => (order.orderItems || [])
+    .map((item) => (item.product?._id ?? item.product))
+    .filter(Boolean));
+
+  const reviewedProducts = productIds.length
+    ? await ProductReview.find({ user: userId, product: { $in: productIds } })
+      .select('product')
+      .lean()
+    : [];
+
+  const reviewedSet = new Set(reviewedProducts.map((review) => String(review.product)));
+
+  const detailedOrders = orders.map((order) => {
+    const items = (order.orderItems || []).map((item) => {
+      const productId = item.product?._id ?? item.product;
+      const status = normaliseOrderItemStatus(item.status);
+      const reviewed = productId ? reviewedSet.has(String(productId)) : false;
+      const canReview = Boolean(productId) && status === 'delivered' && !reviewed;
+
+      return {
+        id: item._id ?? `${order._id}-${productId}`,
+        productId,
+        name: item.name ?? item.product?.name ?? 'Marketplace item',
+        image: item.image ?? item.product?.image ?? null,
+        quantity: item.quantity ?? 0,
+        status,
+        reviewed,
+        canReview,
+      };
+    });
+
+    return {
+      id: order._id,
+      orderNumber: order.orderNumber,
+      total: formatCurrency(order.total, 'INR'),
+      status: summariseOrderStatus(order),
+      createdAt: order.createdAt,
+      itemsCount: items.reduce((total, item) => total + (item.quantity || 0), 0),
+      items,
+    };
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { orders: buildOrderSummary(orders) }, 'Orders fetched successfully'));
+    .json(new ApiResponse(200, { orders: detailedOrders }, 'Orders fetched successfully'));
 });
+
+export const submitTrainerFeedback = asyncHandler(async (req, res) => {
+  const traineeId = req.user?._id;
+  const { trainerId, message } = req.body ?? {};
+
+  if (!trainerId || !mongoose.Types.ObjectId.isValid(trainerId)) {
+    throw new ApiError(400, 'A valid trainer id is required.');
+  }
+
+  const trimmedMessage = (message ?? '').trim();
+  if (!trimmedMessage) {
+    throw new ApiError(400, 'Feedback message is required.');
+  }
+
+  const membership = await GymMembership.findOne({
+    trainee: traineeId,
+    trainer: trainerId,
+    status: { $in: ['pending', 'active', 'paused', 'expired'] },
+  })
+    .populate({ path: 'trainer', select: 'name profilePicture' })
+    .populate({ path: 'gym', select: 'name location.city' })
+    .lean();
+
+  if (!membership) {
+    throw new ApiError(403, 'You can only share feedback with trainers you are assigned to.');
+  }
+
+  const progress = await TrainerProgress.findOneAndUpdate(
+    { trainee: traineeId, trainer: trainerId },
+    {
+      $setOnInsert: { trainee: traineeId, trainer: trainerId },
+      $set: { gym: membership.gym?._id ?? membership.gym },
+    },
+    { new: true, upsert: true },
+  );
+
+  if (!Array.isArray(progress.traineeFeedback)) {
+    progress.traineeFeedback = [];
+  }
+
+  const feedbackEntry = {
+    message: trimmedMessage,
+    createdAt: new Date(),
+  };
+
+  progress.traineeFeedback.push(feedbackEntry);
+  progress.markModified('traineeFeedback');
+  await progress.save();
+
+  const savedEntry = progress.traineeFeedback[progress.traineeFeedback.length - 1];
+
+  return res.status(201).json(
+    new ApiResponse(
+      201,
+      {
+        feedback: {
+          id: savedEntry._id,
+          trainer: {
+            id: membership.trainer?._id ? String(membership.trainer._id) : String(trainerId),
+            name: membership.trainer?.name ?? 'Trainer',
+          },
+          gym: membership.gym
+            ? {
+                id: membership.gym._id ? String(membership.gym._id) : String(membership.gym),
+                name: membership.gym.name,
+              }
+            : null,
+          message: savedEntry.message,
+          createdAt: savedEntry.createdAt,
+        },
+      },
+      'Feedback shared with your trainer.',
+    ),
+  );
+});
+
+export const getTrainerFeedbackInbox = asyncHandler(async (req, res) => {
+  const trainerId = req.user?._id;
+  const progressDocs = await TrainerProgress.find({ trainer: trainerId, 'traineeFeedback.0': { $exists: true } })
+    .select('traineeFeedback trainee gym')
+    .populate({ path: 'trainee', select: 'name email profilePicture' })
+    .populate({ path: 'gym', select: 'name location.city' })
+    .lean();
+
+  const feedback = progressDocs
+    .flatMap((doc) => {
+      const traineeId = doc.trainee?._id ? String(doc.trainee._id) : doc.trainee ? String(doc.trainee) : null;
+      const traineeName = doc.trainee?.name ?? 'Trainee';
+      const gymName = doc.gym?.name ?? '—';
+      const gymId = doc.gym?._id ? String(doc.gym._id) : doc.gym ? String(doc.gym) : null;
+
+      if (!traineeId || !Array.isArray(doc.traineeFeedback)) {
+        return [];
+      }
+
+      return doc.traineeFeedback.map((entry) => ({
+        id: entry._id ? String(entry._id) : `${traineeId}-${entry.createdAt?.toISOString?.() ?? Date.now()}`,
+        trainee: {
+          id: traineeId,
+          name: traineeName,
+        },
+        gym: {
+          id: gymId,
+          name: gymName,
+        },
+        message: entry.message,
+        createdAt: entry.createdAt,
+      }));
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { feedback }, 'Trainer feedback inbox fetched successfully'));
+});
+
 
 export const getGymOwnerOverview = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;

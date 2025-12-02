@@ -82,6 +82,104 @@
   margin-bottom: 1rem;
 }
 
+.gym-details__reviews article header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.gym-details__reviews article header small {
+  color: var(--muted-text-color);
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.gym-details__reviews article p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.gym-details__reviews-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.gym-details__reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.gym-details__reviews-empty {
+  color: var(--muted-text-color);
+}
+
+.gym-review-form-wrapper {
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1.5rem;
+}
+
+.gym-review-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gym-review-form select,
+.gym-review-form textarea {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: inherit;
+  padding: 0.6rem 0.8rem;
+}
+
+.gym-review-form textarea {
+  resize: vertical;
+}
+
+.gym-review-form button {
+  align-self: flex-start;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 10px;
+  color: #000;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.65rem 1.5rem;
+}
+
+.gym-review-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.gym-review-form__notice {
+  color: var(--muted-text-color);
+  margin: 0;
+}
+
+.gym-review-form__error {
+  color: #ff8c8c;
+  margin: 0;
+}
+
+.gym-review-form__success {
+  color: #7fe57f;
+  margin: 0;
+}
+
 .gym-details__empty {
   background: rgba(0, 0, 0, 0.18);
   border-radius: 16px;
