@@ -7,7 +7,6 @@ const AppFooter = () => (
       <a href="/contact">Contact Us</a>
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
-      <a href="/support">Support</a>
     </div>
   </footer>
 );
