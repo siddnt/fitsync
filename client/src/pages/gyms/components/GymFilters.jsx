@@ -1,8 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-
-const amenitiesOptions = ['AC', 'Nutrition', 'Steam', 'Swimming', 'Parking', 'Showers'];
+import { AMENITY_OPTIONS } from '../../../constants/amenities.js';
 
 const GymFilters = ({ filters, onChange }) => {
   const { control, setValue } = useForm({
@@ -81,7 +80,7 @@ const GymFilters = ({ filters, onChange }) => {
           name="amenities"
           render={({ field }) => (
             <div className="gym-filters__chips">
-              {amenitiesOptions.map((amenity) => {
+              {AMENITY_OPTIONS.map((amenity) => {
                 const isSelected = field.value.includes(amenity);
                 return (
                   <button

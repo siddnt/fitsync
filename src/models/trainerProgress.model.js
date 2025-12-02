@@ -19,18 +19,37 @@ const progressMetricSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const bodyMetricSchema = new mongoose.Schema(
+  {
+    weightKg: { type: Number, required: true },
+    heightCm: { type: Number, required: true },
+    bmi: { type: Number, required: true },
+    recordedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const dietMealSchema = new mongoose.Schema(
+  {
+    mealType: {
+      type: String,
+      enum: ['breakfast', 'lunch', 'snack', 'dinner'],
+      required: true,
+    },
+    item: { type: String, required: true },
+    calories: { type: Number },
+    protein: { type: Number },
+    fat: { type: Number },
+    notes: { type: String },
+  },
+  { _id: false },
+);
+
 const dietPlanSchema = new mongoose.Schema(
   {
     weekOf: { type: Date, required: true },
     meals: {
-      type: [
-        {
-          name: { type: String },
-          description: { type: String },
-          calories: { type: Number },
-          macros: { type: Map, of: Number },
-        },
-      ],
+      type: [dietMealSchema],
       default: [],
     },
     notes: { type: String },
@@ -76,6 +95,10 @@ const trainerProgressSchema = new mongoose.Schema(
     },
     progressMetrics: {
       type: [progressMetricSchema],
+      default: [],
+    },
+    bodyMetrics: {
+      type: [bodyMetricSchema],
       default: [],
     },
     dietPlans: {

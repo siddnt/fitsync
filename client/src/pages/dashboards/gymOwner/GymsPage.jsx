@@ -118,7 +118,11 @@ const GymOwnerGymsPage = () => {
         open: details.schedule?.open ?? '',
         close: details.schedule?.close ?? '',
       },
-      keyFeatures: (details.keyFeatures ?? []).join(', '),
+      keyFeatures: Array.isArray(details.keyFeatures)
+        ? details.keyFeatures
+        : Array.isArray(details.amenities)
+          ? details.amenities
+          : [],
       tags: (details.tags ?? []).join(', '),
     };
   }, [gymDetailsResponse]);

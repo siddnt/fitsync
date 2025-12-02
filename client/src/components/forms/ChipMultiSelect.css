@@ -1,0 +1,46 @@
+.chip-multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chip-multiselect__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip-multiselect .chip {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted-text-color);
+  cursor: pointer;
+  padding: 0.4rem 1rem;
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.chip-multiselect .chip:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.chip-multiselect .chip--active {
+  border-color: rgba(229, 9, 20, 0.8);
+  color: #fff;
+  background: rgba(229, 9, 20, 0.15);
+}
+
+.chip-multiselect__hint {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+}
+
+.chip-multiselect__error {
+  color: #ff6b6b;
+  font-size: 0.8rem;
+}
+
+.chip-multiselect--error .chip {
+  border-color: rgba(255, 107, 107, 0.5);
+}
