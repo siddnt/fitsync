@@ -1941,10 +1941,18 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
     value: entry.count,
   }));
 
-  const ageDistribution = ageAggregation.map((entry) => ({
-    label: entry._id,
-    value: entry.count,
-  }));
+  const ageBucketOrder = ['<18', '18-24', '25-34', '35-44', '45-59', '60+'];
+  const ageBucketMap = ageAggregation.reduce((acc, entry) => {
+    acc[entry._id] = entry.count;
+    return acc;
+  }, {});
+
+  const ageDistribution = ageBucketOrder
+    .map((label) => ({
+      label,
+      value: ageBucketMap[label] ?? 0,
+    }))
+    .filter((bucket) => bucket.value > 0);
 
   const notifications = revenueEvents.map((event) => {
     const amount = event.amount ?? 0;

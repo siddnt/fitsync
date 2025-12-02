@@ -1,30 +1,10 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
 import { useLoginMutation } from '../../services/authApi.js';
 import './AuthPage.css';
-
-const emailPattern = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s])(?!.*\s).{8,}$/;
-
-const schema = yup.object({
-  email: yup
-    .string()
-    .required('Email is required')
-    .matches(emailPattern, 'Enter a valid email address'),
-  password: yup
-    .string()
-    .min(8, 'Password must have at least 8 characters')
-    .matches(
-      passwordPattern,
-      'Password needs upper, lower, number, special char, and no spaces'
-    )
-    .required('Password is required'),
-});
 
 const LoginPage = () => {
   const dispatch = useAppDispatch();
@@ -34,11 +14,7 @@ const LoginPage = () => {
   const { status, error, user } = useAppSelector((state) => state.auth);
   const [login, { isLoading }] = useLoginMutation();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({ resolver: yupResolver(schema) });
+  const { register, handleSubmit } = useForm();
 
   useEffect(() => {
     if (user) {
@@ -78,7 +54,7 @@ const LoginPage = () => {
           </ul>
         </aside>
 
-        <form className="auth-card" onSubmit={handleSubmit(onSubmit)}>
+        <form className="auth-card" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="auth-card__header">
             <h2>Welcome back</h2>
             <p className="auth-card__subtitle">Sign in to manage your fitness journey.</p>
@@ -88,13 +64,11 @@ const LoginPage = () => {
             <label>
               <span>Email</span>
               <input type="email" {...register('email')} placeholder="you@example.com" autoComplete="email" />
-              {errors.email && <p className="input-error">{errors.email.message}</p>}
             </label>
 
             <label>
               <span>Password</span>
               <input type="password" {...register('password')} placeholder="********" autoComplete="current-password" />
-              {errors.password && <p className="input-error">{errors.password.message}</p>}
             </label>
           </div>
 
