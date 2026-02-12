@@ -8,11 +8,15 @@
   gap: 0.4rem;
   padding: 2rem 1rem;
   text-align: center;
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
 }
 
 .app-footer__links {
   display: flex;
   gap: 1.5rem;
+  pointer-events: auto;
 }
 
 .app-footer__links a {

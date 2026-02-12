@@ -1225,15 +1225,12 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
       : null;
 
     const assignment = assignmentByGym[String(membership.gym?._id)] ?? null;
-    const goals = (() => {
-      if (!assignment?.trainees?.length) {
-        return [];
-      }
-      const record = assignment.trainees.find(
-        (entry) => String(entry.trainee) === String(membership.trainee?._id),
-      );
-      return record?.goals ?? [];
-    })();
+    const record = assignment?.trainees?.find(
+      (entry) => String(entry.trainee) === String(membership.trainee?._id),
+    );
+    const goals = record?.goals ?? [];
+    const sessionsPerWeek = record?.sessionsPerWeek ?? record?.trainingPlan?.sessionsPerWeek ?? null;
+    const trainingPlan = record?.trainingPlan ?? null;
 
     return {
       trainee: membership.trainee
@@ -1246,6 +1243,8 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
       gym: gymInfo,
       assignedAt: membership.startDate,
       goals,
+      sessionsPerWeek,
+      trainingPlan,
       status: membership.status,
     };
   });
@@ -1329,15 +1328,12 @@ export const getTrainerTrainees = asyncHandler(async (req, res) => {
     }
 
     const container = grouped.get(gymId);
-    const goals = (() => {
-      if (!assignment?.trainees?.length) {
-        return [];
-      }
-      const record = assignment.trainees.find(
-        (entry) => String(entry.trainee) === String(membership.trainee?._id),
-      );
-      return record?.goals ?? [];
-    })();
+    const record = assignment?.trainees?.find(
+      (entry) => String(entry.trainee) === String(membership.trainee?._id),
+    );
+    const goals = record?.goals ?? [];
+    const sessionsPerWeek = record?.sessionsPerWeek ?? record?.trainingPlan?.sessionsPerWeek ?? null;
+    const trainingPlan = record?.trainingPlan ?? null;
 
     container.trainees.push({
       id: membership.trainee?._id ?? membership.trainee,
@@ -1346,6 +1342,8 @@ export const getTrainerTrainees = asyncHandler(async (req, res) => {
       status: membership.status,
       assignedAt: membership.startDate,
       goals,
+      sessionsPerWeek,
+      trainingPlan,
       membershipId: membership._id,
     });
   });

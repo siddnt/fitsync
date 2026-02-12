@@ -14,6 +14,12 @@ const traineeRecordSchema = new mongoose.Schema(
       default: 'active',
     },
     goals: { type: [String], default: [] },
+    sessionsPerWeek: { type: Number, min: 0, max: 14 },
+    trainingPlan: {
+      sessionsPerWeek: { type: Number, min: 0, max: 14 },
+      focusAreas: { type: [String], default: [] },
+      intensity: { type: String, enum: ['light', 'moderate', 'intense'] },
+    },
   },
   { _id: false },
 );

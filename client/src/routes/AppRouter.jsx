@@ -37,6 +37,9 @@ import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 import AboutPage from '../pages/about/AboutPage.jsx';
 import ContactPage from '../pages/contact/ContactPage.jsx';
+import PrivacyPage from '../pages/legal/PrivacyPage.jsx';
+import TermsPage from '../pages/legal/TermsPage.jsx';
+import SupportPage from '../pages/legal/SupportPage.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -45,6 +48,9 @@ const AppRouter = () => (
         <Route index element={<LandingPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="contact" element={<ContactPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="terms" element={<TermsPage />} />
+        <Route path="support" element={<SupportPage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />

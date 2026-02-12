@@ -43,6 +43,8 @@ body {
   flex-direction: column;
   gap: 12rem;
   padding-bottom: 10rem;
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* Animations */

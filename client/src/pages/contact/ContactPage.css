@@ -18,6 +18,7 @@
       rgba(0, 0, 0, 0.7) 0%,
       rgba(0, 0, 0, 0.85) 100%);
   z-index: 1;
+  pointer-events: none;
 }
 
 .contact-container {
