@@ -125,7 +125,40 @@ const userSchema = new mongoose.Schema(
         weight: Number,
         fitnessGoals: [{ type: String }],
         age: Number,
-        gender: String
+        gender: String,
+        // ===== PHASE 1: TERMS & PRIVACY ACCEPTANCE TRACKING =====
+        // Purpose: Legal compliance - track user consent and terms acceptance
+        legal: {
+            termsAccepted: {
+                type: Boolean,
+                default: false
+            },
+            termsVersion: {
+                type: String,
+                default: null
+            },
+            termsAcceptedAt: {
+                type: Date,
+                default: null
+            },
+            privacyAccepted: {
+                type: Boolean,
+                default: false
+            },
+            privacyVersion: {
+                type: String,
+                default: null
+            },
+            privacyAcceptedAt: {
+                type: Date,
+                default: null
+            },
+            // IP address when terms/privacy were accepted (for audit trail)
+            acceptanceIP: {
+                type: String,
+                default: null
+            }
+        }
     },
     {
         timestamps: true

@@ -155,6 +155,21 @@ export const joinGym = asyncHandler(async (req, res) => {
     status: { $in: ['pending', 'active', 'paused'] },
   }).lean();
 
+  if (!joinAsTrainer && user.role === 'trainee') {
+    const otherGymMembership = await GymMembership.findOne({
+      trainee: user._id,
+      gym: { $ne: gym._id },
+      plan: { $ne: 'trainer-access' },
+      status: { $in: ['pending', 'active', 'paused'] },
+    })
+      .select('_id gym status plan')
+      .lean();
+
+    if (otherGymMembership) {
+      throw new ApiError(409, 'You already have an active membership in another gym.');
+    }
+  }
+
   const existingTrainerMembership = existingMembership?.plan === 'trainer-access'
     ? existingMembership
     : await GymMembership.findOne({

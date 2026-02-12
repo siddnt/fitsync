@@ -246,11 +246,11 @@ useEffect(() => {
 ```
 
 ### Context API (Not Required but Bonus)
-⚠️ **Redux used instead of Context API:**
-While Context API usage is minimal, Redux Toolkit provides superior state management:
-- Redux Provider wraps entire app
-- Multiple slices (auth, ui, cart, seller, monetisation)
-- RTK Query for server state caching
+✅ **Targeted shared state with Context:**
+- `AnnouncementProvider` in `client/src/context/AnnouncementContext.jsx` wraps the SPA and exposes announcement message, CTA, and visibility controls.
+- `AppHeader.jsx` consumes the context to render a dismissible promotional banner without prop drilling.
+- `LandingPage.jsx` reuses the same context data to surface the promo message within the CTA section and can reset banner visibility on navigation.
+- Context is intentionally scoped to lightweight UI copy while Redux Toolkit continues to manage complex, persistent state.
 
 ### Reusable UI Components
 ✅ **Comprehensive component library:**
