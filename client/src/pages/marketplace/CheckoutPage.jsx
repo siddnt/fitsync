@@ -6,6 +6,10 @@ import { cartActions } from '../../features/cart/cartSlice.js';
 import { useCreateMarketplaceOrderMutation } from '../../services/marketplaceApi.js';
 import { formatCurrency } from '../../utils/format.js';
 
+const phonePattern = /^[0-9]{10}$/;
+const pinPattern = /^[0-9]{6}$/;
+const cityStatePattern = /^[A-Za-z ]+$/;
+
 const initialAddressState = (user) => ({
   firstName: user?.firstName ?? '',
   lastName: user?.lastName ?? '',
@@ -29,19 +33,13 @@ const CheckoutPage = () => {
   const [order, setOrder] = useState(null);
 
   useEffect(() => {
-    setFormState((prev) => {
-      const next = { ...prev };
-      const template = initialAddressState(user);
-
-      Object.entries(template).forEach(([key, value]) => {
-        if (!prev[key]) {
-          next[key] = value;
-        }
-      });
-
-      return next;
-    });
-  }, [user]);
+    setFormState((prev) => ({
+      ...prev,
+      firstName: user?.firstName ?? '',
+      lastName: user?.lastName ?? '',
+      email: user?.email ?? '',
+    }));
+  }, [user?.firstName, user?.lastName, user?.email]);
 
   const totals = useMemo(() => {
     const subtotal = items.reduce(
@@ -56,7 +54,21 @@ const CheckoutPage = () => {
   }, [items]);
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
+    const { name } = event.target;
+    let { value } = event.target;
+
+    if (name === 'phone') {
+      value = value.replace(/\D/g, '').slice(0, 10);
+    }
+
+    if (name === 'zipCode') {
+      value = value.replace(/\D/g, '').slice(0, 6);
+    }
+
+    if (name === 'city' || name === 'state') {
+      value = value.replace(/[^A-Za-z\s]/g, '');
+    }
+
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -71,6 +83,26 @@ const CheckoutPage = () => {
 
     if (!items.length) {
       setError('Your cart is empty. Add a product before checking out.');
+      return;
+    }
+
+    if (!phonePattern.test(formState.phone)) {
+      setError('Phone number must be exactly 10 digits.');
+      return;
+    }
+
+    if (!pinPattern.test(formState.zipCode)) {
+      setError('PIN code must be a 6-digit number.');
+      return;
+    }
+
+    if (!cityStatePattern.test(formState.city.trim())) {
+      setError('City should contain letters only.');
+      return;
+    }
+
+    if (!cityStatePattern.test(formState.state.trim())) {
+      setError('State should contain letters only.');
       return;
     }
 
@@ -206,9 +238,13 @@ const CheckoutPage = () => {
               Phone number
               <input
                 required
+                type="tel"
                 name="phone"
                 value={formState.phone}
                 onChange={handleChange}
+                pattern="[0-9]{10}"
+                inputMode="numeric"
+                placeholder="9876543210"
               />
             </label>
           </div>
@@ -229,6 +265,8 @@ const CheckoutPage = () => {
                 name="city"
                 value={formState.city}
                 onChange={handleChange}
+                pattern="[A-Za-z ]+"
+                placeholder="Bengaluru"
               />
             </label>
             <label>
@@ -238,6 +276,8 @@ const CheckoutPage = () => {
                 name="state"
                 value={formState.state}
                 onChange={handleChange}
+                pattern="[A-Za-z ]+"
+                placeholder="Karnataka"
               />
             </label>
             <label>
@@ -247,6 +287,9 @@ const CheckoutPage = () => {
                 name="zipCode"
                 value={formState.zipCode}
                 onChange={handleChange}
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                placeholder="560001"
               />
             </label>
           </div>

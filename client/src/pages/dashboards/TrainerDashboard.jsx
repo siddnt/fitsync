@@ -1,15 +1,22 @@
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
-import { useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
+import { useGetTrainerFeedbackQuery, useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
 
 const TrainerDashboard = () => {
   const { data, isLoading, isError, refetch } = useGetTrainerOverviewQuery();
+  const {
+    data: feedbackData,
+    isLoading: isFeedbackLoading,
+    isError: isFeedbackError,
+    refetch: refetchFeedback,
+  } = useGetTrainerFeedbackQuery();
   const overview = data?.data;
   const assignments = overview?.activeAssignments ?? [];
   const upcoming = overview?.upcomingCheckIns ?? [];
+  const feedbackEntries = Array.isArray(feedbackData?.data?.feedback) ? feedbackData.data.feedback : [];
 
   if (isLoading) {
     return (
@@ -110,6 +117,36 @@ const TrainerDashboard = () => {
           </ul>
         ) : (
           <EmptyState message="Schedule follow-ups with your assigned trainees to see them here." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Feedback" className="dashboard-section--span-12">
+        {isFeedbackLoading ? (
+          <SkeletonPanel lines={6} />
+        ) : isFeedbackError ? (
+          <div className="dashboard-feedback-error">
+            <EmptyState message="We could not load trainee feedback." />
+            <button type="button" onClick={() => refetchFeedback()}>
+              Retry
+            </button>
+          </div>
+        ) : feedbackEntries.length ? (
+          <ul className="trainer-feedback-list">
+            {feedbackEntries.map((entry) => (
+              <li key={entry.id}>
+                <header>
+                  <div>
+                    <strong>{entry.trainee?.name ?? 'Trainee'}</strong>
+                    <small>{entry.gym?.name ?? '—'}</small>
+                  </div>
+                  <small>{formatDate(entry.createdAt)}</small>
+                </header>
+                <p>{entry.message}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState message="No trainee feedback yet. Encourage members to share their thoughts." />
         )}
       </DashboardSection>
     </div>

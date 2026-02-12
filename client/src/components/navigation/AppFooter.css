@@ -8,6 +8,8 @@
   gap: 0.4rem;
   padding: 2rem 1rem;
   text-align: center;
+  position: relative;
+  z-index: 10;
 }
 
 .app-footer__links {
@@ -20,6 +22,7 @@
   font-size: 0.95rem;
   text-decoration: none;
   transition: color 0.2s ease;
+  pointer-events: auto;
 }
 
 .app-footer__links a:hover {

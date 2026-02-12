@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
 import Revenue from '../../models/revenue.model.js';
+import Review from '../../models/review.model.js';
+import GymMembership from '../../models/gymMembership.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -62,6 +64,61 @@ const buildFilters = ({ search, city, amenities }) => {
   }
 
   return filter;
+};
+
+const formatMemberName = (profile) => {
+  if (!profile) {
+    return 'Member';
+  }
+
+  const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
+  return fullName || profile.name || profile.email || 'Member';
+};
+
+const mapReview = (review) => ({
+  id: review._id,
+  rating: review.rating,
+  comment: review.comment,
+  authorId: review.user?._id,
+  authorName: formatMemberName(review.user),
+  authorAvatar: review.user?.profile?.avatar ?? null,
+  createdAt: review.createdAt,
+  updatedAt: review.updatedAt,
+});
+
+const fetchGymReviews = async (gymId, limit = 12) => {
+  const reviews = await Review.find({ gym: gymId })
+    .sort({ updatedAt: -1 })
+    .limit(limit)
+    .populate({ path: 'user', select: 'name firstName lastName email profile avatar' });
+
+  return reviews.map(mapReview);
+};
+
+const recalculateGymRating = async (gymId) => {
+  const [stats] = await Review.aggregate([
+    { $match: { gym: new mongoose.Types.ObjectId(gymId) } },
+    {
+      $group: {
+        _id: '$gym',
+        avgRating: { $avg: '$rating' },
+        totalReviews: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const avgRating = stats ? Number(stats.avgRating.toFixed(1)) : 0;
+  const totalReviews = stats?.totalReviews ?? 0;
+
+  await Gym.findByIdAndUpdate(gymId, {
+    $set: {
+      'analytics.rating': avgRating,
+      'analytics.ratingCount': totalReviews,
+      'analytics.lastReviewAt': new Date(),
+    },
+  });
+
+  return { rating: avgRating, ratingCount: totalReviews };
 };
 
 const mapGym = (gym) => ({
@@ -149,9 +206,76 @@ export const getGymById = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Gym not found');
   }
 
+  const reviews = await fetchGymReviews(gym._id);
+  const mappedGym = mapGym(gym);
+  mappedGym.reviews = reviews;
+
   return res
     .status(200)
-    .json(new ApiResponse(200, { gym: mapGym(gym) }, 'Gym fetched successfully'));
+    .json(new ApiResponse(200, { gym: mappedGym }, 'Gym fetched successfully'));
+});
+
+export const listGymReviews = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(gymId)) {
+    throw new ApiError(400, 'Invalid gym id');
+  }
+
+  const reviews = await fetchGymReviews(gymId, Number(req.query?.limit) || 20);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { reviews }, 'Reviews fetched successfully'));
+});
+
+export const submitGymReview = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+  const { rating, comment } = req.body ?? {};
+
+  if (!mongoose.Types.ObjectId.isValid(gymId)) {
+    throw new ApiError(400, 'Invalid gym id');
+  }
+
+  const parsedRating = Number(rating);
+  if (!Number.isFinite(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+    throw new ApiError(400, 'Please provide a rating between 1 and 5 stars.');
+  }
+
+  const trimmedComment = comment?.trim();
+  if (!trimmedComment) {
+    throw new ApiError(400, 'Please add a short comment with your rating.');
+  }
+
+  const gym = await Gym.findById(gymId);
+  if (!gym) {
+    throw new ApiError(404, 'Gym not found');
+  }
+
+  const membership = await GymMembership.findOne({
+    trainee: req.user._id,
+    gym: gymId,
+    status: { $nin: ['pending', 'cancelled'] },
+  });
+
+  if (!membership) {
+    throw new ApiError(403, 'You can only review gyms you are enrolled in.');
+  }
+
+  const review = await Review.findOneAndUpdate(
+    { user: req.user._id, gym: gymId },
+    { rating: parsedRating, comment: trimmedComment },
+    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+  ).populate({ path: 'user', select: 'name firstName lastName email profile avatar' });
+
+  const analytics = await recalculateGymRating(gymId);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { review: mapReview(review), analytics },
+      'Thank you for sharing your experience with this gym.',
+    ),
+  );
 });
 
 export const recordImpression = asyncHandler(async (req, res) => {

@@ -1,6 +1,9 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './GymMembershipActions.jsx';
+import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
+import { formatDate } from '../../../utils/format.js';
 
 const GymHighlight = ({
   gym,
@@ -16,7 +19,103 @@ const GymHighlight = ({
   actionError,
   userRole,
   trainers,
+  userId,
 }) => {
+  const gymId = gym?.id ?? null;
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewStatus, setReviewStatus] = useState({ error: null, success: null });
+
+  const {
+    data: reviewsResponse,
+    isFetching: isReviewsFetching,
+    refetch: refetchReviews,
+  } = useGetGymReviewsQuery(gymId, { skip: !gymId });
+
+  const [submitGymReview, { isLoading: isSubmittingReview }] = useSubmitGymReviewMutation();
+
+  const reviews = useMemo(() => {
+    const reviewList = Array.isArray(reviewsResponse?.data?.reviews)
+      ? reviewsResponse.data.reviews
+      : Array.isArray(gym?.reviews)
+        ? gym.reviews
+        : [];
+    return [...reviewList].sort((a, b) => {
+      const parseDate = (entry) => new Date(entry?.updatedAt ?? entry?.createdAt ?? 0).getTime();
+      return parseDate(b) - parseDate(a);
+    });
+  }, [reviewsResponse?.data?.reviews, gym?.reviews]);
+
+  const existingUserReview = useMemo(() => {
+    if (!reviews.length || !userId) {
+      return null;
+    }
+    return reviews.find((review) => review.authorId === userId) ?? null;
+  }, [reviews, userId]);
+
+  useEffect(() => {
+    if (existingUserReview) {
+      setReviewRating(existingUserReview.rating);
+      setReviewComment(existingUserReview.comment);
+    } else {
+      setReviewRating(5);
+      setReviewComment('');
+    }
+  }, [existingUserReview]);
+
+  useEffect(() => {
+    setReviewStatus({ error: null, success: null });
+  }, [gymId]);
+
+  const canSubmitReview = useMemo(() => {
+    if (userRole !== 'trainee' || !membership) {
+      return false;
+    }
+    return ['active', 'paused', 'expired'].includes(membership.status);
+  }, [membership, userRole]);
+
+  const reviewNotice = useMemo(() => {
+    if (!isAuthenticated) {
+      return 'Sign in as a trainee to share your experience.';
+    }
+    if (userRole !== 'trainee') {
+      return 'Only trainees can submit gym reviews.';
+    }
+    if (!membership) {
+      return 'Join this gym to leave a review.';
+    }
+    if (membership.status === 'pending') {
+      return 'Activate your membership to share a review.';
+    }
+    if (membership.status === 'cancelled') {
+      return 'Cancelled memberships cannot create new reviews.';
+    }
+    return null;
+  }, [isAuthenticated, membership, userRole]);
+
+  const handleReviewSubmit = useCallback(async (event) => {
+    event.preventDefault();
+    if (!gymId || !canSubmitReview) {
+      return;
+    }
+    const trimmedComment = reviewComment.trim();
+    if (!trimmedComment) {
+      setReviewStatus({ error: 'Please add a few words about your experience.', success: null });
+      return;
+    }
+    setReviewStatus({ error: null, success: null });
+    try {
+      await submitGymReview({ gymId, rating: reviewRating, comment: trimmedComment }).unwrap();
+      setReviewComment(trimmedComment);
+      setReviewStatus({ error: null, success: 'Thanks for sharing your experience!' });
+      if (refetchReviews) {
+        await refetchReviews();
+      }
+    } catch (error) {
+      setReviewStatus({ error: error?.data?.message ?? 'Could not save your review.', success: null });
+    }
+  }, [gymId, canSubmitReview, reviewComment, reviewRating, submitGymReview, refetchReviews]);
+
   if (isLoading && !gym) {
     return <SkeletonPanel lines={12} />;
   }
@@ -105,17 +204,85 @@ const GymHighlight = ({
       </section>
 
       <section className="gym-highlight__reviews">
-        <h2>Member reviews</h2>
-        {(gym.reviews?.length ? gym.reviews : []).slice(0, 3).map((review) => (
-          <article key={review.id}>
-            <header>
-              <strong>{review.authorName}</strong>
-              <span>{'★'.repeat(review.rating)}</span>
-            </header>
-            <p>{review.comment}</p>
-          </article>
-        ))}
-        {!gym.reviews?.length && <p>No reviews yet. Be the first to share your experience!</p>}
+        <div className="gym-highlight__reviews-header">
+          <h2>Member reviews</h2>
+          {gym.analytics?.ratingCount ? (
+            <span>
+              {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} · {gym.analytics.ratingCount} ratings
+            </span>
+          ) : (
+            <span>Be the first to review this gym</span>
+          )}
+        </div>
+
+        <div className="gym-highlight__reviews-list">
+          {isReviewsFetching && !reviews.length ? <p>Loading reviews…</p> : null}
+          {reviews.length ? (
+            reviews.slice(0, 3).map((review) => {
+              const starCount = Math.round(Number(review.rating) || 0);
+              return (
+                <article key={review.id}>
+                  <header>
+                    <div>
+                      <strong>{review.authorName ?? 'Member'}</strong>
+                      <small>
+                        {review.updatedAt || review.createdAt
+                          ? formatDate(review.updatedAt ?? review.createdAt)
+                          : null}
+                      </small>
+                    </div>
+                    <span>{starCount ? '★'.repeat(starCount) : '—'}</span>
+                  </header>
+                  <p>{review.comment}</p>
+                </article>
+              );
+            })
+          ) : (
+            <p className="gym-highlight__reviews-empty">No reviews yet.</p>
+          )}
+        </div>
+
+        <div className="gym-highlight__review-form">
+          <h3>Share your experience</h3>
+          {canSubmitReview ? (
+            <form onSubmit={handleReviewSubmit}>
+              <label htmlFor="gym-highlight-review-rating">Your rating</label>
+              <select
+                id="gym-highlight-review-rating"
+                value={reviewRating}
+                onChange={(event) => setReviewRating(Number(event.target.value))}
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>{`${value} star${value > 1 ? 's' : ''}`}</option>
+                ))}
+              </select>
+
+              <label htmlFor="gym-highlight-review-comment">Your feedback</label>
+              <textarea
+                id="gym-highlight-review-comment"
+                rows={4}
+                maxLength={500}
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="What stood out about this gym?"
+                required
+              />
+
+              {reviewStatus.error && <p className="gym-highlight__review-error">{reviewStatus.error}</p>}
+              {reviewStatus.success && (
+                <p className="gym-highlight__review-success">{reviewStatus.success}</p>
+              )}
+
+              <button type="submit" disabled={isSubmittingReview}>
+                {existingUserReview ? 'Update review' : 'Submit review'}
+              </button>
+            </form>
+          ) : (
+            <p className="gym-highlight__review-notice">
+              {reviewNotice ?? 'You need an active membership to leave a review.'}
+            </p>
+          )}
+        </div>
       </section>
     </article>
   );
@@ -157,6 +324,10 @@ GymHighlight.propTypes = {
       status: PropTypes.string,
       tier: PropTypes.string,
     }),
+    analytics: PropTypes.shape({
+      rating: PropTypes.number,
+      ratingCount: PropTypes.number,
+    }),
   }),
   isLoading: PropTypes.bool,
   membership: PropTypes.shape({
@@ -178,6 +349,7 @@ GymHighlight.propTypes = {
       name: PropTypes.string.isRequired,
     }),
   ),
+  userId: PropTypes.string,
 };
 
 GymHighlight.defaultProps = {
@@ -194,6 +366,7 @@ GymHighlight.defaultProps = {
   actionError: null,
   userRole: null,
   trainers: [],
+  userId: null,
 };
 
 export default GymHighlight;
