@@ -27,7 +27,6 @@ import AdminUsersPage from '../pages/dashboards/admin/UsersPage.jsx';
 import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
-import AdminSettingsPage from '../pages/dashboards/admin/SettingsPage.jsx';
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
@@ -37,6 +36,8 @@ import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 import AboutPage from '../pages/about/AboutPage.jsx';
 import ContactPage from '../pages/contact/ContactPage.jsx';
+import PrivacyPage from '../pages/privacy/PrivacyPage.jsx';
+import TermsPage from '../pages/terms/TermsPage.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -45,6 +46,8 @@ const AppRouter = () => (
         <Route index element={<LandingPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="contact" element={<ContactPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="terms" element={<TermsPage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
@@ -89,7 +92,6 @@ const AppRouter = () => (
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
           <Route path="messages" element={<AdminMessagesPage />} />
-          <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

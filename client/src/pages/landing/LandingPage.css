@@ -532,6 +532,12 @@ body {
   position: relative;
   margin-top: 6rem;
   overflow: hidden;
+
+.landing__cta-note {
+  margin-top: 1.25rem;
+  color: var(--brand-muted);
+  font-size: 1rem;
+}
 }
 
 .landing__cta::before {

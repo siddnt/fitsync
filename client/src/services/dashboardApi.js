@@ -18,6 +18,14 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/trainee/orders',
       providesTags: ['Dashboard', 'Marketplace'],
     }),
+    submitTrainerFeedback: builder.mutation({
+      query: (payload) => ({
+        url: '/dashboards/trainee/feedback',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: ['Dashboard', 'Trainer'],
+    }),
     getGymOwnerOverview: builder.query({
       query: () => '/dashboards/gym-owner/overview',
       providesTags: ['Dashboard', 'Analytics', 'Subscription'],
@@ -54,6 +62,10 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/trainer/updates',
       providesTags: ['Dashboard', 'Trainer'],
     }),
+    getTrainerFeedback: builder.query({
+      query: () => '/dashboards/trainer/feedback',
+      providesTags: ['Dashboard', 'Trainer'],
+    }),
     getAdminOverview: builder.query({
       query: () => '/dashboards/admin/overview',
       providesTags: ['Dashboard', 'Analytics'],
@@ -86,6 +98,7 @@ export const {
   useGetTraineeProgressQuery,
   useGetTraineeDietQuery,
   useGetTraineeOrdersQuery,
+  useSubmitTrainerFeedbackMutation,
   useGetGymOwnerOverviewQuery,
   useGetGymOwnerRosterQuery,
   useGetGymOwnerGymsQuery,
@@ -95,6 +108,7 @@ export const {
   useGetTrainerOverviewQuery,
   useGetTrainerTraineesQuery,
   useGetTrainerUpdatesQuery,
+  useGetTrainerFeedbackQuery,
   useGetAdminOverviewQuery,
   useGetAdminUsersQuery,
   useGetAdminGymsQuery,
