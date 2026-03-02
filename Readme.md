@@ -1,103 +1,89 @@
-# FitSync - Gym Management System
+# FitSync
 
-## Quick Start - Admin Login
-To log in as an admin user:
-1. Run `./create-admin.sh` to create admin credentials
-2. Login with:
-   - Email: admin@fitsync.com
-   - Password: admin123
-3. Visit http://localhost:4000/auth/login to log in
+Full-stack gym and marketplace platform with an Express/MongoDB API and a Vite + React client.
 
-## Overview
-FitSync is a comprehensive gym management system that facilitates interaction between gym members, trainers, and administrators. It allows users to browse and enroll in fitness plans, book sessions with trainers, and manage their fitness journey, all in one place.
+## What you get
+- Member, trainer, seller, and owner consoles for memberships, listings, inventory, orders, and analytics.
+- Stripe-ready payments, image uploads, and JWT-based auth with refresh tokens.
+- React + Redux Toolkit front-end with Vite dev server and API proxying.
 
-## Features
-- **User Management**: Registration, login, profile management for members and trainers
-- **Plan Management**: Create, update, and enroll in fitness plans
-- **Booking System**: Schedule and manage training sessions
-- **Admin Dashboard**: Monitor and manage users, plans, and bookings
-- **Responsive UI**: Works on both desktop and mobile devices
+## Project layout
+- API server: `src/` (Express + MongoDB)
+- Web client: `client/` (Vite + React)
 
-## Tech Stack
-- **Backend**: Node.js, Express.js
-- **Database**: MongoDB
-- **Frontend**: EJS templates, HTML, CSS, JavaScript
-- **Authentication**: JWT and Session-based authentication
+## Prerequisites
+- Node.js 18+
+- npm
+- MongoDB running locally or remotely (set `MONGODB_URI`)
 
-## Getting Started
-
-### Prerequisites
-- Node.js (v14 or higher)
-- MongoDB Compass (local installation)
-
-### Installation
-1. Clone the repository
-   ```
-   git clone https://github.com/yourusername/fitsync.git
-   cd fitsync
-   ```
-
-2. Install dependencies
-   ```
-   npm install
-   ```
-
-3. Configure environment variables
-   ```
-   cp sample.env .env
-   ```
-   Edit the `.env` file with your own values.
-
-4. Start MongoDB locally
-   Ensure MongoDB is running on your local machine.
-
-5. Start the application
-   ```
-   npm run dev
-   ```
-
-6. Access the application
-   Open your browser and navigate to `http://localhost:4000`
-
-### Creating Admin User
-To create an admin user for accessing the admin dashboard:
-
-1. Run the admin creation script:
-   ```
-   ./create-admin.sh
-   ```
-   or
-   ```
-   node src/scripts/createAdminUser.js
-   ```
-
-2. The script will create an admin user with the following credentials:
-   - Email: admin@fitsync.com
-   - Password: admin123
-
-3. Login at http://localhost:4000/auth/login with these credentials
-
-### Legacy Data Cleanup
-- Run `npm run migrate:cleanup:legacy` after deploying to remove deprecated course-era fields from existing user documents. The script is idempotent but you should back up the `users` collection before executing it in production.
-
-## Project Structure
+## Setup
+1) Install server deps (root):
 ```
-src/
-├── controllers/     # Request handlers
-├── db/              # Database connection
-├── middlewares/     # Express middlewares
-├── models/          # Mongoose schemas
-├── routes/          # API routes
-├── scripts/         # Utility scripts
-├── storage/         # File uploads storage
-├── utils/           # Utility functions
-├── app.js           # Express app setup
-└── index.js         # Entry point
-public/              # Static assets
-views/               # EJS templates
+npm install
 ```
 
-## License
-ISC
+2) Install client deps:
+```
+cd client
+npm install
+cd ..
+```
+
+3) Environment files:
+- Server: create `.env` in the repo root. Minimal for local dev:
+```
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/fitsync
+CORS_ORIGIN=http://localhost:5173,http://localhost:4000
+JWT_SECRET=dev-jwt-secret
+REFRESH_TOKEN_SECRET=dev-refresh-secret
+STRIPE_PUBLISHABLE_KEY=pk_test_dummy
+STRIPE_SECRET_KEY=sk_test_dummy
+STRIPE_WEBHOOK_SECRET=whsec_dummy
+CLOUDINARY_URL= # or CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET
+```
+- Client: copy `.env.example` inside `client/` to `.env` and adjust as needed (default proxies `/api` to `http://localhost:4000`).
+
+## Run in development
+Open two terminals:
+1) API server (nodemon):
+```
+npm run dev
+```
+Starts at `http://localhost:4000`.
+
+2) Web client (Vite + HMR):
+```
+npm run client:dev
+```
+Serves at `http://localhost:5173` and proxies `/api` to the server.
+
+## Admin quick start
+- Create an admin user:
+```
+./create-admin.sh
+# or
+node src/scripts/createAdminUser.js
+```
+- Login at `http://localhost:4000/auth/login` with the generated `admin@fitsync.com / admin123`.
+
+## Scripts
+- `npm run dev` — API dev server with nodemon
+- `npm start` — API production start
+- `npm test` — backend tests (Jest)
+- `npm run client:dev` — client dev server
+- `npm run client:build` — client production build
+- `npm run client:preview` — preview built client locally
+
+## Build for production
+1) Build client assets:
+```
+npm run client:build
+```
+2) Serve API with `npm start` and host the built client (`client/dist`) behind your chosen web server or CDN.
+
+## Quick tour
+- API: Express routes under `src/api`, Mongo connection in `src/db`, auth/session handling in `src/middlewares` and `src/models`.
+- Client: pages and dashboards in `client/src/pages`, API calls via RTK Query services in `client/src/services`, global state in `client/src/features` and `client/src/app/store.js`.
 
 

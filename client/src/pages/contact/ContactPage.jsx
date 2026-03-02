@@ -53,7 +53,13 @@ const ContactPage = () => {
                                 id="name"
                                 type="text"
                                 placeholder="Your Name"
-                                {...register('name', { required: 'Name is required' })}
+                                {...register('name', {
+                                    required: 'Name is required',
+                                    pattern: {
+                                        value: /^[A-Za-z]+$/,
+                                        message: 'Name can contain letters only',
+                                    },
+                                })}
                                 className={errors.name ? 'error' : ''}
                             />
                             {errors.name && (
@@ -84,13 +90,17 @@ const ContactPage = () => {
 
                     <div className="form-group">
                         <label htmlFor="subject">Subject</label>
-                        <input
-                            id="subject"
-                            type="text"
-                            placeholder="What is this about?"
-                            {...register('subject', { required: 'Subject is required' })}
-                            className={errors.subject ? 'error' : ''}
-                        />
+                            <input
+                                id="subject"
+                                type="text"
+                                placeholder="What is this about?"
+                                {...register('subject', {
+                                    required: 'Subject is required',
+                                    validate: (value) =>
+                                        value.trim().length > 0 || 'Subject cannot be empty',
+                                })}
+                                className={errors.subject ? 'error' : ''}
+                            />
                         {errors.subject && (
                             <span className="error-message">{errors.subject.message}</span>
                         )}
@@ -98,13 +108,17 @@ const ContactPage = () => {
 
                     <div className="form-group">
                         <label htmlFor="message">Message</label>
-                        <textarea
-                            id="message"
-                            rows="5"
-                            placeholder="How can we help you?"
-                            {...register('message', { required: 'Message is required' })}
-                            className={errors.message ? 'error' : ''}
-                        />
+                            <textarea
+                                id="message"
+                                rows="5"
+                                placeholder="How can we help you?"
+                                {...register('message', {
+                                    required: 'Message is required',
+                                    validate: (value) =>
+                                        value.trim().length > 0 || 'Message cannot be empty',
+                                })}
+                                className={errors.message ? 'error' : ''}
+                            />
                         {errors.message && (
                             <span className="error-message">{errors.message.message}</span>
                         )}

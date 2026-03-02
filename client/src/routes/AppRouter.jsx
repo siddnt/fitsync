@@ -27,7 +27,6 @@ import AdminUsersPage from '../pages/dashboards/admin/UsersPage.jsx';
 import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
-import AdminSettingsPage from '../pages/dashboards/admin/SettingsPage.jsx';
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
@@ -93,7 +92,6 @@ const AppRouter = () => (
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
           <Route path="messages" element={<AdminMessagesPage />} />
-          <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
