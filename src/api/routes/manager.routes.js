@@ -13,7 +13,9 @@ import {
   getManagerGyms,
   deleteManagerGym,
   getManagerMarketplace,
+  deleteManagerProduct,
 } from '../controllers/manager.controller.js';
+import { getAdminUserDetail, getAdminProducts, getAdminGymDetail, getAdminProductBuyers } from '../controllers/dashboard.controller.js';
 
 const router = Router();
 
@@ -34,11 +36,18 @@ router.get('/gym-owners', getGymOwners);
 router.patch('/gym-owners/:userId/status', updateGymOwnerStatus);
 router.delete('/gym-owners/:userId', deleteGymOwner);
 
+// User detail (reuses admin deep-view)
+router.get('/users/:userId', getAdminUserDetail);
+
 // Gyms oversight
 router.get('/gyms', getManagerGyms);
+router.get('/gyms/:gymId', getAdminGymDetail);
 router.delete('/gyms/:gymId', deleteManagerGym);
 
 // Marketplace oversight
 router.get('/marketplace', getManagerMarketplace);
+router.get('/products', getAdminProducts);
+router.get('/products/:productId', getAdminProductBuyers);
+router.delete('/products/:productId', deleteManagerProduct);
 
 export default router;

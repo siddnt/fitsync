@@ -3,6 +3,7 @@ import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js'
 import {
 	deleteUserAccount,
 	deleteGymListing,
+	deleteProduct,
 	getAdminToggles,
 	updateAdminToggles,
 	updateUserStatus,
@@ -15,6 +16,7 @@ router.use(verifyJWT, authorizeRoles('admin'));
 router.delete('/users/:userId', deleteUserAccount);
 router.patch('/users/:userId/status', updateUserStatus);
 router.delete('/gyms/:gymId', deleteGymListing);
+router.delete('/products/:productId', deleteProduct);
 router.get('/settings/toggles', getAdminToggles);
 router.patch('/settings/toggles', updateAdminToggles);
 

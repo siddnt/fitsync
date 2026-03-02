@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -11,6 +12,7 @@ import { formatDate, formatStatus, formatNumber } from '../../../utils/format.js
 import '../Dashboard.css';
 
 const GymOwnersPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetManagerGymOwnersQuery();
   const [updateStatus, { isLoading: isUpdating }] = useUpdateGymOwnerStatusMutation();
   const [deleteOwner, { isLoading: isDeleting }] = useDeleteGymOwnerByManagerMutation();
@@ -135,7 +137,13 @@ const GymOwnersPage = () => {
               {filteredOwners.map((owner) => (
                 <tr key={owner._id}>
                   <td>
-                    <div className="dashboard-table__user">
+                    <div
+                      className="dashboard-table__user dashboard-table__user--link"
+                      onClick={() => navigate(`/dashboard/manager/users/${owner._id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${owner._id}`)}
+                    >
                       {owner.profilePicture ? (
                         <img src={owner.profilePicture} alt={owner.name} />
                       ) : (

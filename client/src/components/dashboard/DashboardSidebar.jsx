@@ -33,6 +33,7 @@ const dashboardLinksByRole = {
     { to: '/dashboard/manager/sellers', label: 'Sellers' },
     { to: '/dashboard/manager/gym-owners', label: 'Gym Owners' },
     { to: '/dashboard/manager/gyms', label: 'Gyms' },
+    { to: '/dashboard/manager/products', label: 'Products' },
     { to: '/dashboard/manager/marketplace', label: 'Marketplace' },
     { to: '/dashboard/manager/messages', label: 'Messages' },
   ],
@@ -40,9 +41,14 @@ const dashboardLinksByRole = {
     { to: '/dashboard/admin', label: 'Overview' },
     { to: '/dashboard/admin/users', label: 'Users' },
     { to: '/dashboard/admin/gyms', label: 'Gyms' },
+    { to: '/dashboard/admin/memberships', label: 'Memberships' },
+    { to: '/dashboard/admin/products', label: 'Products' },
     { to: '/dashboard/admin/revenue', label: 'Revenue' },
     { to: '/dashboard/admin/marketplace', label: 'Marketplace' },
+    { to: '/dashboard/admin/reviews', label: 'Reviews' },
+    { to: '/dashboard/admin/subscriptions', label: 'Subscriptions' },
     { to: '/dashboard/admin/messages', label: 'Messages' },
+    { to: '/dashboard/admin/settings', label: 'Settings' },
   ],
 };
 

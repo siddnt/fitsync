@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -11,6 +12,7 @@ import { formatDate, formatStatus, formatNumber } from '../../../utils/format.js
 import '../Dashboard.css';
 
 const SellersPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetManagerSellersQuery();
   const [updateStatus, { isLoading: isUpdating }] = useUpdateSellerStatusMutation();
   const [deleteSeller, { isLoading: isDeleting }] = useDeleteSellerByManagerMutation();
@@ -130,7 +132,13 @@ const SellersPage = () => {
               {filteredSellers.map((seller) => (
                 <tr key={seller._id}>
                   <td>
-                    <div className="dashboard-table__user">
+                    <div
+                      className="dashboard-table__user dashboard-table__user--link"
+                      onClick={() => navigate(`/dashboard/manager/users/${seller._id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${seller._id}`)}
+                    >
                       {seller.profilePicture ? (
                         <img src={seller.profilePicture} alt={seller.name} />
                       ) : (

@@ -8,6 +8,8 @@ import TrainerProgress from '../../models/trainerProgress.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import Product from '../../models/product.model.js';
+import Cart from '../../models/cart.model.js';
+import ProductReview from '../../models/productReview.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -444,4 +446,30 @@ export const getManagerMarketplace = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { orders: data }, 'Marketplace orders fetched.'));
+});
+
+/* ──────── PRODUCT DELETION ──────── */
+export const deleteManagerProduct = asyncHandler(async (req, res) => {
+  ensureManager(req);
+
+  const productId = toObjectId(req.params.productId, 'Product id');
+
+  const product = await Product.findById(productId).lean();
+  if (!product) {
+    throw new ApiError(404, 'Product not found.');
+  }
+
+  await Promise.all([
+    Cart.updateMany(
+      { 'items.product': productId },
+      { $pull: { items: { product: productId } } },
+    ),
+    ProductReview.deleteMany({ product: productId }),
+  ]);
+
+  await Product.findByIdAndDelete(productId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { productId }, 'Product deleted successfully.'));
 });

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import User from '../../models/user.model.js';
 import Gym from '../../models/gym.model.js';
+import Product from '../../models/product.model.js';
+import Cart from '../../models/cart.model.js';
+import ProductReview from '../../models/productReview.model.js';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
@@ -171,6 +174,33 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { gymId }, 'Gym listing removed successfully.'));
+});
+
+export const deleteProduct = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    throw new ApiError(403, 'Only administrators can delete products.');
+  }
+
+  const productId = toObjectId(req.params.productId, 'Product id');
+
+  const product = await Product.findById(productId).lean();
+  if (!product) {
+    throw new ApiError(404, 'Product not found.');
+  }
+
+  await Promise.all([
+    Cart.updateMany(
+      { 'items.product': productId },
+      { $pull: { items: { product: productId } } },
+    ),
+    ProductReview.deleteMany({ product: productId }),
+  ]);
+
+  await Product.findByIdAndDelete(productId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { productId }, 'Product deleted successfully.'));
 });
 
 export const getAdminToggles = asyncHandler(async (_req, res) => {

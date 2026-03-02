@@ -69,6 +69,10 @@ export const managerApi = apiSlice.injectEndpoints({
       query: () => '/manager/gyms',
       providesTags: ['Dashboard', 'Gym'],
     }),
+    getManagerGymDetail: builder.query({
+      query: (gymId) => `/manager/gyms/${gymId}`,
+      providesTags: (_result, _error, gymId) => [{ type: 'Gym', id: gymId }],
+    }),
     deleteGymByManager: builder.mutation({
       query: (gymId) => ({
         url: `/manager/gyms/${gymId}`,
@@ -81,6 +85,31 @@ export const managerApi = apiSlice.injectEndpoints({
     getManagerMarketplace: builder.query({
       query: () => '/manager/marketplace',
       providesTags: ['Dashboard', 'Marketplace'],
+    }),
+
+    /* ── Products Listing ── */
+    getManagerProducts: builder.query({
+      query: () => '/manager/products',
+      providesTags: ['Dashboard', 'Marketplace'],
+    }),
+    getManagerProductBuyers: builder.query({
+      query: (productId) => `/manager/products/${productId}`,
+      providesTags: (_result, _error, productId) => [{ type: 'Marketplace', id: productId }],
+    }),
+
+    /* ── User Detail (deep view) ── */
+    getManagerUserDetail: builder.query({
+      query: (userId) => `/manager/users/${userId}`,
+      providesTags: (_res, _err, userId) => [{ type: 'User', id: userId }],
+    }),
+
+    /* ── Product Deletion ── */
+    deleteManagerProduct: builder.mutation({
+      query: (productId) => ({
+        url: `/manager/products/${productId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Dashboard', 'Marketplace'],
     }),
   }),
 });
@@ -96,6 +125,11 @@ export const {
   useUpdateGymOwnerStatusMutation,
   useDeleteGymOwnerByManagerMutation,
   useGetManagerGymsQuery,
+  useGetManagerGymDetailQuery,
   useDeleteGymByManagerMutation,
   useGetManagerMarketplaceQuery,
+  useGetManagerProductsQuery,
+  useGetManagerProductBuyersQuery,
+  useGetManagerUserDetailQuery,
+  useDeleteManagerProductMutation,
 } = managerApi;
