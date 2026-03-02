@@ -19,6 +19,7 @@ const GymOwnerDashboard = () => {
     isLoading: isOverviewLoading,
     isError: isOverviewError,
     refetch: refetchOverview,
+    error: overviewError,
   } = useGetGymOwnerOverviewQuery();
 
   const {
@@ -26,10 +27,14 @@ const GymOwnerDashboard = () => {
     isLoading: isSubscriptionsLoading,
     isError: isSubscriptionsError,
     refetch: refetchSubscriptions,
+    error: subscriptionsError,
   } = useGetGymOwnerSubscriptionsQuery();
 
   const isLoading = isOverviewLoading || isSubscriptionsLoading;
   const isError = isOverviewError || isSubscriptionsError;
+  const approvalError = [overviewError, subscriptionsError].find((err) => err?.status === 403);
+  const approvalMessage = approvalError?.data?.message
+    ?? 'Your gym-owner account is awaiting approval. Hang tight—we\'ll unlock the console as soon as you are activated.';
 
   const overview = overviewResponse?.data;
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
@@ -52,6 +57,22 @@ const GymOwnerDashboard = () => {
   }
 
   if (isError) {
+    if (approvalError) {
+      return (
+        <div className="dashboard-grid dashboard-grid--owner">
+          <DashboardSection
+            title="Gym Owner Dashboard"
+            action={(
+              <button type="button" onClick={refetchAll}>
+                Refresh
+              </button>
+            )}
+          >
+            <EmptyState message={approvalMessage} />
+          </DashboardSection>
+        </div>
+      );
+    }
     return (
       <div className="dashboard-grid dashboard-grid--owner">
         <DashboardSection

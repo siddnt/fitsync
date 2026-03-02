@@ -30,6 +30,13 @@ import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx'
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
+import ManagerDashboard from '../pages/dashboards/ManagerDashboard.jsx';
+import ManagerApprovalsPage from '../pages/dashboards/manager/ApprovalsPage.jsx';
+import ManagerSellersPage from '../pages/dashboards/manager/SellersPage.jsx';
+import ManagerGymOwnersPage from '../pages/dashboards/manager/GymOwnersPage.jsx';
+import ManagerGymsPage from '../pages/dashboards/manager/GymsPage.jsx';
+import ManagerMarketplacePage from '../pages/dashboards/manager/MarketplacePage.jsx';
+import ManagerMessagesPage from '../pages/dashboards/manager/MessagesPage.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
@@ -84,6 +91,15 @@ const AppRouter = () => (
           <Route index element={<TrainerDashboard />} />
           <Route path="trainees" element={<TrainerTraineesPage />} />
           <Route path="updates" element={<TrainerUpdatesPage />} />
+        </Route>
+        <Route path="manager">
+          <Route index element={<ManagerDashboard />} />
+          <Route path="approvals" element={<ManagerApprovalsPage />} />
+          <Route path="sellers" element={<ManagerSellersPage />} />
+          <Route path="gym-owners" element={<ManagerGymOwnersPage />} />
+          <Route path="gyms" element={<ManagerGymsPage />} />
+          <Route path="marketplace" element={<ManagerMarketplacePage />} />
+          <Route path="messages" element={<ManagerMessagesPage />} />
         </Route>
         <Route path="admin">
           <Route index element={<AdminDashboard />} />

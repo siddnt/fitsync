@@ -193,7 +193,7 @@ const InventoryPage = () => {
 
   const approvalError = error?.status === 403 ? error : null;
   const approvalMessage = approvalError?.data?.message
-    ?? 'Your seller account is awaiting admin approval. Hang tight—you can start listing products as soon as you are activated.';
+    ?? 'Your seller account is awaiting approval. Hang tight—you can start listing products as soon as you are activated.';
 
   const createPreviewUrl = useCallback((file) => {
     if (!file) {

@@ -27,6 +27,15 @@ const dashboardLinksByRole = {
     { to: '/dashboard/seller/inventory', label: 'Inventory' },
     { to: '/dashboard/seller/orders', label: 'Orders' },
   ],
+  manager: [
+    { to: '/dashboard/manager', label: 'Overview' },
+    { to: '/dashboard/manager/approvals', label: 'Pending Approvals' },
+    { to: '/dashboard/manager/sellers', label: 'Sellers' },
+    { to: '/dashboard/manager/gym-owners', label: 'Gym Owners' },
+    { to: '/dashboard/manager/gyms', label: 'Gyms' },
+    { to: '/dashboard/manager/marketplace', label: 'Marketplace' },
+    { to: '/dashboard/manager/messages', label: 'Messages' },
+  ],
   admin: [
     { to: '/dashboard/admin', label: 'Overview' },
     { to: '/dashboard/admin/users', label: 'Users' },

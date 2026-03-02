@@ -60,6 +60,9 @@ const AppHeader = () => {
         {user?.role === 'trainer' && (
           <NavLink to="/dashboard/trainer">Trainer Console</NavLink>
         )}
+        {user?.role === 'manager' && (
+          <NavLink to="/dashboard/manager">Manager Console</NavLink>
+        )}
         {user?.role === 'admin' && (
           <NavLink to="/dashboard/admin">Admin</NavLink>
         )}

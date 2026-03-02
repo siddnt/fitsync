@@ -39,6 +39,7 @@ const userSchema = new mongoose.Schema(
                 "trainer",
                 "gym-owner",
                 "seller",
+                "manager",
                 "admin"
             ],
             default: "trainee"
@@ -47,8 +48,8 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: ["active", "inactive", "pending"],
             default: function() {
-                // If role is trainer, set status to pending by default
-                if (["trainer", "gym-owner", "seller"].includes(this.role)) {
+                // If role is trainer, gym-owner, seller, or manager set status to pending by default
+                if (["trainer", "gym-owner", "seller", "manager"].includes(this.role)) {
                     return "pending";
                 }
                 return "active";

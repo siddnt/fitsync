@@ -64,7 +64,7 @@ const ensureSellerActive = (user) => {
   }
 
   if (user.status !== 'active') {
-    throw new ApiError(403, 'Your seller account is awaiting admin approval.');
+    throw new ApiError(403, 'Your seller account is awaiting approval.');
   }
 };
 

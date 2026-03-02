@@ -798,6 +798,10 @@ export const getTrainerFeedbackInbox = asyncHandler(async (req, res) => {
 
 
 export const getGymOwnerOverview = asyncHandler(async (req, res) => {
+  if (req.user?.status !== 'active' && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'Your gym-owner account is awaiting approval.');
+  }
+
   const ownerId = req.user?._id;
   const ownerObjectId = toObjectId(ownerId);
   const ownerFilter = ownerObjectId ?? ownerId;
@@ -1640,7 +1644,7 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
 });
 
 export const getAdminUsers = asyncHandler(async (_req, res) => {
-  const pendingQuery = User.find({ status: 'pending', role: 'seller' })
+  const pendingQuery = User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner', 'manager'] } })
     .select('name email role createdAt profile.location profile.headline')
     .lean();
 
@@ -1999,5 +2003,169 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, insights, 'Admin insights fetched successfully'));
+});
+
+/* ═══════════════════════════════════════════════
+   MANAGER DASHBOARD
+   ═══════════════════════════════════════════════ */
+
+const ensureManagerDashboard = (req) => {
+  if (!req.user || req.user.role !== 'manager') {
+    throw new ApiError(403, 'Only managers can access this resource.');
+  }
+  if (req.user.status !== 'active') {
+    throw new ApiError(403, 'Your manager account is awaiting admin approval.');
+  }
+};
+
+export const getManagerOverview = asyncHandler(async (req, res) => {
+  ensureManagerDashboard(req);
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    pendingApprovals,
+    activeSellers,
+    activeGymOwners,
+    totalGyms,
+    recentOrders,
+    contactMessages,
+    recentPending,
+  ] = await Promise.all([
+    User.countDocuments({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } }),
+    User.countDocuments({ role: 'seller', status: 'active' }),
+    User.countDocuments({ role: 'gym-owner', status: 'active' }),
+    Gym.countDocuments({ status: 'active' }),
+    Order.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+    mongoose.connection.db.collection('contacts').countDocuments({ status: 'new' }),
+    User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } })
+      .select('name email role createdAt profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      stats: {
+        pendingApprovals,
+        activeSellers,
+        activeGymOwners,
+        totalGyms,
+        recentOrders,
+        openMessages: contactMessages,
+      },
+      recentPending,
+    }, 'Manager overview fetched successfully.'),
+  );
+});
+
+export const getManagerSellers = asyncHandler(async (req, res) => {
+  ensureManagerDashboard(req);
+
+  const sellers = await User.find({ role: 'seller' })
+    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const sellerIds = sellers.map((s) => s._id);
+
+  const productCounts = await Product.aggregate([
+    { $match: { seller: { $in: sellerIds } } },
+    {
+      $group: {
+        _id: '$seller',
+        total: { $sum: 1 },
+        published: { $sum: { $cond: ['$isPublished', 1, 0] } },
+      },
+    },
+  ]);
+
+  const orderCounts = await Order.aggregate([
+    { $unwind: '$orderItems' },
+    { $match: { 'orderItems.seller': { $in: sellerIds } } },
+    { $group: { _id: '$orderItems.seller', orderCount: { $sum: 1 } } },
+  ]);
+
+  const productMap = productCounts.reduce((acc, item) => {
+    acc[item._id.toString()] = { total: item.total, published: item.published };
+    return acc;
+  }, {});
+
+  const orderMap = orderCounts.reduce((acc, item) => {
+    acc[item._id.toString()] = item.orderCount;
+    return acc;
+  }, {});
+
+  const enriched = sellers.map((seller) => ({
+    ...seller,
+    products: productMap[seller._id.toString()] ?? { total: 0, published: 0 },
+    orderCount: orderMap[seller._id.toString()] ?? 0,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { sellers: enriched }, 'Manager sellers fetched.'));
+});
+
+export const getManagerGymOwners = asyncHandler(async (req, res) => {
+  ensureManagerDashboard(req);
+
+  const owners = await User.find({ role: 'gym-owner' })
+    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const ownerIds = owners.map((o) => o._id);
+
+  const gymCounts = await Gym.aggregate([
+    { $match: { owner: { $in: ownerIds } } },
+    {
+      $group: {
+        _id: '$owner',
+        total: { $sum: 1 },
+        published: { $sum: { $cond: ['$isPublished', 1, 0] } },
+        totalImpressions: { $sum: { $ifNull: ['$analytics.impressions', 0] } },
+      },
+    },
+  ]);
+
+  const membershipCounts = await GymMembership.aggregate([
+    {
+      $lookup: {
+        from: 'gyms',
+        localField: 'gym',
+        foreignField: '_id',
+        as: 'gymInfo',
+      },
+    },
+    { $unwind: '$gymInfo' },
+    { $match: { 'gymInfo.owner': { $in: ownerIds }, status: 'active' } },
+    { $group: { _id: '$gymInfo.owner', members: { $sum: 1 } } },
+  ]);
+
+  const gymMap = gymCounts.reduce((acc, item) => {
+    acc[item._id.toString()] = {
+      total: item.total,
+      published: item.published,
+      totalImpressions: item.totalImpressions,
+    };
+    return acc;
+  }, {});
+
+  const memberMap = membershipCounts.reduce((acc, item) => {
+    acc[item._id.toString()] = item.members;
+    return acc;
+  }, {});
+
+  const enriched = owners.map((owner) => ({
+    ...owner,
+    gyms: gymMap[owner._id.toString()] ?? { total: 0, published: 0, totalImpressions: 0 },
+    totalMembers: memberMap[owner._id.toString()] ?? 0,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { gymOwners: enriched }, 'Manager gym owners fetched.'));
 });
 

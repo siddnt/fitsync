@@ -105,6 +105,8 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
     }
   }
 
+  // Manager deletion has no special cascade since they don't own content
+
   await Promise.all(cleanupTasks);
   await User.findByIdAndDelete(targetUserId);
 

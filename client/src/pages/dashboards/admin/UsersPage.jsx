@@ -11,7 +11,7 @@ const AdminUsersPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
-  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'seller');
+  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
@@ -20,7 +20,7 @@ const AdminUsersPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'admin'];
+    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
     const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
     const merged = [...new Set([...knownRoles, ...dynamicRoles])];
     return ['all', ...merged];
@@ -186,7 +186,7 @@ const AdminUsersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No pending approvals. All caught up!" />
+          <EmptyState message="No pending manager approvals. All caught up!" />
         )}
       </DashboardSection>
 
