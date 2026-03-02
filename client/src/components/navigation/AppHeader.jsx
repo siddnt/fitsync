@@ -3,7 +3,6 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
 import { useLogoutMutation } from '../../services/authApi.js';
-import { useAnnouncement } from '../../context/AnnouncementContext.jsx';
 import logo from '../../assets/logo.png';
 import './AppHeader.css';
 
@@ -15,7 +14,6 @@ const AppHeader = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
-  const { isAnnouncementVisible, message: announcementMessage } = useAnnouncement();
 
   const handleLogout = useCallback(async () => {
     try {
@@ -31,11 +29,6 @@ const AppHeader = () => {
 
   return (
     <>
-      {isAnnouncementVisible ? (
-        <div className="app-header__announcement">
-          <p className="app-header__announcement-text">{announcementMessage}</p>
-        </div>
-      ) : null}
       <header className="app-header">
       <div className="app-header__brand">
         <Link to="/">
