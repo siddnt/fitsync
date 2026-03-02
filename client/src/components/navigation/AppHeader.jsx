@@ -14,7 +14,6 @@ const AppHeader = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
-
   const handleLogout = useCallback(async () => {
     try {
       await logout().unwrap();
@@ -28,7 +27,8 @@ const AppHeader = () => {
   }, [dispatch, navigate, logout]);
 
   return (
-    <header className="app-header">
+    <>
+      <header className="app-header">
       <div className="app-header__brand">
         <Link to="/">
           <img src={logo} alt="FitSync" className="app-logo" />
@@ -86,6 +86,7 @@ const AppHeader = () => {
         )}
       </div>
     </header>
+    </>
   );
 };
 

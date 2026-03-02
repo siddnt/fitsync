@@ -126,43 +126,58 @@ const mapGym = (gym) => ({
   name: gym.name,
   owner: gym.owner
     ? {
-        id: gym.owner._id,
-        name: gym.owner.name,
-        firstName: gym.owner.firstName,
-        lastName: gym.owner.lastName,
-      }
+      id: gym.owner._id,
+      name: gym.owner.name,
+      firstName: gym.owner.firstName,
+      lastName: gym.owner.lastName,
+    }
     : undefined,
   city: gym.location?.city,
   location: {
-    address: [
-      gym.location?.addressLine1,
-      gym.location?.addressLine2,
-      gym.location?.city,
-      gym.location?.state,
-      gym.location?.postalCode,
-    ]
-      .filter(Boolean)
-      .join(', '),
+    address: gym.location?.address
+      || [gym.location?.city, gym.location?.state, gym.location?.postalCode]
+        .filter(Boolean)
+        .join(', '),
+    city: gym.location?.city,
+    state: gym.location?.state,
   },
-  pricing: gym.pricing,
+  pricing: {
+    mrp: gym.pricing?.monthlyMrp,
+    discounted: gym.pricing?.monthlyPrice,
+    monthlyMrp: gym.pricing?.monthlyMrp,
+    monthlyPrice: gym.pricing?.monthlyPrice,
+    currency: gym.pricing?.currency ?? 'INR',
+  },
   contact: gym.contact,
-  schedule: gym.schedule,
+  schedule: {
+    open: gym.schedule?.openTime,
+    close: gym.schedule?.closeTime,
+    openTime: gym.schedule?.openTime,
+    closeTime: gym.schedule?.closeTime,
+    workingDays: gym.schedule?.workingDays,
+  },
   features: gym.keyFeatures?.length ? gym.keyFeatures : gym.amenities,
+  keyFeatures: gym.keyFeatures,
   amenities: gym.amenities,
+  tags: gym.tags,
   description: gym.description,
   gallery: gym.gallery,
   sponsorship: gym.sponsorship,
   analytics: gym.analytics,
+  status: gym.status,
+  isPublished: gym.isPublished,
+  updatedAt: gym.updatedAt,
   reviews: gym.analytics?.ratingCount
     ? [
-        {
-          id: `${gym._id}-aggregate`,
-          rating: gym.analytics.rating,
-          comment: `${gym.analytics.ratingCount} members rated this gym`,
-        },
-      ]
+      {
+        id: `${gym._id}-aggregate`,
+        rating: gym.analytics.rating,
+        comment: `${gym.analytics.ratingCount} members rated this gym`,
+      },
+    ]
     : [],
 });
+
 
 export const listGyms = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;

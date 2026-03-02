@@ -28,26 +28,26 @@ const mapMembership = (membership) => {
     notes: membership.notes,
     billing: membership.billing
       ? {
-          amount: membership.billing.amount,
-          currency: membership.billing.currency,
-          paymentGateway: membership.billing.paymentGateway,
-          paymentReference: membership.billing.paymentReference,
-          status: membership.billing.status,
-        }
+        amount: membership.billing.amount,
+        currency: membership.billing.currency,
+        paymentGateway: membership.billing.paymentGateway,
+        paymentReference: membership.billing.paymentReference,
+        status: membership.billing.status,
+      }
       : null,
     gym: membership.gym
       ? {
-          id: membership.gym._id,
-          name: membership.gym.name,
-          city: membership.gym.location?.city,
-        }
+        id: membership.gym._id,
+        name: membership.gym.name,
+        city: membership.gym.location?.city,
+      }
       : null,
     trainer: membership.trainer
       ? {
-          id: membership.trainer._id,
-          name: membership.trainer.name,
-          profilePicture: membership.trainer.profilePicture,
-        }
+        id: membership.trainer._id,
+        name: membership.trainer.name,
+        profilePicture: membership.trainer.profilePicture,
+      }
       : null,
   };
 };
@@ -129,7 +129,7 @@ export const getMyGymMembership = asyncHandler(async (req, res) => {
 });
 
 const resolveGymPrice = (gym) => {
-  const price = Number(gym?.pricing?.discounted ?? gym?.pricing?.mrp);
+  const price = Number(gym?.pricing?.monthlyPrice ?? gym?.pricing?.monthlyMrp);
   return Number.isFinite(price) && price > 0 ? price : null;
 };
 
@@ -155,14 +155,29 @@ export const joinGym = asyncHandler(async (req, res) => {
     status: { $in: ['pending', 'active', 'paused'] },
   }).lean();
 
+  if (!joinAsTrainer && user.role === 'trainee') {
+    const otherGymMembership = await GymMembership.findOne({
+      trainee: user._id,
+      gym: { $ne: gym._id },
+      plan: { $ne: 'trainer-access' },
+      status: { $in: ['pending', 'active', 'paused'] },
+    })
+      .select('_id gym status plan')
+      .lean();
+
+    if (otherGymMembership) {
+      throw new ApiError(409, 'You already have an active membership in another gym.');
+    }
+  }
+
   const existingTrainerMembership = existingMembership?.plan === 'trainer-access'
     ? existingMembership
     : await GymMembership.findOne({
-        gym: gym._id,
-        trainee: user._id,
-        plan: 'trainer-access',
-        status: { $in: ['pending', 'active'] },
-      }).lean();
+      gym: gym._id,
+      trainee: user._id,
+      plan: 'trainer-access',
+      status: { $in: ['pending', 'active'] },
+    }).lean();
 
   if (joinAsTrainer) {
     if (existingTrainerMembership) {

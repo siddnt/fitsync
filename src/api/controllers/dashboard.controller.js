@@ -456,52 +456,52 @@ export const getTraineeOverview = asyncHandler(async (req, res) => {
 
   const membership = membershipDoc
     ? {
-        id: membershipDoc._id,
-        plan: membershipDoc.plan,
-        status: membershipDoc.status,
-        startDate: membershipDoc.startDate,
-        endDate: membershipDoc.endDate,
-        daysRemaining: Math.max(0, daysBetween(new Date(), membershipDoc.endDate)),
-        autoRenew: membershipDoc.autoRenew,
-        benefits: membershipDoc.benefits ?? [],
-        trainer: membershipDoc.trainer
-          ? {
-              id: membershipDoc.trainer._id,
-              name: membershipDoc.trainer.name,
-              profilePicture: membershipDoc.trainer.profilePicture,
-            }
-          : null,
-        gym: membershipDoc.gym
-          ? {
-              id: membershipDoc.gym._id,
-              name: membershipDoc.gym.name,
-              city: membershipDoc.gym.location?.city,
-              pricing: membershipDoc.gym.pricing,
-              sponsorship: membershipDoc.gym.sponsorship,
-              analytics: membershipDoc.gym.analytics,
-            }
-          : null,
-        billing: membershipDoc.billing
-          ? formatCurrency(membershipDoc.billing.amount, membershipDoc.billing.currency)
-          : null,
-      }
+      id: membershipDoc._id,
+      plan: membershipDoc.plan,
+      status: membershipDoc.status,
+      startDate: membershipDoc.startDate,
+      endDate: membershipDoc.endDate,
+      daysRemaining: Math.max(0, daysBetween(new Date(), membershipDoc.endDate)),
+      autoRenew: membershipDoc.autoRenew,
+      benefits: membershipDoc.benefits ?? [],
+      trainer: membershipDoc.trainer
+        ? {
+          id: membershipDoc.trainer._id,
+          name: membershipDoc.trainer.name,
+          profilePicture: membershipDoc.trainer.profilePicture,
+        }
+        : null,
+      gym: membershipDoc.gym
+        ? {
+          id: membershipDoc.gym._id,
+          name: membershipDoc.gym.name,
+          city: membershipDoc.gym.location?.city,
+          pricing: membershipDoc.gym.pricing,
+          sponsorship: membershipDoc.gym.sponsorship,
+          analytics: membershipDoc.gym.analytics,
+        }
+        : null,
+      billing: membershipDoc.billing
+        ? formatCurrency(membershipDoc.billing.amount, membershipDoc.billing.currency)
+        : null,
+    }
     : null;
 
   const attendanceSummary = progressDoc ? buildAttendanceSummary(progressDoc.attendance) : null;
 
   const progressSummary = progressDoc
     ? {
-        streak: attendanceSummary?.streak ?? 0,
-        lastCheckIn: progressDoc.attendance?.length
-          ? [...progressDoc.attendance].sort((a, b) => new Date(b.date) - new Date(a.date))[0].date
-          : null,
-        attendance: attendanceSummary,
-        metrics: groupProgressMetrics(progressDoc.progressMetrics || [], progressDoc.bodyMetrics || []).slice(0, 3),
-        bodyMetrics: serializeBodyMetrics(progressDoc.bodyMetrics || []),
-        feedback: progressDoc.feedback
-          ?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 3),
-      }
+      streak: attendanceSummary?.streak ?? 0,
+      lastCheckIn: progressDoc.attendance?.length
+        ? [...progressDoc.attendance].sort((a, b) => new Date(b.date) - new Date(a.date))[0].date
+        : null,
+      attendance: attendanceSummary,
+      metrics: groupProgressMetrics(progressDoc.progressMetrics || [], progressDoc.bodyMetrics || []).slice(0, 3),
+      bodyMetrics: serializeBodyMetrics(progressDoc.bodyMetrics || []),
+      feedback: progressDoc.feedback
+        ?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 3),
+    }
     : null;
 
   const latestDiet = progressDoc?.dietPlans
@@ -513,10 +513,10 @@ export const getTraineeOverview = asyncHandler(async (req, res) => {
     progress: progressSummary,
     diet: latestDiet
       ? {
-          weekOf: latestDiet.weekOf,
-          meals: mapDietMeals(latestDiet.meals || []),
-          notes: latestDiet.notes,
-        }
+        weekOf: latestDiet.weekOf,
+        meals: mapDietMeals(latestDiet.meals || []),
+        notes: latestDiet.notes,
+      }
       : null,
     recentOrders: buildOrderSummary(orders),
   };
@@ -616,10 +616,10 @@ export const getTraineeDiet = asyncHandler(async (req, res) => {
     new ApiResponse(200, {
       latest: latest
         ? {
-            weekOf: latest.weekOf,
-            meals: mapDietMeals(latest.meals || []),
-            notes: latest.notes,
-          }
+          weekOf: latest.weekOf,
+          meals: mapDietMeals(latest.meals || []),
+          notes: latest.notes,
+        }
         : null,
       history,
     }, 'Diet plans fetched successfully'),
@@ -743,9 +743,9 @@ export const submitTrainerFeedback = asyncHandler(async (req, res) => {
           },
           gym: membership.gym
             ? {
-                id: membership.gym._id ? String(membership.gym._id) : String(membership.gym),
-                name: membership.gym.name,
-              }
+              id: membership.gym._id ? String(membership.gym._id) : String(membership.gym),
+              name: membership.gym.name,
+            }
             : null,
           message: savedEntry.message,
           createdAt: savedEntry.createdAt,
@@ -938,11 +938,11 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
     id: membership._id,
     user: membership.trainee
       ? {
-          id: membership.trainee._id,
-          name: membership.trainee.name,
-          email: membership.trainee.email,
-          profilePicture: membership.trainee.profilePicture,
-        }
+        id: membership.trainee._id,
+        name: membership.trainee.name,
+        email: membership.trainee.email,
+        profilePicture: membership.trainee.profilePicture,
+      }
       : null,
     gym: membership.gym ? { id: membership.gym._id, name: membership.gym.name } : null,
     joinedAt: membership.createdAt,
@@ -1102,9 +1102,9 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
       autoRenew: membership.autoRenew,
       trainer: membership.trainer
         ? {
-            id: membership.trainer._id,
-            name: membership.trainer.name,
-          }
+          id: membership.trainer._id,
+          name: membership.trainer.name,
+        }
         : null,
     });
   });
@@ -1139,11 +1139,11 @@ export const getGymOwnerSubscriptions = asyncHandler(async (req, res) => {
     invoices: subscription.invoices ?? [],
     gym: subscription.gym
       ? {
-          id: subscription.gym._id,
-          name: subscription.gym.name,
-          city: subscription.gym.location?.city,
-          status: subscription.gym.status,
-        }
+        id: subscription.gym._id,
+        name: subscription.gym.name,
+        city: subscription.gym.location?.city,
+        status: subscription.gym.status,
+      }
       : null,
   }));
 
@@ -1224,7 +1224,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
     applyMonthlyAmount(monthlyTimeline, when, 'memberships', 1);
     applyWeeklyAmount(weeklyTimeline, when, 'memberships', 1);
 
-  const ownerShareAmount = calculateRevenueShare(membership?.billing?.amount, OWNER_REVENUE_SHARE);
+    const ownerShareAmount = calculateRevenueShare(membership?.billing?.amount, OWNER_REVENUE_SHARE);
     if (ownerShareAmount > 0) {
       fallbackRevenueEntries.push({ amount: ownerShareAmount, date: when });
     }
@@ -1420,10 +1420,10 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
   const activeTrainees = memberships.map((membership) => {
     const gymInfo = membership.gym
       ? {
-          id: membership.gym._id,
-          name: membership.gym.name,
-          city: membership.gym.location?.city,
-        }
+        id: membership.gym._id,
+        name: membership.gym.name,
+        city: membership.gym.location?.city,
+      }
       : null;
 
     const assignment = assignmentByGym[String(membership.gym?._id)] ?? null;
@@ -1440,10 +1440,10 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     return {
       trainee: membership.trainee
         ? {
-            id: membership.trainee._id,
-            name: membership.trainee.name,
-            profilePicture: membership.trainee.profilePicture,
-          }
+          id: membership.trainee._id,
+          name: membership.trainee.name,
+          profilePicture: membership.trainee.profilePicture,
+        }
         : null,
       gym: gymInfo,
       assignedAt: membership.startDate,
@@ -1646,7 +1646,7 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
 
   const recentQuery = User.find()
     .sort({ createdAt: -1 })
-    .limit(20)
+    .limit(200)
     .select('name email role status createdAt profilePicture')
     .lean();
 
@@ -1941,10 +1941,18 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
     value: entry.count,
   }));
 
-  const ageDistribution = ageAggregation.map((entry) => ({
-    label: entry._id,
-    value: entry.count,
-  }));
+  const ageBucketOrder = ['<18', '18-24', '25-34', '35-44', '45-59', '60+'];
+  const ageBucketMap = ageAggregation.reduce((acc, entry) => {
+    acc[entry._id] = entry.count;
+    return acc;
+  }, {});
+
+  const ageDistribution = ageBucketOrder
+    .map((label) => ({
+      label,
+      value: ageBucketMap[label] ?? 0,
+    }))
+    .filter((bucket) => bucket.value > 0);
 
   const notifications = revenueEvents.map((event) => {
     const amount = event.amount ?? 0;

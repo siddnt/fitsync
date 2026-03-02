@@ -68,9 +68,13 @@ export const transformGymPayload = (values) => {
     payload.description = description;
   }
 
+  const city = trimToUndefined(values?.location?.city);
+  const state = trimToUndefined(values?.location?.state);
+  const address = [city, state].filter(Boolean).join(', ') || undefined;
   const location = buildSection([
-    ['city', trimToUndefined(values?.location?.city)],
-    ['state', trimToUndefined(values?.location?.state)],
+    ['address', address],
+    ['city', city],
+    ['state', state],
   ]);
   if (location) {
     payload.location = location;
@@ -84,8 +88,8 @@ export const transformGymPayload = (values) => {
   }
 
   const schedule = buildSection([
-    ['open', trimToUndefined(values?.schedule?.open)],
-    ['close', trimToUndefined(values?.schedule?.close)],
+    ['openTime', trimToUndefined(values?.schedule?.open)],
+    ['closeTime', trimToUndefined(values?.schedule?.close)],
   ]);
   if (schedule) {
     payload.schedule = schedule;
@@ -93,9 +97,10 @@ export const transformGymPayload = (values) => {
 
   const mrp = normaliseAmount(values?.pricing?.mrp);
   const discounted = normaliseAmount(values?.pricing?.discounted);
+  const effectivePrice = discounted !== undefined && (mrp === undefined || discounted < mrp) ? discounted : mrp;
   const pricing = buildSection([
-    ['mrp', mrp],
-    ['discounted', discounted !== undefined && (mrp === undefined || discounted < mrp) ? discounted : undefined],
+    ['monthlyMrp', mrp],
+    ['monthlyPrice', effectivePrice],
   ]);
   if (pricing) {
     payload.pricing = pricing;

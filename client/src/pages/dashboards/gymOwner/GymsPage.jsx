@@ -108,15 +108,15 @@ const GymOwnerGymsPage = () => {
         state: details.location?.state ?? '',
       },
       pricing: {
-        mrp: details.pricing?.mrp ?? '',
-        discounted: details.pricing?.discounted ?? '',
+        mrp: details.pricing?.monthlyMrp ?? details.pricing?.mrp ?? '',
+        discounted: details.pricing?.monthlyPrice ?? details.pricing?.discounted ?? '',
       },
       contact: {
         phone: details.contact?.phone ?? '',
       },
       schedule: {
-        open: details.schedule?.open ?? '',
-        close: details.schedule?.close ?? '',
+        open: details.schedule?.openTime ?? details.schedule?.open ?? '',
+        close: details.schedule?.closeTime ?? details.schedule?.close ?? '',
       },
       keyFeatures: Array.isArray(details.keyFeatures)
         ? details.keyFeatures
@@ -403,36 +403,36 @@ const GymOwnerGymsPage = () => {
                   const deleting = isProcessing && processingGymAction === 'delete';
                   const disableLabel = gym.isPublished ? 'Disable' : 'Enable';
                   return (
-                  <tr key={gym.id}>
-                    <td>{gym.name}</td>
-                    <td>{formatStatus(gym.status)}</td>
-                    <td>
-                      Active {gym.members?.active ?? 0} · Paused {gym.members?.paused ?? 0}
-                    </td>
-                    <td>{formatDate(gym.updatedAt)}</td>
-                    <td>
-                      <div className="button-row">
-                        <button type="button" onClick={() => handleEditGym(gym.id)}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePublishGym(gym)}
-                          disabled={isProcessing}
-                        >
-                          {toggling ? 'Updating…' : disableLabel}
-                        </button>
-                        <button
-                          type="button"
-                          className="button--danger"
-                          onClick={() => handleDeleteGym(gym)}
-                          disabled={isProcessing}
-                        >
-                          {deleting ? 'Removing…' : 'Delete'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    <tr key={gym.id}>
+                      <td>{gym.name}</td>
+                      <td>{formatStatus(gym.status)}</td>
+                      <td>
+                        Active {gym.members?.active ?? 0} · Paused {gym.members?.paused ?? 0}
+                      </td>
+                      <td>{formatDate(gym.updatedAt)}</td>
+                      <td>
+                        <div className="button-row">
+                          <button type="button" onClick={() => handleEditGym(gym.id)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePublishGym(gym)}
+                            disabled={isProcessing}
+                          >
+                            {toggling ? 'Updating…' : disableLabel}
+                          </button>
+                          <button
+                            type="button"
+                            className="button--danger"
+                            onClick={() => handleDeleteGym(gym)}
+                            disabled={isProcessing}
+                          >
+                            {deleting ? 'Removing…' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
