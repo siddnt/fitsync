@@ -1839,6 +1839,84 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
     .json(new ApiResponse(200, { orders: data, adminToggles }, 'Admin marketplace activity fetched successfully'));
 });
 
+export const getAdminSubscriptions = asyncHandler(async (_req, res) => {
+  const [subscriptionDocs, sponsoredGyms, adminToggles] = await Promise.all([
+    GymListingSubscription.find()
+      .sort({ createdAt: -1 })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'owner', select: 'name email' })
+      .lean(),
+    Gym.find({
+      'sponsorship.status': { $in: ['active', 'expired'] },
+      'sponsorship.package': { $exists: true, $ne: null },
+    })
+      .sort({ 'sponsorship.expiresAt': -1, updatedAt: -1 })
+      .select('name location sponsorship owner createdAt updatedAt')
+      .populate({ path: 'owner', select: 'name email' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  const listingSubscriptions = subscriptionDocs.map((subscription) => ({
+    id: subscription._id,
+    owner: subscription.owner
+      ? {
+        id: subscription.owner._id,
+        name: subscription.owner.name,
+        email: subscription.owner.email,
+      }
+      : null,
+    gym: subscription.gym
+      ? {
+        id: subscription.gym._id,
+        name: subscription.gym.name,
+        city: subscription.gym.location?.city,
+      }
+      : null,
+    planCode: subscription.planCode,
+    amount: Number(subscription.amount) || 0,
+    currency: subscription.currency || 'INR',
+    status: subscription.status,
+    periodStart: subscription.periodStart,
+    periodEnd: subscription.periodEnd,
+    autoRenew: Boolean(subscription.autoRenew),
+    invoiceCount: Array.isArray(subscription.invoices) ? subscription.invoices.length : 0,
+    createdAt: subscription.createdAt,
+  }));
+
+  const sponsorships = sponsoredGyms.map((gym) => {
+    const sponsorship = gym.sponsorship || {};
+    return {
+      id: gym._id,
+      owner: gym.owner
+        ? {
+          id: gym.owner._id,
+          name: gym.owner.name,
+          email: gym.owner.email,
+        }
+        : null,
+      gym: {
+        id: gym._id,
+        name: gym.name,
+        city: gym.location?.city,
+      },
+      package: sponsorship.package || null,
+      amount: Number(sponsorship.amount ?? sponsorship.monthlyBudget) || 0,
+      status: sponsorship.status || 'none',
+      expiresAt: sponsorship.expiresAt || null,
+      createdAt: sponsorship.startDate || gym.updatedAt || gym.createdAt,
+    };
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { listingSubscriptions, sponsorships, adminToggles },
+      'Admin subscriptions fetched successfully',
+    ),
+  );
+});
+
 export const getAdminInsights = asyncHandler(async (_req, res) => {
   const now = new Date();
 

@@ -42,6 +42,13 @@ export const gymsApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'GymList', id: 'LIST' }, 'Dashboard', 'Analytics'],
     }),
+    createGymStripeCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/owner/gyms/checkout-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
     getMyGymMembership: builder.query({
       query: (gymId) => `/gyms/${gymId}/memberships/me`,
       providesTags: (_result, _error, gymId) => [{ type: 'GymMembership', id: gymId }],
@@ -62,6 +69,29 @@ export const gymsApi = apiSlice.injectEndpoints({
         { type: 'GymList', id: 'LIST' },
         'Dashboard',
       ],
+    }),
+    createMembershipStripeCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/memberships/checkout-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    confirmPaymentSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/confirm',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: (_result, _error, payload) => {
+        const gymId = payload?.gymId;
+        return [
+          ...(gymId ? [{ type: 'GymMembership', id: gymId }, { type: 'Gym', id: gymId }] : []),
+          { type: 'GymList', id: 'LIST' },
+          'Dashboard',
+          'Analytics',
+        ];
+      },
     }),
     leaveGym: builder.mutation({
       query: ({ gymId, membershipId }) => ({
@@ -125,4 +155,7 @@ export const {
   useSubmitGymReviewMutation,
   useRecordImpressionMutation,
   useUpdateGymMutation,
+  useCreateGymStripeCheckoutSessionMutation,
+  useCreateMembershipStripeCheckoutSessionMutation,
+  useConfirmPaymentSessionMutation,
 } = gymsApi;

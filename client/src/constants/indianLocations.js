@@ -1,0 +1,32 @@
+export const INDIAN_STATES = [
+    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+    'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+    'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+    'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+    'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+    'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+    'Delhi', 'Chandigarh', 'Puducherry', 'Jammu and Kashmir', 'Ladakh',
+];
+
+export const INDIAN_CITIES = [
+    'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Ahmedabad',
+    'Chennai', 'Kolkata', 'Pune', 'Jaipur', 'Lucknow',
+    'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal',
+    'Visakhapatnam', 'Patna', 'Vadodara', 'Ghaziabad', 'Ludhiana',
+    'Agra', 'Nashik', 'Faridabad', 'Meerut', 'Rajkot',
+    'Varanasi', 'Srinagar', 'Amritsar', 'Allahabad', 'Ranchi',
+    'Coimbatore', 'Jabalpur', 'Gwalior', 'Vijayawada', 'Jodhpur',
+    'Madurai', 'Raipur', 'Kota', 'Chandigarh', 'Guwahati',
+    'Solapur', 'Hubli', 'Mysore', 'Tiruchirappalli', 'Bareilly',
+    'Aligarh', 'Tiruppur', 'Moradabad', 'Jalandhar', 'Bhubaneswar',
+    'Salem', 'Warangal', 'Guntur', 'Bhiwandi', 'Saharanpur',
+    'Gorakhpur', 'Bikaner', 'Amravati', 'Noida', 'Jamshedpur',
+    'Bhilai', 'Cuttack', 'Firozabad', 'Kochi', 'Nellore',
+    'Bhavnagar', 'Dehradun', 'Durgapur', 'Asansol', 'Rourkela',
+    'Nanded', 'Kolhapur', 'Ajmer', 'Akola', 'Gulbarga',
+    'Jamnagar', 'Ujjain', 'Loni', 'Siliguri', 'Jhansi',
+    'Ulhasnagar', 'Jammu', 'Sangli', 'Mangalore', 'Erode',
+    'Belgaum', 'Kurnool', 'Ambattur', 'Rajahmundry', 'Tirunelveli',
+    'Malegaon', 'Gaya', 'Udaipur', 'Kakinada', 'Davanagere',
+    'Kozhikode', 'Thiruvananthapuram', 'Bokaro', 'Bellary', 'Patiala',
+];

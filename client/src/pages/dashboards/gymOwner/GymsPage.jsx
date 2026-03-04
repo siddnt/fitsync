@@ -1,11 +1,18 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { SubmissionError, reset as resetForm } from 'redux-form';
 import { useDispatch } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetGymOwnerGymsQuery } from '../../../services/dashboardApi.js';
-import { useGetGymByIdQuery, useUpdateGymMutation, useCreateGymMutation } from '../../../services/gymsApi.js';
+import {
+  useGetGymByIdQuery,
+  useUpdateGymMutation,
+  useCreateGymMutation,
+  useCreateGymStripeCheckoutSessionMutation,
+  useConfirmPaymentSessionMutation,
+} from '../../../services/gymsApi.js';
 import {
   useGetMonetisationOptionsQuery,
   useGetTrainerRequestsQuery,
@@ -20,6 +27,8 @@ import '../Dashboard.css';
 
 const GymOwnerGymsPage = () => {
   const dispatch = useDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const processedSessionRef = useRef(null);
   const [activeGymId, setActiveGymId] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [processingRequestId, setProcessingRequestId] = useState(null);
@@ -93,6 +102,8 @@ const GymOwnerGymsPage = () => {
 
   const [updateGym] = useUpdateGymMutation();
   const [createGym] = useCreateGymMutation();
+  const [createGymStripeCheckoutSession] = useCreateGymStripeCheckoutSessionMutation();
+  const [confirmPaymentSession] = useConfirmPaymentSessionMutation();
 
   const formInitialValues = useMemo(() => {
     const details = gymDetailsResponse?.data?.gym;
@@ -153,6 +164,10 @@ const GymOwnerGymsPage = () => {
     refetchTrainerRequests();
   };
 
+  const stripeStatus = searchParams.get('stripe');
+  const paymentSessionId = searchParams.get('payment_session_id');
+  const stripeSessionId = searchParams.get('session_id');
+
   const handleApproveTrainer = async (assignmentId) => {
     if (!assignmentId) {
       return;
@@ -201,6 +216,78 @@ const GymOwnerGymsPage = () => {
     dispatch(resetForm('gymCreate'));
   };
 
+  useEffect(() => {
+    const clearStripeQuery = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('stripe');
+      nextParams.delete('payment_session_id');
+      nextParams.delete('session_id');
+      setSearchParams(nextParams, { replace: true });
+    };
+
+    if (!stripeStatus) {
+      processedSessionRef.current = null;
+      return;
+    }
+
+    if (stripeStatus === 'cancelled') {
+      setGymActionMessage('Stripe checkout was cancelled. No gym was created.');
+      setGymActionError(null);
+      clearStripeQuery();
+      return;
+    }
+
+    if (stripeStatus !== 'success' || !paymentSessionId) {
+      clearStripeQuery();
+      return;
+    }
+
+    if (processedSessionRef.current === paymentSessionId) {
+      return;
+    }
+    processedSessionRef.current = paymentSessionId;
+
+    const confirmStripePayment = async () => {
+      clearGymMessages();
+      try {
+        const response = await confirmPaymentSession({
+          paymentSessionId,
+          sessionId: stripeSessionId || undefined,
+        }).unwrap();
+
+        const createdGym = response?.data?.gym;
+        await refetch();
+        dispatch(resetForm('gymCreate'));
+        setIsCreateOpen(false);
+        setGymActionError(null);
+        setGymActionMessage('Payment successful. Gym created and activated.');
+
+        if (createdGym?.id) {
+          setActiveGymId(createdGym.id);
+        }
+      } catch (error) {
+        setGymActionError(
+          error?.data?.message
+            ?? 'Payment completed, but gym confirmation failed. Please refresh and retry.',
+        );
+      } finally {
+        clearStripeQuery();
+      }
+    };
+
+    confirmStripePayment();
+  }, [
+    stripeStatus,
+    paymentSessionId,
+    stripeSessionId,
+    searchParams,
+    setSearchParams,
+    refetch,
+    dispatch,
+    confirmPaymentSession,
+    clearGymMessages,
+  ]);
+
   const isOverlayOpen = isCreateOpen || Boolean(activeGymId);
   const overlayTitle = isCreateOpen
     ? 'Add a new gym'
@@ -239,31 +326,55 @@ const GymOwnerGymsPage = () => {
 
   const handleCreateGym = async (values) => {
     try {
+      clearGymMessages();
       const payload = transformGymPayload(values);
       const planCode = values.planCode;
-      const paymentReference = values.paymentReference;
       const autoRenew = Boolean(values.autoRenew);
 
-      const response = await createGym({
-        ...payload,
-        subscription: {
-          planCode,
-          paymentReference,
-          autoRenew,
-        },
+      const response = await createGymStripeCheckoutSession({
+        gym: payload,
+        planCode,
+        autoRenew,
+        redirectPath: '/dashboard/gym-owner/gyms',
       }).unwrap();
 
-      const createdGym = response?.data?.gym;
-
-      await refetch();
-      dispatch(resetForm('gymCreate'));
-      setIsCreateOpen(false);
-
-      if (createdGym?.id) {
-        setActiveGymId(createdGym.id);
+      const checkoutUrl = response?.data?.checkoutUrl;
+      if (!checkoutUrl) {
+        throw new Error('Missing Stripe checkout URL.');
       }
+
+      window.location.assign(checkoutUrl);
     } catch (error) {
-      const message = error?.data?.message ?? 'Could not create gym.';
+      if (error?.status === 503) {
+        try {
+          const fallbackReference = `manual-${Date.now()}`;
+          const fallbackResponse = await createGym({
+            ...transformGymPayload(values),
+            subscription: {
+              planCode: values.planCode,
+              autoRenew: Boolean(values.autoRenew),
+              paymentReference: fallbackReference,
+            },
+          }).unwrap();
+
+          const createdGym = fallbackResponse?.data?.gym;
+          await refetch();
+          dispatch(resetForm('gymCreate'));
+          setIsCreateOpen(false);
+          setGymActionError(null);
+          setGymActionMessage('Stripe is unavailable; gym created with manual fallback.');
+
+          if (createdGym?.id) {
+            setActiveGymId(createdGym.id);
+          }
+          return;
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError?.data?.message ?? 'Could not create gym.';
+          throw new SubmissionError({ _error: fallbackMessage });
+        }
+      }
+
+      const message = error?.data?.message ?? error?.message ?? 'Could not start Stripe checkout.';
       throw new SubmissionError({ _error: message });
     }
   };

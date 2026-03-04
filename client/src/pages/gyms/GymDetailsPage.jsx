@@ -1,11 +1,13 @@
-import { useParams } from 'react-router-dom';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import {
   useGetGymByIdQuery,
   useRecordImpressionMutation,
   useGetMyGymMembershipQuery,
   useJoinGymMutation,
+  useCreateMembershipStripeCheckoutSessionMutation,
+  useConfirmPaymentSessionMutation,
   useLeaveGymMutation,
   useGetGymTrainersQuery,
   useGetGymReviewsQuery,
@@ -18,12 +20,18 @@ import './GymDetailsPage.css';
 
 const GymDetailsPage = () => {
   const { gymId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const processedSessionRef = useRef(null);
   const { data, isLoading, refetch } = useGetGymByIdQuery(gymId, { skip: !gymId });
   const [recordImpression] = useRecordImpressionMutation();
-  const [joinGym, { isLoading: isJoining }] = useJoinGymMutation();
+  const [joinGym, { isLoading: isJoiningDirect }] = useJoinGymMutation();
+  const [createMembershipStripeCheckoutSession, { isLoading: isCreatingMembershipCheckout }] =
+    useCreateMembershipStripeCheckoutSessionMutation();
+  const [confirmPaymentSession] = useConfirmPaymentSessionMutation();
   const [leaveGym, { isLoading: isLeaving }] = useLeaveGymMutation();
   const [submitGymReview, { isLoading: isSubmittingReview }] = useSubmitGymReviewMutation();
   const [actionError, setActionError] = useState(null);
+  const [stripeNotice, setStripeNotice] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState({ error: null, success: null });
@@ -32,6 +40,11 @@ const GymDetailsPage = () => {
   const userRole = user?.role ?? null;
   const isAuthenticated = Boolean(user);
   const canManageMembership = ['trainee', 'trainer'].includes(userRole);
+  const isJoining = isJoiningDirect || isCreatingMembershipCheckout;
+
+  const stripeStatus = searchParams.get('stripe');
+  const paymentSessionId = searchParams.get('payment_session_id');
+  const stripeSessionId = searchParams.get('session_id');
 
   const gym = data?.data?.gym ?? null;
   const shouldFetchMembership = canManageMembership && Boolean(gymId);
@@ -94,6 +107,10 @@ const GymDetailsPage = () => {
   }, [gymId]);
 
   useEffect(() => {
+    setStripeNotice(null);
+  }, [gymId]);
+
+  useEffect(() => {
     setReviewStatus({ error: null, success: null });
   }, [gymId]);
 
@@ -116,21 +133,108 @@ const GymDetailsPage = () => {
     return undefined;
   }, [membership?.plan, membership?.status, refetchMembership]);
 
+  useEffect(() => {
+    const clearStripeQuery = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('stripe');
+      nextParams.delete('payment_session_id');
+      nextParams.delete('session_id');
+      setSearchParams(nextParams, { replace: true });
+    };
+
+    if (!stripeStatus) {
+      processedSessionRef.current = null;
+      return;
+    }
+
+    if (stripeStatus === 'cancelled') {
+      setStripeNotice('Stripe checkout was cancelled. Membership was not activated.');
+      clearStripeQuery();
+      return;
+    }
+
+    if (stripeStatus !== 'success' || !paymentSessionId) {
+      clearStripeQuery();
+      return;
+    }
+
+    if (processedSessionRef.current === paymentSessionId) {
+      return;
+    }
+    processedSessionRef.current = paymentSessionId;
+
+    const confirmStripePayment = async () => {
+      try {
+        await confirmPaymentSession({
+          paymentSessionId,
+          sessionId: stripeSessionId || undefined,
+        }).unwrap();
+
+        setStripeNotice('Payment successful. Membership activated.');
+        await Promise.all([
+          refetch(),
+          shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+        ]);
+      } catch (error) {
+        setActionError(
+          error?.data?.message
+            ?? 'Payment completed, but membership confirmation failed. Please refresh and retry.',
+        );
+      } finally {
+        clearStripeQuery();
+      }
+    };
+
+    confirmStripePayment();
+  }, [
+    stripeStatus,
+    paymentSessionId,
+    stripeSessionId,
+    searchParams,
+    setSearchParams,
+    confirmPaymentSession,
+    refetch,
+    shouldFetchMembership,
+    refetchMembership,
+  ]);
+
   const handleJoin = useCallback(async (payload) => {
     if (!gymId || !canManageMembership) {
       return;
     }
     setActionError(null);
     try {
-      await joinGym({ gymId, ...payload }).unwrap();
-      await Promise.all([
-        refetch(),
-        shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
-      ]);
+      if (payload?.joinAsTrainer) {
+        await joinGym({ gymId, ...payload }).unwrap();
+        await Promise.all([
+          refetch(),
+          shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),
+        ]);
+        return;
+      }
+
+      const response = await createMembershipStripeCheckoutSession({
+        gymId,
+        ...payload,
+        redirectPath: `/gyms/${gymId}`,
+      }).unwrap();
+      const checkoutUrl = response?.data?.checkoutUrl;
+      if (!checkoutUrl) {
+        throw new Error('Missing Stripe checkout URL.');
+      }
+      window.location.assign(checkoutUrl);
     } catch (error) {
       setActionError(error?.data?.message ?? 'Could not join the gym. Please try again.');
     }
-  }, [gymId, canManageMembership, joinGym, refetch, shouldFetchMembership, refetchMembership]);
+  }, [
+    gymId,
+    canManageMembership,
+    joinGym,
+    createMembershipStripeCheckoutSession,
+    refetch,
+    shouldFetchMembership,
+    refetchMembership,
+  ]);
 
   const handleLeave = useCallback(async () => {
     if (!gymId || !membership?.id) {
@@ -227,6 +331,8 @@ const GymDetailsPage = () => {
           )}
         </div>
       </header>
+
+      {stripeNotice ? <p>{stripeNotice}</p> : null}
 
       <GymMembershipActions
         membership={membership}

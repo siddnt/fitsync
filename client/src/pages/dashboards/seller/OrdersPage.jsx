@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import {
   useGetSellerOrdersQuery,
   useUpdateSellerOrderStatusMutation,
@@ -27,6 +28,8 @@ const OrdersPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const orders = ordersResponse?.data?.orders ?? [];
+
+  const orderSuggestions = useMemo(() => orders.flatMap((o) => [o.orderNumber, o.buyer?.name, o.buyer?.email, ...(o.items || []).map((i) => i?.name)].filter(Boolean)), [orders]);
   const statusOptions = useMemo(() => {
     const allowed = new Set(ordersResponse?.data?.statusOptions ?? SELLER_ORDER_STATUSES.map((option) => option.value));
     return SELLER_ORDER_STATUSES.filter((option) => allowed.has(option.value));
@@ -189,12 +192,13 @@ const OrdersPage = () => {
         )}
       >
         <div className="inventory-toolbar orders-toolbar">
-          <input
-            type="text"
+          <AutosuggestInput
             className="inventory-toolbar__input"
             placeholder="Search order number or buyer"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={setSearchQuery}
+            suggestions={orderSuggestions}
+            ariaLabel="Search orders"
           />
           <select
             className="inventory-toolbar__input inventory-toolbar__input--select"

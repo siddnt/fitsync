@@ -1,20 +1,8 @@
-.gym-highlight section {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 22px;
-  padding: 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-}
-
-.gym-highlight section h2 {
-  margin-top: 0;
-  margin-bottom: 0.9rem;
-  font-size: 1.1rem;
-}
+/* ─── Gym Explorer Layout ─── */
 .gym-explorer {
   display: grid;
   gap: clamp(1.5rem, 3vw, 2.5rem);
-  grid-template-columns: minmax(280px, 360px) 1fr;
+  grid-template-columns: minmax(280px, 380px) 1fr;
   padding: clamp(1rem, 2vw, 1.75rem);
   background: radial-gradient(circle at top left, rgba(35, 38, 56, 0.9), rgba(10, 11, 17, 0.95));
   border-radius: 32px;
@@ -28,6 +16,10 @@
   position: sticky;
   top: 5rem;
   align-self: flex-start;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 .gym-explorer__detail {
@@ -39,62 +31,7 @@
   box-shadow: 0 35px 65px rgba(0, 0, 0, 0.4);
 }
 
-
-.gym-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.gym-list__item button {
-  background: linear-gradient(135deg, rgba(20, 22, 30, 0.9), rgba(16, 18, 26, 0.9));
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.2rem;
-  text-align: left;
-  width: 100%;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.gym-list__item button:hover {
-  transform: translateX(6px);
-  box-shadow: 0 14px 32px rgba(229, 9, 20, 0.25);
-  border-color: rgba(229, 9, 20, 0.4);
-}
-
-.gym-list__item--active button {
-  border: 1px solid rgba(229, 9, 20, 0.7);
-  box-shadow: 0 18px 38px rgba(229, 9, 20, 0.35);
-  background: linear-gradient(135deg, rgba(229, 9, 20, 0.12), rgba(16, 18, 26, 0.95));
-}
-
-.gym-list__empty {
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 12px;
-  padding: 1rem;
-  color: var(--muted-text-color);
-}
-
-.gym-list__sponsored-badge {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 165, 0, 0.9));
-  border-radius: 8px;
-  color: rgba(0, 0, 0, 0.9);
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
-}
-
+/* ─── Gym Filters ─── */
 .gym-filters {
   background: rgba(14, 16, 27, 0.9);
   border-radius: 24px;
@@ -117,6 +54,15 @@
   padding: 0;
 }
 
+.gym-filters label>span,
+.gym-filters fieldset>legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .gym-filters input {
   background: rgba(0, 0, 0, 0.35);
   border-radius: 14px;
@@ -124,6 +70,13 @@
   color: var(--light-text-color);
   padding: 0.8rem 1rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font: inherit;
+}
+
+.gym-filters .autosuggest {
+  display: block;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .gym-filters input:focus {
@@ -145,34 +98,213 @@
   color: var(--muted-text-color);
   cursor: pointer;
   padding: 0.4rem 0.95rem;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  font-size: 0.82rem;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.gym-filters .chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .gym-filters .chip--active {
   border-color: rgba(229, 9, 20, 0.7);
   color: var(--light-text-color);
   background: rgba(229, 9, 20, 0.2);
+  box-shadow: 0 2px 12px rgba(229, 9, 20, 0.2);
 }
 
+/* ─── Gym List ─── */
+.gym-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 
+.gym-list__item button {
+  background: linear-gradient(135deg, rgba(20, 22, 30, 0.9), rgba(16, 18, 26, 0.9));
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.2rem;
+  text-align: left;
+  width: 100%;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease,
+    background 0.25s ease;
+}
+
+.gym-list__item button:hover {
+  transform: translateX(6px);
+  box-shadow: 0 14px 32px rgba(229, 9, 20, 0.2);
+  border-color: rgba(229, 9, 20, 0.35);
+  background: linear-gradient(135deg, rgba(229, 9, 20, 0.06), rgba(16, 18, 26, 0.95));
+}
+
+.gym-list__item--active button {
+  border: 1px solid rgba(229, 9, 20, 0.6);
+  box-shadow: 0 18px 38px rgba(229, 9, 20, 0.3);
+  background: linear-gradient(135deg, rgba(229, 9, 20, 0.12), rgba(16, 18, 26, 0.95));
+}
+
+.gym-list__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.gym-list__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gym-list__name-row strong {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gym-list__location {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.gym-list__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.gym-list__rating {
+  font-size: 0.78rem;
+  color: #ffc857;
+}
+
+.gym-list__rating small {
+  color: rgba(255, 255, 255, 0.4);
+  margin-left: 2px;
+}
+
+.gym-list__price {
+  font-size: 0.78rem;
+  color: rgba(229, 9, 20, 0.9);
+  font-weight: 600;
+}
+
+.gym-list__arrow {
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, 0.2);
+  transition: transform 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.gym-list__item button:hover .gym-list__arrow,
+.gym-list__item--active .gym-list__arrow {
+  color: rgba(229, 9, 20, 0.8);
+  transform: translateX(3px);
+}
+
+.gym-list__empty {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 1rem;
+  color: var(--muted-text-color);
+  text-align: center;
+}
+
+.gym-list__sponsored-badge {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 165, 0, 0.9));
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.9);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+  flex-shrink: 0;
+}
+
+/* ─── Gym Highlight (Detail) ─── */
 .gym-highlight {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  animation: gymFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes gymFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gym-highlight section {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 22px;
+  padding: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  transition: border-color 0.3s ease;
+}
+
+.gym-highlight section:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.gym-highlight section h2 {
+  margin-top: 0;
+  margin-bottom: 0.9rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Sponsored banner */
 .gym-highlight__sponsored-banner {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: linear-gradient(120deg, rgba(255, 215, 0, 0.12), rgba(255, 165, 0, 0.15));
-  border: 1px solid rgba(255, 215, 0, 0.5);
+  background: linear-gradient(120deg, rgba(255, 215, 0, 0.1), rgba(255, 165, 0, 0.12));
+  border: 1px solid rgba(255, 215, 0, 0.4);
   border-radius: 18px;
   padding: 0.9rem 1.2rem;
   font-weight: 600;
   color: rgba(255, 215, 0, 1);
-  box-shadow: 0 22px 40px rgba(255, 215, 0, 0.25);
+  box-shadow: 0 16px 35px rgba(255, 215, 0, 0.15);
+  animation: sponsorGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes sponsorGlow {
+  from {
+    box-shadow: 0 16px 35px rgba(255, 215, 0, 0.1);
+  }
+
+  to {
+    box-shadow: 0 16px 35px rgba(255, 215, 0, 0.25);
+  }
 }
 
 .gym-highlight__sponsored-icon {
@@ -189,7 +321,7 @@
   margin-left: auto;
 }
 
-
+/* Header */
 .gym-highlight__header {
   align-items: flex-start;
   display: flex;
@@ -200,8 +332,18 @@
 .gym-highlight__header h1 {
   font-size: clamp(2rem, 4vw, 2.6rem);
   margin-bottom: 0.4rem;
+  background: linear-gradient(135deg, #fff 60%, rgba(229, 9, 20, 0.7));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
+.gym-highlight__header p {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.95rem;
+}
+
+/* Pricing */
 .gym-highlight__pricing {
   display: flex;
   align-items: baseline;
@@ -218,30 +360,54 @@
 .gym-highlight__pricing .price--mrp {
   color: var(--muted-text-color);
   text-decoration: line-through;
+  font-size: 1.2rem;
 }
 
+.gym-highlight__per-month {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  align-self: flex-end;
+  margin-bottom: 0.35rem;
+}
+
+
+/* Meta cards */
 .gym-highlight__meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .gym-highlight__meta div {
-  background: rgba(0, 0, 0, 0.25);
+  background: linear-gradient(145deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.2));
   border-radius: 18px;
   padding: 1rem 1.25rem;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gym-highlight__meta div:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .gym-highlight__meta strong {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  color: var(--muted-text-color);
+  color: rgba(255, 255, 255, 0.4);
   margin-bottom: 0.35rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
+.gym-highlight__meta span {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Features */
 .gym-highlight__features div {
   display: flex;
   flex-wrap: wrap;
@@ -249,19 +415,39 @@
 }
 
 .gym-highlight__features span {
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
   border-radius: 999px;
   padding: 0.5rem 1.05rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   letter-spacing: 0.03em;
+  font-size: 0.88rem;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 
+.gym-highlight__features span:hover {
+  border-color: rgba(229, 9, 20, 0.4);
+  background: rgba(229, 9, 20, 0.08);
+  transform: translateY(-1px);
+}
+
+/* About */
+.gym-highlight__about p {
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.7;
+}
+
+/* Reviews */
 .gym-highlight__reviews article {
   background: rgba(0, 0, 0, 0.18);
   border-radius: 20px;
   padding: 1.1rem 1.4rem;
   margin-bottom: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s ease;
+}
+
+.gym-highlight__reviews article:hover {
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .gym-highlight__reviews-header {
@@ -294,14 +480,26 @@
   color: #ffc857;
 }
 
+.gym-highlight__reviews article header small {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.78rem;
+}
+
 .gym-highlight__reviews p {
   margin: 0;
   color: var(--light-text-color);
+  line-height: 1.6;
 }
 
+/* Review form */
 .gym-highlight__review-form {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 1.5rem;
+}
+
+.gym-highlight__review-form h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .gym-highlight__review-form form {
@@ -311,18 +509,28 @@
 }
 
 .gym-highlight__review-form label {
-  font-size: 0.9rem;
-  color: var(--muted-text-color);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .gym-highlight__review-form select,
 .gym-highlight__review-form textarea {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   color: var(--light-text-color);
   padding: 0.65rem 0.85rem;
   font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gym-highlight__review-form select:focus,
+.gym-highlight__review-form textarea:focus {
+  border-color: rgba(229, 9, 20, 0.6);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
 }
 
 .gym-highlight__review-form textarea {
@@ -332,14 +540,15 @@
 
 .gym-highlight__review-form button {
   align-self: flex-start;
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), #c5070f);
   color: #fff;
   border: none;
   border-radius: 999px;
-  padding: 0.65rem 1.4rem;
+  padding: 0.7rem 1.6rem;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  letter-spacing: 0.02em;
 }
 
 .gym-highlight__review-form button:disabled {
@@ -348,25 +557,30 @@
 }
 
 .gym-highlight__review-form button:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(229, 9, 20, 0.4);
 }
 
 .gym-highlight__review-error {
   color: #ff6b6b;
   margin: 0;
+  font-size: 0.9rem;
 }
 
 .gym-highlight__review-success {
   color: #4ade80;
   margin: 0;
+  font-size: 0.9rem;
 }
 
 .gym-highlight__review-notice {
   color: var(--muted-text-color);
   margin: 0;
+  font-style: italic;
+  font-size: 0.9rem;
 }
 
+/* ─── Responsive ─── */
 @media (max-width: 960px) {
   .gym-explorer {
     grid-template-columns: 1fr;
@@ -375,5 +589,20 @@
 
   .gym-explorer__sidebar {
     position: static;
+    max-height: none;
+  }
+
+  .gym-highlight__header {
+    flex-direction: column;
+  }
+
+  .gym-highlight__meta {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .gym-highlight__meta {
+    grid-template-columns: 1fr;
   }
 }

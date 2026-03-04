@@ -24,11 +24,11 @@ const TierOptionField = ({ input, option, onSelected }) => {
       />
       <div className="plan-card__header">
         <h4>{option.label}</h4>
-        <span className="plan-card__price">₹{option.amount} / {option.durationMonths} mo</span>
+        <span className="plan-card__price">INR {option.amount} / {option.durationMonths} mo</span>
       </div>
       <ul className="plan-card__features">
-        <li>Monthly budget · ₹{option.monthlyBudget}</li>
-        <li>Estimated reach · {option.reach.toLocaleString()}</li>
+        <li>Monthly budget - INR {option.monthlyBudget}</li>
+        <li>Estimated reach - {option.reach.toLocaleString()}</li>
       </ul>
     </label>
   );
@@ -97,22 +97,15 @@ const SponsorshipFormComponent = ({
         ))}
       </div>
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-987654"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">
-          Sponsorship activated · Ref #{lastReceipt}
+          Sponsorship activated - Ref #{lastReceipt}
         </div>
       ) : null}
 
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Processing…' : 'Activate sponsorship'}
+        {submitting ? 'Redirecting...' : 'Continue to Stripe'}
       </button>
     </form>
   );
@@ -162,3 +155,4 @@ const SponsorshipForm = reduxForm({
 })(SponsorshipFormComponent);
 
 export default SponsorshipForm;
+
