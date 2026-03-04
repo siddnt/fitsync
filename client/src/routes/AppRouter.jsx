@@ -24,7 +24,9 @@ import GymOwnerRosterPage from '../pages/dashboards/gymOwner/RosterPage.jsx';
 import TrainerTraineesPage from '../pages/dashboards/trainer/TraineesPage.jsx';
 import TrainerUpdatesPage from '../pages/dashboards/trainer/UpdatesPage.jsx';
 import AdminUsersPage from '../pages/dashboards/admin/UsersPage.jsx';
+import AdminUserDetailsPage from '../pages/dashboards/admin/UserDetailsPage.jsx';
 import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
+import AdminGymDetailsPage from '../pages/dashboards/admin/GymDetailsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
@@ -88,7 +90,9 @@ const AppRouter = () => (
         <Route path="admin">
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="users/:userId" element={<AdminUserDetailsPage />} />
           <Route path="gyms" element={<AdminGymsPage />} />
+          <Route path="gyms/:gymId" element={<AdminGymDetailsPage />} />
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
           <Route path="messages" element={<AdminMessagesPage />} />
