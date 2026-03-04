@@ -7,13 +7,15 @@
 
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useCheckLegalStatusQuery } from '../../services/legalApi';
 import './LegalAcceptancePage.css';
 
 const LegalAcceptancePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: legalStatus, isLoading, refetch } = useCheckLegalStatusQuery();
+  const user = useSelector((state) => state.auth?.user);
+  const { data: legalStatus, isLoading, refetch } = useCheckLegalStatusQuery(undefined, { skip: !user });
 
   // Use ?? true to default to needing acceptance if undefined
   const needsTermsAcceptance = legalStatus?.data?.needsTermsAcceptance ?? true;
@@ -21,8 +23,10 @@ const LegalAcceptancePage = () => {
 
   useEffect(() => {
     // Refetch legal status when page loads to ensure fresh data
-    refetch();
-  }, [refetch]);
+    if (user) {
+      refetch();
+    }
+  }, [refetch, user]);
 
   useEffect(() => {
     // If already accepted both, redirect back

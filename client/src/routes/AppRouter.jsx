@@ -7,6 +7,8 @@ import MarketplacePage from '../pages/marketplace/MarketplacePage.jsx';
 import MarketplaceProductPage from '../pages/marketplace/MarketplaceProductPage.jsx';
 import CartPage from '../pages/marketplace/CartPage.jsx';
 import CheckoutPage from '../pages/marketplace/CheckoutPage.jsx';
+import PaymentSuccess from '../pages/marketplace/PaymentSuccess.jsx';
+import PaymentCancelled from '../pages/marketplace/PaymentCancelled.jsx';
 import ProfilePage from '../pages/profile/ProfilePage.jsx';
 import TraineeDashboard from '../pages/dashboards/TraineeDashboard.jsx';
 import GymOwnerDashboard from '../pages/dashboards/GymOwnerDashboard.jsx';
@@ -58,6 +60,8 @@ const AppRouter = () => (
         <Route path="marketplace/products/:productId" element={<MarketplaceProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="checkout" element={<CheckoutPage />} />
+        <Route path="payments/success" element={<PaymentSuccess />} />
+        <Route path="payments/cancelled" element={<PaymentCancelled />} />
 
         <Route path="profile" element={<ProfilePage />} />
         <Route path="auth/*" element={<AuthRoutes />} />

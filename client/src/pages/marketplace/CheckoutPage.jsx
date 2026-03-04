@@ -4,6 +4,7 @@ import './CheckoutPage.css';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
 import { useCreateMarketplaceOrderMutation } from '../../services/marketplaceApi.js';
+import { useCreateCheckoutSessionMutation } from '../../services/paymentApi.js';
 import { formatCurrency } from '../../utils/format.js';
 
 const phonePattern = /^[0-9]{10}$/;
@@ -28,6 +29,7 @@ const CheckoutPage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [createOrder, { isLoading }] = useCreateMarketplaceOrderMutation();
+  const [createCheckoutSession, { isLoading: isCreatingSession }] = useCreateCheckoutSessionMutation();
   const [formState, setFormState] = useState(() => initialAddressState(user));
   const [error, setError] = useState(null);
   const [order, setOrder] = useState(null);
@@ -106,6 +108,45 @@ const CheckoutPage = () => {
       return;
     }
 
+    // Check if user selected Card Payment - redirect to Stripe
+    if (formState.paymentMethod === 'Card Payment') {
+      try {
+        const checkoutPayload = {
+          items: items.map((item) => ({
+            productId: item.id,
+            name: item.name,
+            description: item.description || '',
+            price: item.price,
+            quantity: item.quantity,
+            imageUrl: item.imageUrl || '',
+          })),
+          shippingAddress: {
+            firstName: formState.firstName.trim(),
+            lastName: formState.lastName.trim(),
+            email: formState.email.trim(),
+            phone: formState.phone.trim(),
+            address: formState.address.trim(),
+            city: formState.city.trim(),
+            state: formState.state.trim(),
+            zipCode: formState.zipCode.trim(),
+          },
+        };
+
+        const response = await createCheckoutSession(checkoutPayload).unwrap();
+        
+        // Redirect to Stripe Checkout
+        if (response?.data?.url) {
+          window.location.href = response.data.url;
+        } else {
+          setError('Could not create payment session. Please try again.');
+        }
+      } catch (apiError) {
+        setError(apiError?.data?.message ?? 'Payment session creation failed. Please try again.');
+      }
+      return;
+    }
+
+    // For Cash on Delivery and other methods, create order directly
     try {
       const payload = {
         items: items.map((item) => ({
@@ -301,12 +342,14 @@ const CheckoutPage = () => {
               onChange={handleChange}
             >
               <option value="Cash on Delivery">Cash on Delivery</option>
+              <option value="Card Payment">Card Payment (Stripe)</option>
               <option value="UPI">UPI</option>
-              <option value="Credit / Debit Card">Credit / Debit Card</option>
             </select>
           </label>
-          <button type="submit" disabled={isLoading || !user}>
-            {isLoading ? 'Placing order...' : 'Place order'}
+          <button type="submit" disabled={isLoading || isCreatingSession || !user}>
+            {isLoading || isCreatingSession 
+              ? (formState.paymentMethod === 'Card Payment' ? 'Redirecting to payment...' : 'Placing order...')
+              : (formState.paymentMethod === 'Card Payment' ? 'Proceed to payment' : 'Place order')}
           </button>
         </form>
 

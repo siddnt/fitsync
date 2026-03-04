@@ -1,29 +1,51 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAcceptPrivacyMutation, useCheckLegalStatusQuery } from '../../services/legalApi';
+import { useSelector } from 'react-redux';
+import {
+  useAcceptPrivacyMutation,
+  useCheckLegalStatusQuery,
+  useGetLegalVersionsQuery,
+} from '../../services/legalApi';
 import privacyImg from '../../assets/privacy_policy.png';
 import './PrivacyPage.css';
 import '../legal/LegalPageStyles.css';
 
 const PrivacyPage = () => {
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth?.user);
   const [acceptPrivacy, { isLoading, isSuccess, isError, error }] = useAcceptPrivacyMutation();
   const [showAcceptButton, setShowAcceptButton] = useState(true);
   const [hasAccepted, setHasAccepted] = useState(false);
-  const { data: legalStatus } = useCheckLegalStatusQuery();
+  const { data: legalStatus } = useCheckLegalStatusQuery(undefined, { skip: !user });
+  const { data: legalVersions } = useGetLegalVersionsQuery();
 
   useEffect(() => {
+    if (!user) {
+      setShowAcceptButton(false);
+      return;
+    }
+
     if (legalStatus?.data?.needsPrivacyAcceptance === false) {
       setShowAcceptButton(false);
     }
-  }, [legalStatus]);
+  }, [legalStatus, user]);
 
   const handleAcceptPrivacy = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
     if (!hasAccepted) {
       return;
     }
     try {
-      await acceptPrivacy({ version: '1.0' }).unwrap();
+      const version =
+        legalVersions?.data?.privacyVersion ??
+        legalStatus?.data?.currentPrivacyVersion ??
+        '1.0';
+
+      await acceptPrivacy({ version }).unwrap();
       setShowAcceptButton(false);
       // Redirect to legal acceptance page to continue flow
       setTimeout(() => {

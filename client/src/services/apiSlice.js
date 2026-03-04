@@ -17,6 +17,7 @@ export const apiSlice = createApi({
   }),
   tagTypes: [
     'Auth',
+    'Legal',
     'User',
     'Gym',
     'GymList',

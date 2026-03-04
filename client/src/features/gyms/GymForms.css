@@ -135,23 +135,3 @@
     padding-top: 0;
   }
 }
-
-.ghost-button {
-  padding: 0.65rem 1.25rem;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #f8f9fa;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.ghost-button:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ghost-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}

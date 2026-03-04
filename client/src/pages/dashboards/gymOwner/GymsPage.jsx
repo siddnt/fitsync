@@ -372,7 +372,7 @@ const GymOwnerGymsPage = () => {
         <DashboardSection
           title="Registered gyms"
           action={(
-            <button type="button" className="cta-button" onClick={handleStartCreate}>
+            <button type="button" className="ghost-button" onClick={handleStartCreate}>
               Add gym
             </button>
           )}

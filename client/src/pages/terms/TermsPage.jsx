@@ -1,29 +1,51 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAcceptTermsMutation, useCheckLegalStatusQuery } from '../../services/legalApi';
+import { useSelector } from 'react-redux';
+import {
+  useAcceptTermsMutation,
+  useCheckLegalStatusQuery,
+  useGetLegalVersionsQuery,
+} from '../../services/legalApi';
 import termsImg from '../../assets/terms_of_service.png';
 import './TermsPage.css';
 import '../legal/LegalPageStyles.css';
 
 const TermsPage = () => {
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth?.user);
   const [acceptTerms, { isLoading, isSuccess, isError, error }] = useAcceptTermsMutation();
   const [showAcceptButton, setShowAcceptButton] = useState(true);
   const [hasAccepted, setHasAccepted] = useState(false);
-  const { data: legalStatus } = useCheckLegalStatusQuery();
+  const { data: legalStatus } = useCheckLegalStatusQuery(undefined, { skip: !user });
+  const { data: legalVersions } = useGetLegalVersionsQuery();
 
   useEffect(() => {
+    if (!user) {
+      setShowAcceptButton(false);
+      return;
+    }
+
     if (legalStatus?.data?.needsTermsAcceptance === false) {
       setShowAcceptButton(false);
     }
-  }, [legalStatus]);
+  }, [legalStatus, user]);
 
   const handleAcceptTerms = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+
     if (!hasAccepted) {
       return;
     }
     try {
-      await acceptTerms({ version: '1.0' }).unwrap();
+      const version =
+        legalVersions?.data?.termsVersion ??
+        legalStatus?.data?.currentTermsVersion ??
+        '1.0';
+
+      await acceptTerms({ version }).unwrap();
       setShowAcceptButton(false);
       // Redirect to legal acceptance page to continue flow
       setTimeout(() => {
