@@ -14,6 +14,7 @@ const AppHeader = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+
   const handleLogout = useCallback(async () => {
     try {
       await logout().unwrap();

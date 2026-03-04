@@ -1,8 +1,11 @@
 import PropTypes from 'prop-types';
+import { useState } from 'react';
 import { Field, reduxForm } from 'redux-form';
+import { useSelector } from 'react-redux';
 import FormField from '../../components/forms/FormField.jsx';
 import ChipMultiSelect from '../../components/forms/ChipMultiSelect.jsx';
 import { AMENITY_OPTIONS } from '../../constants/amenities.js';
+import { useCreateGymListingCheckoutMutation } from '../../services/paymentApi.js';
 import './GymForms.css';
 
 const GymCreateFormComponent = ({
@@ -12,7 +15,47 @@ const GymCreateFormComponent = ({
   error,
   plans,
   isPlansLoading,
-}) => (
+}) => {
+  const [paymentMethod, setPaymentMethod] = useState('stripe');
+  const [stripeError, setStripeError] = useState(null);
+  const [createGymListingCheckout, { isLoading: isCreatingCheckout }] = useCreateGymListingCheckoutMutation();
+  const currentValues = useSelector((state) => state.form?.gymCreate?.values || {});
+
+  const handleStripePayment = async () => {
+    setStripeError(null);
+
+    if (!currentValues.planCode) {
+      setStripeError('Please select a listing plan');
+      return;
+    }
+
+    try {
+      const response = await createGymListingCheckout({
+        planCode: currentValues.planCode,
+        autoRenew: currentValues.autoRenew || false,
+        gymData: {
+          name: currentValues.name,
+          description: currentValues.description,
+          location: currentValues.location,
+          pricing: currentValues.pricing,
+          contact: currentValues.contact,
+          schedule: currentValues.schedule,
+          keyFeatures: currentValues.keyFeatures,
+          tags: currentValues.tags,
+        },
+      }).unwrap();
+
+      if (response?.data?.url) {
+        window.location.href = response.data.url;
+      } else {
+        setStripeError('Failed to create payment session. Please try again.');
+      }
+    } catch (err) {
+      setStripeError(err?.data?.message ?? 'Failed to initiate payment. Please try again.');
+    }
+  };
+
+  return (
   <form className="gym-form" onSubmit={handleSubmit}>
     <section className="gym-form__section">
       <div className="gym-form__section-header">
@@ -135,12 +178,24 @@ const GymCreateFormComponent = ({
           ))}
         </Field>
 
-        <Field
-          name="paymentReference"
-          component={FormField}
-          label="Payment reference"
-          placeholder="Txn-123456"
-        />
+        <div className="form-field">
+          <label>
+            <span className="form-field__label">Payment method</span>
+            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+              <option value="stripe">Card Payment (Stripe)</option>
+              <option value="manual">Manual Payment Reference</option>
+            </select>
+          </label>
+        </div>
+
+        {paymentMethod === 'manual' ? (
+          <Field
+            name="paymentReference"
+            component={FormField}
+            label="Payment reference"
+            placeholder="Txn-123456"
+          />
+        ) : null}
       </div>
 
       <Field
@@ -153,17 +208,30 @@ const GymCreateFormComponent = ({
     </section>
 
     {error ? <div className="form-error">{error}</div> : null}
+    {stripeError ? <div className="form-error">{stripeError}</div> : null}
 
     <div className="gym-form__actions">
-      <button type="button" className="ghost-button" onClick={onCancel} disabled={submitting}>
+      <button type="button" className="ghost-button" onClick={onCancel} disabled={submitting || isCreatingCheckout}>
         Cancel
       </button>
-      <button type="submit" className="cta-button" disabled={submitting || isPlansLoading}>
-        {submitting ? 'Creating…' : 'Create gym'}
-      </button>
+      {paymentMethod === 'stripe' ? (
+        <button
+          type="button"
+          className="primary-button"
+          onClick={handleStripePayment}
+          disabled={isCreatingCheckout || isPlansLoading}
+        >
+          {isCreatingCheckout ? 'Processing…' : 'Pay with Stripe & Create'}
+        </button>
+      ) : (
+        <button type="submit" className="primary-button" disabled={submitting || isPlansLoading}>
+          {submitting ? 'Creating…' : 'Create gym'}
+        </button>
+      )}
     </div>
   </form>
-);
+  );
+};
 
 GymCreateFormComponent.propTypes = {
   handleSubmit: PropTypes.func.isRequired,
@@ -221,10 +289,6 @@ const validate = (values) => {
 
   if (!values.planCode) {
     errors.planCode = 'Choose a listing plan';
-  }
-
-  if (!values.paymentReference?.trim()) {
-    errors.paymentReference = 'Enter the payment reference used for this activation';
   }
 
   return errors;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useCreateGymMembershipCheckoutMutation } from '../../../services/paymentApi';
 import './GymMembershipActions.css';
 
 const statusCopy = {
@@ -23,11 +24,15 @@ const GymMembershipActions = ({
   trainers,
   monthlyFee,
   currency,
+  gymId,
 }) => {
   const [selectedTrainer, setSelectedTrainer] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('stripe');
   const [autoRenew, setAutoRenew] = useState(true);
   const [localError, setLocalError] = useState(null);
+
+  const [createGymMembershipCheckout, { isLoading: isCreatingCheckout }] = useCreateGymMembershipCheckoutMutation();
 
   const isTrainerAccount = userRole === 'trainer';
   const isTrainerMembership = isTrainerAccount && membership?.plan === 'trainer-access';
@@ -124,6 +129,28 @@ const GymMembershipActions = ({
       return;
     }
 
+    // Handle Stripe payment
+    if (paymentMethod === 'stripe') {
+      try {
+        const response = await createGymMembershipCheckout({
+          gymId,
+          trainerId: selectedTrainer,
+          autoRenew,
+        }).unwrap();
+
+        // Redirect to Stripe checkout
+        if (response?.data?.url) {
+          window.location.href = response.data.url;
+        } else {
+          setLocalError('Failed to create payment session. Please try again.');
+        }
+      } catch (error) {
+        setLocalError(error?.data?.message ?? 'Failed to initiate payment. Please try again.');
+      }
+      return;
+    }
+
+    // Handle manual payment reference
     if (!paymentReference.trim()) {
       setLocalError('Enter the payment reference received after payment.');
       return;
@@ -289,17 +316,32 @@ const GymMembershipActions = ({
                 </p>
               ) : null}
 
-              <label className="gym-membership-actions__label" htmlFor="gym-membership-payment">
-                Payment reference
-                <input
-                  id="gym-membership-payment"
-                  type="text"
-                  value={paymentReference}
-                  placeholder="Txn-123456"
-                  onChange={(event) => setPaymentReference(event.target.value)}
-                  disabled={isJoining}
-                />
+              <label className="gym-membership-actions__label" htmlFor="gym-membership-payment-method">
+                Payment method
+                <select
+                  id="gym-membership-payment-method"
+                  value={paymentMethod}
+                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  disabled={isJoining || isCreatingCheckout}
+                >
+                  <option value="stripe">Card Payment (Stripe)</option>
+                  <option value="manual">Manual Payment Reference</option>
+                </select>
               </label>
+
+              {paymentMethod === 'manual' ? (
+                <label className="gym-membership-actions__label" htmlFor="gym-membership-payment">
+                  Payment reference
+                  <input
+                    id="gym-membership-payment"
+                    type="text"
+                    value={paymentReference}
+                    placeholder="Txn-123456"
+                    onChange={(event) => setPaymentReference(event.target.value)}
+                    disabled={isJoining}
+                  />
+                </label>
+              ) : null}
 
               <label className="gym-membership-actions__toggle" htmlFor="gym-membership-autorenew">
                 <input
@@ -320,9 +362,14 @@ const GymMembershipActions = ({
                   type="button"
                   className="cta-button"
                   onClick={handleJoinClick}
-                  disabled={isJoining || !trainers.length || numericMonthlyFee === null}
+                  disabled={isJoining || isCreatingCheckout || !trainers.length || numericMonthlyFee === null}
                 >
-                  {isJoining ? 'Joining…' : 'Join this gym'}
+                  {isJoining || isCreatingCheckout 
+                    ? 'Processing…' 
+                    : paymentMethod === 'stripe' 
+                      ? 'Pay with Stripe' 
+                      : 'Join this gym'
+                  }
                 </button>
               </div>
 
@@ -408,6 +455,7 @@ GymMembershipActions.propTypes = {
   isLeaving: PropTypes.bool,
   error: PropTypes.string,
   userRole: PropTypes.string,
+  gymId: PropTypes.string,
   trainers: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.string.isRequired,
@@ -439,6 +487,7 @@ GymMembershipActions.defaultProps = {
   isLeaving: false,
   error: null,
   userRole: null,
+  gymId: null,
   trainers: [],
   monthlyFee: null,
   currency: '₹',

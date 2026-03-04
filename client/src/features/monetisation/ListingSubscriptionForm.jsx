@@ -1,7 +1,9 @@
 import PropTypes from 'prop-types';
 import { Field, reduxForm } from 'redux-form';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import FormField from '../../components/forms/FormField.jsx';
+import { useCreateGymListingCheckoutMutation } from '../../services/paymentApi.js';
 import {
   selectPlan,
   selectGym,
@@ -95,6 +97,42 @@ const ListingSubscriptionFormComponent = ({
 }) => {
   const dispatch = useDispatch();
   const lastReceipt = useSelector((state) => state.monetisation.lastReceipt);
+  const [paymentMethod, setPaymentMethod] = useState('stripe');
+  const [stripeError, setStripeError] = useState(null);
+  const [createGymListingCheckout, { isLoading: isCreatingCheckout }] = useCreateGymListingCheckoutMutation();
+
+  const currentValues = useSelector((state) => state.form?.listingSubscription?.values || {});
+
+  const handleStripePayment = async () => {
+    setStripeError(null);
+
+    if (!currentValues.gymId) {
+      setStripeError('Please select a gym');
+      return;
+    }
+
+    if (!currentValues.planCode) {
+      setStripeError('Please select a plan');
+      return;
+    }
+
+    try {
+      const response = await createGymListingCheckout({
+        gymId: currentValues.gymId,
+        planCode: currentValues.planCode,
+        autoRenew: currentValues.autoRenew || false,
+      }).unwrap();
+
+      // Redirect to Stripe checkout
+      if (response?.data?.url) {
+        window.location.href = response.data.url;
+      } else {
+        setStripeError('Failed to create payment session. Please try again.');
+      }
+    } catch (err) {
+      setStripeError(err?.data?.message ?? 'Failed to initiate payment. Please try again.');
+    }
+  };
 
   return (
     <form className="monetisation-form" onSubmit={handleSubmit}>
@@ -125,23 +163,47 @@ const ListingSubscriptionFormComponent = ({
         type="checkbox"
       />
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-123456"
-      />
+      <div className="form-field">
+        <label>
+          <span className="form-field__label">Payment method</span>
+          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            <option value="stripe">Card Payment (Stripe)</option>
+            <option value="manual">Manual Payment Reference</option>
+          </select>
+        </label>
+      </div>
+
+      {paymentMethod === 'manual' ? (
+        <Field
+          name="paymentReference"
+          component={FormField}
+          label="Payment reference"
+          placeholder="Txn-123456"
+        />
+      ) : null}
 
       {error ? <div className="form-error">{error}</div> : null}
+      {stripeError ? <div className="form-error">{stripeError}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">
           Subscription activated · Ref #{lastReceipt}
         </div>
       ) : null}
 
-      <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Activating…' : 'Activate plan'}
-      </button>
+      {paymentMethod === 'stripe' ? (
+        <button 
+          type="button" 
+          className="primary-button" 
+          onClick={handleStripePayment}
+          disabled={isCreatingCheckout}
+        >
+          {isCreatingCheckout ? 'Processing…' : 'Pay with Stripe'}
+        </button>
+      ) : (
+        <button type="submit" className="primary-button" disabled={submitting}>
+          {submitting ? 'Activating…' : 'Activate plan'}
+        </button>
+      )}
     </form>
   );
 };

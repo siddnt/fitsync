@@ -478,7 +478,6 @@ body {
   gap: 2rem;
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(10px);
 }
 
 .stream-card:first-child {
@@ -586,7 +585,6 @@ body {
   text-decoration: none;
   transition: all 0.3s;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
   font-size: 0.9rem;
   clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
 }

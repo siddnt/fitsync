@@ -3,6 +3,7 @@ import { persistReducer, persistStore } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { reducer as formReducer } from 'redux-form';
 import { apiSlice } from '../services/apiSlice.js';
+import { paymentApi } from '../services/paymentApi.js';
 import authReducer from '../features/auth/authSlice.js';
 import uiReducer from '../features/ui/uiSlice.js';
 import monetisationReducer from '../features/monetisation/monetisationSlice.js';
@@ -23,6 +24,7 @@ const rootReducer = combineReducers({
   cart: cartReducer,
   form: formReducer,
   [apiSlice.reducerPath]: apiSlice.reducer,
+  [paymentApi.reducerPath]: paymentApi.reducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -32,7 +34,7 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }).concat(apiSlice.middleware),
+    }).concat(apiSlice.middleware, paymentApi.middleware),
 });
 
 export const persistor = persistStore(store);

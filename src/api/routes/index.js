@@ -8,6 +8,8 @@ import ownerRoutes from './owner.routes.js';
 import marketplaceRoutes from './marketplace.routes.js';
 import userRoutes from './user.routes.js';
 import contactRoutes from './contact.routes.js';
+import paymentRoutes from './payment.routes.js';
+import legalRoutes from './legal.routes.js';
 
 const router = Router();
 
@@ -20,6 +22,8 @@ router.use('/owner', ownerRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/users', userRoutes);
 router.use('/contact', contactRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/legal', legalRoutes);
 
 router.get('/system/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: Date.now() });

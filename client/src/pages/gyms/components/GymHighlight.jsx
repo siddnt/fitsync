@@ -163,6 +163,7 @@ const GymHighlight = ({
         isLeaving={isLeaving}
         error={actionError}
         userRole={userRole}
+        gymId={gymId}
         trainers={trainers}
         monthlyFee={gym.pricing?.discounted ?? gym.pricing?.mrp ?? null}
         currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}

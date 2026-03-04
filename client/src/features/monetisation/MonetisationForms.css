@@ -8,6 +8,27 @@
   border-radius: 1rem;
 }
 
+.monetisation-form .form-error,
+.monetisation-form .form-success {
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  width: 100%;
+}
+
+.monetisation-form .form-error {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--danger-color);
+}
+
+.monetisation-form .form-success {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--success-color);
+}
+
 .plan-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -110,33 +131,6 @@
   color: var(--primary-color);
 }
 
-.form-error {
-  color: #ff6b6b;
-  font-size: 0.85rem;
-}
-
-.form-success {
-  color: #51cf66;
-  font-size: 0.85rem;
-}
-
-.cta-button {
+.monetisation-form .primary-button {
   align-self: flex-start;
-  padding: 0.75rem 1.5rem;
-  border-radius: 999px;
-  border: none;
-  background: var(--primary-color);
-  color: #0d1117;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.cta-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.cta-button:not(:disabled):hover {
-  transform: translateY(-1px);
 }

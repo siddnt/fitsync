@@ -7,6 +7,8 @@ import MarketplacePage from '../pages/marketplace/MarketplacePage.jsx';
 import MarketplaceProductPage from '../pages/marketplace/MarketplaceProductPage.jsx';
 import CartPage from '../pages/marketplace/CartPage.jsx';
 import CheckoutPage from '../pages/marketplace/CheckoutPage.jsx';
+import PaymentSuccess from '../pages/marketplace/PaymentSuccess.jsx';
+import PaymentCancelled from '../pages/marketplace/PaymentCancelled.jsx';
 import ProfilePage from '../pages/profile/ProfilePage.jsx';
 import TraineeDashboard from '../pages/dashboards/TraineeDashboard.jsx';
 import GymOwnerDashboard from '../pages/dashboards/GymOwnerDashboard.jsx';
@@ -38,6 +40,8 @@ import AboutPage from '../pages/about/AboutPage.jsx';
 import ContactPage from '../pages/contact/ContactPage.jsx';
 import PrivacyPage from '../pages/privacy/PrivacyPage.jsx';
 import TermsPage from '../pages/terms/TermsPage.jsx';
+import LegalAcceptancePage from '../pages/legal/LegalAcceptancePage.jsx';
+import LegalGuard from '../guards/LegalGuard.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -48,6 +52,7 @@ const AppRouter = () => (
         <Route path="contact" element={<ContactPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
         <Route path="terms" element={<TermsPage />} />
+        <Route path="legal-acceptance" element={<LegalAcceptancePage />} />
         <Route path="gyms" element={<GymExplorerPage />} />
         <Route path="gyms/:gymId" element={<GymDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
@@ -55,11 +60,17 @@ const AppRouter = () => (
         <Route path="marketplace/products/:productId" element={<MarketplaceProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="checkout" element={<CheckoutPage />} />
+        <Route path="payments/success" element={<PaymentSuccess />} />
+        <Route path="payments/cancelled" element={<PaymentCancelled />} />
 
         <Route path="profile" element={<ProfilePage />} />
         <Route path="auth/*" element={<AuthRoutes />} />
       </Route>
-      <Route path="dashboard" element={<DashboardLayout />}>
+      <Route path="dashboard" element={
+        <LegalGuard>
+          <DashboardLayout />
+        </LegalGuard>
+      }>
         <Route index element={<DashboardLanding />} />
         <Route path="trainee">
           <Route index element={<TraineeDashboard />} />

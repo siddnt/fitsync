@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 import apiRouter from "./api/routes/index.js";
+import { handleWebhook } from "./api/controllers/payment.controller.js";
 
 dotenv.config();
 
@@ -57,6 +58,18 @@ app.use(
         },
         credentials: true
     })
+);
+
+// Stripe webhook needs raw body, so handle that path before JSON parser
+// Capture raw body for Stripe webhook signature verification. Important: this must be before express.json()
+app.post(
+    "/payments/webhook",
+    express.raw({ type: "application/json" }),
+    (req, _res, next) => {
+        req.rawBody = req.body;
+        next();
+    },
+    handleWebhook
 );
 
 app.use(express.json({
