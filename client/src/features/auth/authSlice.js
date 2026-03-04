@@ -28,6 +28,9 @@ const authSlice = createSlice({
       state.status = 'failed';
       state.error = action.payload ?? 'Authentication failed';
     },
+    setAccessToken(state, action) {
+      state.accessToken = action.payload ?? null;
+    },
     signOut(state) {
       state.user = null;
       state.accessToken = null;
