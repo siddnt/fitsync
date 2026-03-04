@@ -3,6 +3,7 @@ import Product from '../../models/product.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import ProductReview from '../../models/productReview.model.js';
+import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -53,6 +54,12 @@ const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
 }, {});
 
 const ORDER_NUMBER_PREFIX = 'FS';
+const COD_PAYMENT_METHOD = 'Cash on Delivery';
+const DEFAULT_COD_MAX_ORDER_AMOUNT = 2500;
+const DEFAULT_COD_FEE = 49;
+const DEFAULT_COD_CONFIRMATION_MINUTES = 30;
+const DEFAULT_COD_AUTO_CANCEL_REASON = 'Auto-canceled because COD confirmation was not completed in time.';
+const ORDER_CANCELED_STATUS = 'canceled';
 
 const ensureSellerActive = (user) => {
   if (!user) {
@@ -108,6 +115,41 @@ const parseBoolean = (value, defaultValue = false) => {
     return value !== 0;
   }
   return defaultValue;
+};
+
+const normalisePinCode = (value) => String(value ?? '').replace(/\D/g, '').trim();
+
+const parseCsvValues = (value) => String(value || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+const toPositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return parsed >= 0 ? parsed : fallback;
+};
+
+const isCashOnDeliveryMethod = (paymentMethod) =>
+  String(paymentMethod || '').trim().toLowerCase() === COD_PAYMENT_METHOD.toLowerCase();
+
+const resolveCodPolicy = () => {
+  const allowedPincodesRaw = parseCsvValues(process.env.COD_ALLOWED_PINCODES)
+    .map((value) => normalisePinCode(value))
+    .filter(Boolean);
+
+  return {
+    maxOrderAmount: toPositiveNumber(process.env.COD_MAX_ORDER_AMOUNT, DEFAULT_COD_MAX_ORDER_AMOUNT),
+    fee: toPositiveNumber(process.env.COD_FEE, DEFAULT_COD_FEE),
+    confirmationMinutes: Math.max(
+      1,
+      Math.floor(toPositiveNumber(process.env.COD_CONFIRMATION_MINUTES, DEFAULT_COD_CONFIRMATION_MINUTES)),
+    ),
+    allowedPincodes: new Set(allowedPincodesRaw),
+    autoCancelReason: process.env.COD_AUTO_CANCEL_REASON || DEFAULT_COD_AUTO_CANCEL_REASON,
+  };
 };
 
 const toNumber = (value, fallback) => {
@@ -189,14 +231,35 @@ const mapProduct = (product) => ({
   updatedAt: product.updatedAt,
 });
 
+const resolveSellerName = (sellerDoc) => {
+  if (!sellerDoc) {
+    return null;
+  }
+
+  const fullName = [sellerDoc.firstName, sellerDoc.lastName].filter(Boolean).join(' ').trim();
+  return sellerDoc.name ?? (fullName || null) ?? sellerDoc.email ?? null;
+};
+
+const findMatchingSellerIds = async (escapedTerm, limit = 30) => {
+  const sellerMatches = await User.find({
+    $or: [
+      { name: { $regex: escapedTerm, $options: 'i' } },
+      { firstName: { $regex: escapedTerm, $options: 'i' } },
+      { lastName: { $regex: escapedTerm, $options: 'i' } },
+      { email: { $regex: escapedTerm, $options: 'i' } },
+    ],
+  })
+    .select('_id')
+    .limit(limit)
+    .lean();
+
+  return sellerMatches
+    .map((seller) => seller?._id)
+    .filter(Boolean);
+};
+
 const mapCatalogueProduct = (product) => {
   const sellerDoc = product.seller ?? null;
-  let sellerName = null;
-
-  if (sellerDoc) {
-    const fullName = [sellerDoc.firstName, sellerDoc.lastName].filter(Boolean).join(' ').trim();
-    sellerName = sellerDoc.name ?? (fullName || null) ?? sellerDoc.email ?? null;
-  }
 
   return {
     id: product._id,
@@ -214,7 +277,7 @@ const mapCatalogueProduct = (product) => {
     seller: sellerDoc
       ? {
         id: sellerDoc._id,
-        name: sellerName,
+        name: resolveSellerName(sellerDoc),
         role: sellerDoc.role ?? null,
       }
       : null,
@@ -307,26 +370,41 @@ const shapeMarketplaceProduct = (product, salesStats = {}, reviewStats = {}) => 
   };
 };
 
-const mapBuyerOrder = (order) => ({
-  id: order._id,
-  orderNumber: order.orderNumber,
-  subtotal: order.subtotal,
-  tax: order.tax,
-  shippingCost: order.shippingCost,
-  total: order.total,
-  status: deriveSellerOrderStatus(order.orderItems || []),
-  paymentMethod: order.paymentMethod,
-  createdAt: order.createdAt,
-  items: (order.orderItems || []).map((item) => ({
-    id: item.product?._id ?? item.product,
-    name: item.name,
-    quantity: item.quantity,
-    price: item.price,
-    image: item.image ?? item.product?.image ?? null,
-    status: normaliseItemStatus(item.status),
-  })),
-  shippingAddress: order.shippingAddress,
-});
+const mapBuyerOrder = (order) => {
+  const isCanceled = Boolean(order?.isCanceled) || String(order?.status || '').toLowerCase() === ORDER_CANCELED_STATUS;
+  const status = isCanceled ? ORDER_CANCELED_STATUS : deriveSellerOrderStatus(order.orderItems || []);
+  const paymentMethod = order?.paymentMethod || '';
+  const isCod = isCashOnDeliveryMethod(paymentMethod);
+
+  return {
+    id: order._id,
+    orderNumber: order.orderNumber,
+    subtotal: order.subtotal,
+    tax: order.tax,
+    shippingCost: order.shippingCost,
+    codFee: Number(order.codFee || 0),
+    total: order.total,
+    status,
+    paymentMethod: paymentMethod || COD_PAYMENT_METHOD,
+    createdAt: order.createdAt,
+    items: (order.orderItems || []).map((item) => ({
+      id: item.product?._id ?? item.product,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      image: item.image ?? item.product?.image ?? null,
+      status: normaliseItemStatus(item.status),
+    })),
+    shippingAddress: order.shippingAddress,
+    cod: isCod
+      ? {
+        isConfirmed: Boolean(order.cod?.isConfirmed),
+        confirmationDeadline: order.cod?.confirmationDeadline ?? null,
+        confirmedAt: order.cod?.confirmedAt ?? null,
+      }
+      : null,
+  };
+};
 
 const generateOrderNumber = async () => {
   const now = new Date();
@@ -381,11 +459,19 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
   }
 
   if (search && search.trim()) {
-    const term = escapeRegex(search.trim());
-    filters.$or = [
+    const searchTerm = search.trim();
+    const term = escapeRegex(searchTerm);
+    const matchingSellerIds = searchTerm.length >= 2 ? await findMatchingSellerIds(term) : [];
+    const searchClauses = [
       { name: { $regex: term, $options: 'i' } },
       { description: { $regex: term, $options: 'i' } },
     ];
+
+    if (matchingSellerIds.length) {
+      searchClauses.push({ seller: { $in: matchingSellerIds } });
+    }
+
+    filters.$or = searchClauses;
   }
 
   const resolvedPageSize = Math.min(Math.max(Number(pageSize) || 24, 6), 60);
@@ -435,6 +521,76 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
         totalPages: Math.ceil(total / resolvedPageSize) || 0,
       },
     }, 'Marketplace catalogue fetched successfully'));
+});
+
+export const listMarketplaceSuggestions = asyncHandler(async (req, res) => {
+  const query = String(req.query?.query ?? req.query?.search ?? '').trim();
+  const requestedLimit = Number(req.query?.limit);
+  const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 8, 1), 12);
+
+  if (query.length < 2) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { suggestions: [] }, 'Marketplace suggestions fetched successfully'));
+  }
+
+  const term = escapeRegex(query);
+  const lowerQuery = query.toLowerCase();
+  const matchingSellerIds = await findMatchingSellerIds(term);
+  const searchClauses = [
+    { name: { $regex: term, $options: 'i' } },
+    { description: { $regex: term, $options: 'i' } },
+    { category: { $regex: term, $options: 'i' } },
+  ];
+
+  if (matchingSellerIds.length) {
+    searchClauses.push({ seller: { $in: matchingSellerIds } });
+  }
+
+  const candidates = await Product.find({
+    isPublished: true,
+    $or: searchClauses,
+  })
+    .select('name category seller')
+    .populate({ path: 'seller', select: 'name firstName lastName email' })
+    .sort({ updatedAt: -1 })
+    .limit(Math.max(limit * 4, 20))
+    .lean();
+
+  const seen = new Set();
+  const prefixMatches = [];
+  const containsMatches = [];
+
+  const pushSuggestion = (value) => {
+    const text = String(value || '').trim();
+    if (!text) {
+      return;
+    }
+
+    const lower = text.toLowerCase();
+    if (!lower.includes(lowerQuery) || seen.has(lower)) {
+      return;
+    }
+
+    seen.add(lower);
+    if (lower.startsWith(lowerQuery)) {
+      prefixMatches.push(text);
+      return;
+    }
+    containsMatches.push(text);
+  };
+
+  candidates.forEach((product) => {
+    pushSuggestion(product?.name);
+    pushSuggestion(resolveSellerName(product?.seller));
+    pushSuggestion(product?.category);
+  });
+
+  const suggestions = [...prefixMatches, ...containsMatches].slice(0, limit);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { suggestions }, 'Marketplace suggestions fetched successfully'));
 });
 
 export const getMarketplaceProduct = asyncHandler(async (req, res) => {
@@ -495,7 +651,10 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
   ensureMarketplaceBuyerEligible(req.user);
 
   const userId = req.user?._id;
-  const { items, shippingAddress, paymentMethod = 'Cash on Delivery' } = req.body ?? {};
+  const { items, shippingAddress, paymentMethod = COD_PAYMENT_METHOD } = req.body ?? {};
+  const paymentMethodLabel = String(paymentMethod || COD_PAYMENT_METHOD).trim() || COD_PAYMENT_METHOD;
+  const isCodOrder = isCashOnDeliveryMethod(paymentMethodLabel);
+  const codPolicy = resolveCodPolicy();
 
   if (!userId) {
     throw new ApiError(401, 'You must be signed in to place an order.');
@@ -567,24 +726,44 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
   if (!shippingAddress || requiredAddressFields.some((field) => !shippingAddress[field])) {
     throw new ApiError(400, 'Please provide a complete shipping address.');
   }
+  const shippingPinCode = normalisePinCode(shippingAddress.zipCode);
+
+  if (isCodOrder && codPolicy.allowedPincodes.size && !codPolicy.allowedPincodes.has(shippingPinCode)) {
+    throw new ApiError(400, 'Cash on Delivery is unavailable for this PIN code.');
+  }
 
   const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
+  if (isCodOrder && subtotal > codPolicy.maxOrderAmount) {
+    throw new ApiError(400, `Cash on Delivery is available up to INR ${codPolicy.maxOrderAmount} per order.`);
+  }
+
   const tax = 0;
   const shippingCost = 0;
-  const total = subtotal + tax + shippingCost;
+  const codFee = isCodOrder ? codPolicy.fee : 0;
+  const total = subtotal + tax + shippingCost + codFee;
 
   const orderNumber = await generateOrderNumber();
+  const codConfirmationDeadline = isCodOrder
+    ? new Date(Date.now() + codPolicy.confirmationMinutes * 60 * 1000)
+    : null;
 
   const order = await Order.create({
     user: userId,
     orderItems,
     shippingAddress,
-    paymentMethod,
+    paymentMethod: paymentMethodLabel,
     subtotal,
     tax,
     shippingCost,
+    codFee,
     total,
     orderNumber,
+    cod: isCodOrder
+      ? {
+        isConfirmed: false,
+        confirmationDeadline: codConfirmationDeadline,
+      }
+      : undefined,
   });
 
   await Promise.all(orderItems.map(async (item) => {
@@ -612,6 +791,128 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     .status(201)
     .json(new ApiResponse(201, { order: mapBuyerOrder(populated) }, 'Order placed successfully'));
 });
+
+const restoreOrderStock = async (order) => {
+  const restoreOps = (order.orderItems || []).map(async (item) => {
+    const quantity = Number(item?.quantity ?? 0);
+    const productId = item?.product?._id ?? item?.product;
+
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) {
+      return;
+    }
+
+    await Product.updateOne(
+      { _id: productId },
+      { $inc: { stock: quantity } },
+    );
+
+    await Product.updateOne(
+      { _id: productId, stock: { $gt: 0 }, status: 'out-of-stock' },
+      { $set: { status: 'available' } },
+    );
+  });
+
+  await Promise.all(restoreOps);
+};
+
+const cancelCodOrder = async (order, reason, canceledAt = new Date()) => {
+  if (!order || order.isCanceled) {
+    return order;
+  }
+
+  await restoreOrderStock(order);
+
+  order.isCanceled = true;
+  order.status = ORDER_CANCELED_STATUS;
+  order.canceledAt = canceledAt;
+  order.cancelReason = reason;
+  order.cod = {
+    ...(order.cod || {}),
+    isConfirmed: false,
+    autoCanceledAt: canceledAt,
+    autoCancelReason: reason,
+  };
+
+  await order.save();
+  return order;
+};
+
+export const confirmCashOnDeliveryOrder = asyncHandler(async (req, res) => {
+  ensureMarketplaceBuyerEligible(req.user);
+
+  const orderId = toObjectId(req.params.orderId, 'Order id');
+  const order = await Order.findOne({
+    _id: orderId,
+    user: req.user._id,
+    paymentMethod: COD_PAYMENT_METHOD,
+  });
+
+  if (!order) {
+    throw new ApiError(404, 'COD order not found.');
+  }
+  if (order.isCanceled || String(order.status || '').toLowerCase() === ORDER_CANCELED_STATUS) {
+    throw new ApiError(409, 'This COD order is canceled and cannot be confirmed.');
+  }
+  if (order.cod?.isConfirmed) {
+    const populatedExisting = await Order.findById(order._id)
+      .populate({ path: 'orderItems.product', select: 'name image' })
+      .lean();
+    return res.status(200).json(
+      new ApiResponse(200, { order: mapBuyerOrder(populatedExisting) }, 'COD order is already confirmed.'),
+    );
+  }
+
+  const now = new Date();
+  if (order.cod?.confirmationDeadline && new Date(order.cod.confirmationDeadline).getTime() < now.getTime()) {
+    const canceledOrder = await cancelCodOrder(order, resolveCodPolicy().autoCancelReason, now);
+    const populatedCanceled = await Order.findById(canceledOrder._id)
+      .populate({ path: 'orderItems.product', select: 'name image' })
+      .lean();
+
+    throw new ApiError(409, `COD confirmation window expired. Order ${populatedCanceled?.orderNumber ?? ''} was canceled.`.trim());
+  }
+
+  order.cod = {
+    ...(order.cod || {}),
+    isConfirmed: true,
+    confirmedAt: now,
+  };
+  await order.save();
+
+  const populated = await Order.findById(order._id)
+    .populate({ path: 'orderItems.product', select: 'name image' })
+    .lean();
+
+  return res.status(200).json(
+    new ApiResponse(200, { order: mapBuyerOrder(populated) }, 'COD order confirmed successfully.'),
+  );
+});
+
+export const autoCancelUnconfirmedCodOrders = async ({ limit = 100 } = {}) => {
+  const codPolicy = resolveCodPolicy();
+  const now = new Date();
+
+  const orders = await Order.find({
+    paymentMethod: COD_PAYMENT_METHOD,
+    isCanceled: false,
+    'cod.isConfirmed': false,
+    'cod.confirmationDeadline': { $lte: now },
+  })
+    .sort({ 'cod.confirmationDeadline': 1 })
+    .limit(limit);
+
+  let canceledCount = 0;
+  for (const order of orders) {
+    // eslint-disable-next-line no-await-in-loop
+    await cancelCodOrder(order, codPolicy.autoCancelReason, now);
+    canceledCount += 1;
+  }
+
+  return {
+    scanned: orders.length,
+    canceled: canceledCount,
+  };
+};
 
 export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
   ensureMarketplaceBuyerEligible(req.user);
@@ -975,13 +1276,15 @@ const getSellerOrderItems = (order, sellerId) =>
 const mapOrder = (order, sellerId) => {
   const relevantItems = getSellerOrderItems(order, sellerId);
   const total = relevantItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
+  const isCanceled = Boolean(order?.isCanceled) || String(order?.status || '').toLowerCase() === ORDER_CANCELED_STATUS;
 
   return {
     id: order._id,
     orderNumber: order.orderNumber,
-    status: deriveSellerOrderStatus(relevantItems),
+    status: isCanceled ? ORDER_CANCELED_STATUS : deriveSellerOrderStatus(relevantItems),
     createdAt: order.createdAt,
     total,
+    codFee: Number(order.codFee || 0),
     buyer: order.user,
     items: relevantItems.map((item) => ({
       id: item.product,
@@ -1080,6 +1383,9 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
 
   if (!order) {
     throw new ApiError(404, 'Order not found');
+  }
+  if (order.isCanceled || String(order.status || '').toLowerCase() === ORDER_CANCELED_STATUS) {
+    throw new ApiError(409, 'This order is canceled and cannot be updated.');
   }
 
   const relevantItems = getSellerOrderItems(order, sellerId);

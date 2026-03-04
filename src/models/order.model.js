@@ -145,12 +145,33 @@ const orderSchema = new mongoose.Schema(
             type: Number,
             required: true
         },
+        codFee: {
+            type: Number,
+            required: true,
+            default: 0
+        },
+        cod: {
+            isConfirmed: {
+                type: Boolean,
+                default: false
+            },
+            confirmedAt: Date,
+            confirmationDeadline: Date,
+            autoCanceledAt: Date,
+            autoCancelReason: String
+        },
         status: {
             type: String,
             required: true,
-            enum: ["processing", "in-transit", "out-for-delivery", "delivered"],
+            enum: ["processing", "in-transit", "out-for-delivery", "delivered", "canceled"],
             default: "processing"
         },
+        isCanceled: {
+            type: Boolean,
+            default: false
+        },
+        canceledAt: Date,
+        cancelReason: String,
         orderNumber: {
             type: String,
             required: false,

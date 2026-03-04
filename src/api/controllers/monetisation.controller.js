@@ -23,6 +23,22 @@ const toObjectId = (value, label) => {
   }
 };
 
+const parseBoolean = (value, defaultValue = false) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalised = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalised)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalised)) {
+      return false;
+    }
+  }
+  return defaultValue;
+};
+
 const assertGymAccess = async (user, gymId) => {
   const gym = await Gym.findById(gymId).select('owner sponsorship analytics name location lastUpdatedBy');
   if (!gym) {
@@ -53,22 +69,57 @@ const recordRevenue = async ({ amount, user, type, description, metadata }) => {
   });
 };
 
-export const checkoutListingSubscription = asyncHandler(async (req, res) => {
-  const { gymId: gymIdRaw, planCode, autoRenew = true, paymentReference } = req.body ?? {};
-
+export const activateListingSubscription = async ({
+  actor,
+  gymId: gymIdRaw,
+  planCode,
+  autoRenew = true,
+  paymentReference,
+  paymentSource = 'manual',
+  stripeSessionId,
+  stripePaymentIntentId,
+} = {}) => {
   const plan = resolveListingPlan(planCode);
   if (!plan) {
     throw new ApiError(400, 'Unknown subscription plan selected.');
   }
 
+  if (!paymentReference) {
+    throw new ApiError(400, 'Payment reference is required to activate subscription.');
+  }
+
   const gymId = toObjectId(gymIdRaw, 'Gym id');
-  const gym = await assertGymAccess(req.user, gymId);
+  const gym = await assertGymAccess(actor, gymId);
 
   await cancelActiveSubscriptions(gymId);
 
   const now = new Date();
   const periodEnd = new Date(now);
   periodEnd.setMonth(periodEnd.getMonth() + plan.durationMonths);
+
+  const metadataEntries = [
+    ['planLabel', plan.label],
+    ['features', plan.features.join(', ')],
+    ['paymentSource', String(paymentSource)],
+  ];
+
+  if (stripeSessionId) {
+    metadataEntries.push(['stripeSessionId', String(stripeSessionId)]);
+  }
+  if (stripePaymentIntentId) {
+    metadataEntries.push(['stripePaymentIntentId', String(stripePaymentIntentId)]);
+  }
+
+  const invoiceMetadataEntries = [];
+  if (stripeSessionId) {
+    invoiceMetadataEntries.push(['stripeSessionId', String(stripeSessionId)]);
+  }
+  if (stripePaymentIntentId) {
+    invoiceMetadataEntries.push(['stripePaymentIntentId', String(stripePaymentIntentId)]);
+  }
+  if (paymentSource) {
+    invoiceMetadataEntries.push(['paymentSource', String(paymentSource)]);
+  }
 
   const subscription = await GymListingSubscription.create({
     gym: gymId,
@@ -79,7 +130,7 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
     periodStart: now,
     periodEnd,
     status: 'active',
-    autoRenew,
+    autoRenew: parseBoolean(autoRenew, true),
     invoices: [
       {
         amount: plan.amount,
@@ -87,29 +138,121 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
         paidOn: now,
         paymentReference,
         status: 'paid',
+        ...(invoiceMetadataEntries.length ? { metadata: new Map(invoiceMetadataEntries) } : {}),
       },
     ],
-    metadata: new Map([
-      ['planLabel', plan.label],
-      ['features', plan.features.join(', ')],
-    ]),
-    createdBy: req.user._id,
+    metadata: new Map(metadataEntries),
+    createdBy: actor._id,
   });
 
   await recordRevenue({
     amount: plan.amount,
-    user: req.user._id,
+    user: actor._id,
     type: 'listing',
     description: `${plan.label} subscription for ${gym.name}`,
     metadata: new Map([
       ['gymId', String(gymId)],
       ['planCode', plan.planCode],
+      ['paymentSource', String(paymentSource)],
+      ['paymentReference', String(paymentReference)],
+      ...(stripeSessionId ? [['stripeSessionId', String(stripeSessionId)]] : []),
+      ...(stripePaymentIntentId ? [['stripePaymentIntentId', String(stripePaymentIntentId)]] : []),
     ]),
   });
 
   const response = await GymListingSubscription.findById(subscription._id)
     .populate({ path: 'gym', select: 'name location status' })
     .lean();
+
+  return response;
+};
+
+export const activateGymSponsorship = async ({
+  actor,
+  gymId: gymIdRaw,
+  tier,
+  paymentReference,
+  paymentSource = 'manual',
+  stripeSessionId,
+  stripePaymentIntentId,
+} = {}) => {
+  const packageDetails = resolveSponsorshipPackage(tier);
+
+  if (!packageDetails) {
+    throw new ApiError(400, 'Unknown sponsorship package.');
+  }
+
+  if (!paymentReference) {
+    throw new ApiError(400, 'Payment reference is required to activate sponsorship.');
+  }
+
+  const gymId = toObjectId(gymIdRaw, 'Gym id');
+  const gym = await assertGymAccess(actor, gymId);
+
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setMonth(endDate.getMonth() + packageDetails.durationMonths);
+
+  const sponsorshipPayload = {
+    tier: packageDetails.tier,
+    status: 'active',
+    startDate: now,
+    endDate,
+    amount: packageDetails.amount,
+    monthlyBudget: packageDetails.monthlyBudget,
+    paymentReference,
+    paymentSource,
+  };
+
+  if (stripeSessionId) {
+    sponsorshipPayload.stripeSessionId = stripeSessionId;
+  }
+  if (stripePaymentIntentId) {
+    sponsorshipPayload.stripePaymentIntentId = stripePaymentIntentId;
+  }
+
+  gym.sponsorship = sponsorshipPayload;
+  gym.lastUpdatedBy = actor._id;
+  await gym.save();
+
+  await recordRevenue({
+    amount: packageDetails.amount,
+    user: actor._id,
+    type: 'sponsorship',
+    description: `${packageDetails.label} sponsorship for ${gym.name}`,
+    metadata: new Map([
+      ['gymId', String(gymId)],
+      ['tier', packageDetails.tier],
+      ['paymentSource', String(paymentSource)],
+      ['paymentReference', String(paymentReference)],
+      ...(stripeSessionId ? [['stripeSessionId', String(stripeSessionId)]] : []),
+      ...(stripePaymentIntentId ? [['stripePaymentIntentId', String(stripePaymentIntentId)]] : []),
+    ]),
+  });
+
+  return {
+    tier: packageDetails.tier,
+    startDate: now,
+    endDate,
+    status: 'active',
+    amount: packageDetails.amount,
+    monthlyBudget: packageDetails.monthlyBudget,
+    reach: packageDetails.reach,
+    paymentReference,
+  };
+};
+
+export const checkoutListingSubscription = asyncHandler(async (req, res) => {
+  const { gymId: gymIdRaw, planCode, autoRenew = true, paymentReference } = req.body ?? {};
+
+  const response = await activateListingSubscription({
+    actor: req.user,
+    gymId: gymIdRaw,
+    planCode,
+    autoRenew,
+    paymentReference,
+    paymentSource: 'manual',
+  });
 
   return res
     .status(201)
@@ -118,41 +261,12 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
 
 export const purchaseSponsorship = asyncHandler(async (req, res) => {
   const { gymId: gymIdRaw, tier, paymentReference } = req.body ?? {};
-  const packageDetails = resolveSponsorshipPackage(tier);
-
-  if (!packageDetails) {
-    throw new ApiError(400, 'Unknown sponsorship package.');
-  }
-
-  const gymId = toObjectId(gymIdRaw, 'Gym id');
-  const gym = await assertGymAccess(req.user, gymId);
-
-  const now = new Date();
-  const endDate = new Date(now);
-  endDate.setMonth(endDate.getMonth() + packageDetails.durationMonths);
-
-  gym.sponsorship = {
-    tier: packageDetails.tier,
-    status: 'active',
-    startDate: now,
-    endDate,
-    amount: packageDetails.amount,
-    monthlyBudget: packageDetails.monthlyBudget,
-  };
-
-  gym.lastUpdatedBy = req.user._id;
-  await gym.save();
-
-  await recordRevenue({
-    amount: packageDetails.amount,
-    user: req.user._id,
-    type: 'sponsorship',
-    description: `${packageDetails.label} sponsorship for ${gym.name}`,
-    metadata: new Map([
-      ['gymId', String(gymId)],
-      ['tier', packageDetails.tier],
-      ['paymentReference', paymentReference ?? 'manual'],
-    ]),
+  const sponsorship = await activateGymSponsorship({
+    actor: req.user,
+    gymId: gymIdRaw,
+    tier,
+    paymentReference,
+    paymentSource: 'manual',
   });
 
   return res
@@ -161,15 +275,7 @@ export const purchaseSponsorship = asyncHandler(async (req, res) => {
       new ApiResponse(
         200,
         {
-          sponsorship: {
-            tier: packageDetails.tier,
-            startDate: now,
-            endDate,
-            status: 'active',
-            amount: packageDetails.amount,
-            monthlyBudget: packageDetails.monthlyBudget,
-            reach: packageDetails.reach,
-          },
+          sponsorship,
         },
         'Sponsorship activated successfully.',
       ),

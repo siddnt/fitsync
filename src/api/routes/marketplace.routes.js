@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 import {
   listMarketplaceCatalogue,
+  listMarketplaceSuggestions,
   getMarketplaceProduct,
   createMarketplaceOrder,
+  confirmCashOnDeliveryOrder,
   createMarketplaceProductReview,
   listSellerProducts,
   createSellerProduct,
@@ -18,8 +20,10 @@ import { upload } from '../../middlewares/multer.middleware.js';
 const router = Router();
 
 router.get('/products', listMarketplaceCatalogue);
+router.get('/products/suggestions', listMarketplaceSuggestions);
 router.get('/products/:productId', getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
+router.post('/orders/:orderId/cod-confirm', verifyJWT, authorizeRoles('user', 'trainee'), confirmCashOnDeliveryOrder);
 router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
 
 router.use(verifyJWT, authorizeRoles('seller', 'admin'));

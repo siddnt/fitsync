@@ -38,7 +38,7 @@ const paymentSessionSchema = new mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ["shop", "gym-subscription", "sponsorship"],
+            enum: ["shop", "gym-subscription", "sponsorship", "membership", "gym-create"],
             required: true
         },
         owner: {
