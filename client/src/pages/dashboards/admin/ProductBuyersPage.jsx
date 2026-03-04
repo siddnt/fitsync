@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+﻿import { useMemo, useState } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -12,6 +12,7 @@ import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const currency = (v) => `₹${Number(v ?? 0).toLocaleString('en-IN')}`;
+const getUserId = (user) => user?._id ?? user?.id ?? null;
 
 const AdminProductBuyersPage = () => {
   const { productId } = useParams();
@@ -67,7 +68,7 @@ const AdminProductBuyersPage = () => {
   if (isError || !product) {
     return (
       <div className="dashboard-grid dashboard-grid--stacked ud-page">
-        <DashboardSection title="Product Buyers" action={<button type="button" onClick={handleBack}>← Back</button>}>
+        <DashboardSection title="Product Buyers" action={<button type="button" onClick={handleBack}>Back</button>}>
           <EmptyState message="Could not load product details." />
         </DashboardSection>
       </div>
@@ -78,16 +79,16 @@ const AdminProductBuyersPage = () => {
     <div className="dashboard-grid dashboard-grid--stacked ud-page">
       {/* Actions bar */}
       <div className="ud-actions">
-        <button type="button" className="ud-btn ud-btn--back" onClick={handleBack}>← Back to Products</button>
+        <button type="button" className="ud-btn ud-btn--back" onClick={handleBack}>Back to Products</button>
         <button type="button" className="ud-btn ud-btn--outline" onClick={() => refetch()}>Refresh</button>
         <button type="button" className="ud-btn ud-btn--danger" onClick={handleDelete} disabled={isDeleting}>
-          {isDeleting ? 'Deleting…' : 'Delete Product'}
+          {isDeleting ? 'Deleting...' : 'Delete Product'}
         </button>
       </div>
 
       {notice && <div className="status-pill status-pill--warning">{notice}</div>}
 
-      {/* ── Product Info ── */}
+      {/* -- Product Info -- */}
       <DashboardSection title="Product Details">
         <div className="ud-card">
           <div className="ud-card__row">
@@ -95,16 +96,26 @@ const AdminProductBuyersPage = () => {
             <div className="ud-card__info">
               <p><strong style={{ fontSize: '1.05rem' }}>{product.name}</strong></p>
               <p><strong>Category:</strong> {formatStatus(product.category)}</p>
-              <p><strong>Price:</strong> {currency(product.price)} · <strong>MRP:</strong> {currency(product.mrp)}</p>
-              <p><strong>Stock:</strong> {product.stock} · <strong>Status:</strong>{' '}
+              <p><strong>Price:</strong> {currency(product.price)} | <strong>MRP:</strong> {currency(product.mrp)}</p>
+              <p><strong>Stock:</strong> {product.stock} | <strong>Status:</strong>{' '}
                 <span className={`status-pill ${product.status === 'available' ? 'status-pill--success' : 'status-pill--warning'}`}>
                   {formatStatus(product.status)}
                 </span>
               </p>
               <p><strong>Published:</strong> {product.isPublished ? 'Yes' : 'No'}</p>
-              <p><strong>Rating:</strong> {product.reviews?.avgRating ? `${product.reviews.avgRating} ★` : '—'} ({product.reviews?.reviewCount ?? 0} reviews)</p>
+              <p><strong>Rating:</strong> {product.reviews?.avgRating ? `${product.reviews.avgRating} *` : '-'} ({product.reviews?.reviewCount ?? 0} reviews)</p>
               {product.seller && (
-                <p><strong>Seller:</strong> {product.seller.name} ({product.seller.email})</p>
+                <p>
+                  <strong>Seller:</strong>{' '}
+                  {getUserId(product.seller) ? (
+                    <Link to={`/dashboard/admin/users/${getUserId(product.seller)}`} className="dashboard-table__user--link">
+                      {product.seller.name}
+                    </Link>
+                  ) : (
+                    product.seller.name
+                  )}{' '}
+                  ({product.seller.email})
+                </p>
               )}
               {product.description && <p className="ud-card__desc text-muted">{product.description}</p>}
               <p className="text-muted">Listed {formatDate(product.createdAt)}</p>
@@ -113,7 +124,7 @@ const AdminProductBuyersPage = () => {
         </div>
       </DashboardSection>
 
-      {/* ── Summary ── */}
+      {/* -- Summary -- */}
       <DashboardSection title="Buyer Summary">
         <div className="stat-grid">
           <div className="stat-card stat-card--blue"><small>Total Orders</small><strong>{buyers.length}</strong></div>
@@ -132,7 +143,7 @@ const AdminProductBuyersPage = () => {
         </div>
       </DashboardSection>
 
-      {/* ── Buyers Table ── */}
+      {/* -- Buyers Table -- */}
       <DashboardSection
         title={`Buyers (${buyers.length})`}
         action={
@@ -176,13 +187,21 @@ const AdminProductBuyersPage = () => {
                         <div className="ud-inline-img">
                           {b.user?.profilePicture && <img src={b.user.profilePicture} alt="" />}
                           <div>
-                            <strong>{b.user?.name ?? '—'}</strong>
+                            <strong>
+                              {getUserId(b.user) ? (
+                                <Link to={`/dashboard/admin/users/${getUserId(b.user)}`} className="dashboard-table__user--link">
+                                  {b.user?.name}
+                                </Link>
+                              ) : (
+                                b.user?.name ?? '-'
+                              )}
+                            </strong>
                             <div><small>{b.user?.email}</small></div>
-                            {b.user?.contactNumber && <div><small>📞 {b.user.contactNumber}</small></div>}
+                            {b.user?.contactNumber && <div><small>Phone: {b.user.contactNumber}</small></div>}
                           </div>
                         </div>
                       </td>
-                      <td>{b.orderNumber ?? '—'}</td>
+                      <td>{b.orderNumber ?? '-'}</td>
                       <td>{b.quantity}</td>
                       <td>{currency(b.price)}</td>
                       <td>
@@ -190,7 +209,7 @@ const AdminProductBuyersPage = () => {
                           {formatStatus(b.itemStatus)}
                         </span>
                       </td>
-                      <td>{[b.shippingAddress?.city, b.shippingAddress?.state].filter(Boolean).join(', ') || '—'}</td>
+                      <td>{[b.shippingAddress?.city, b.shippingAddress?.state].filter(Boolean).join(', ') || '-'}</td>
                       <td>{currency(b.total)}</td>
                       <td>{formatDate(b.orderDate)}</td>
                     </tr>
@@ -207,3 +226,6 @@ const AdminProductBuyersPage = () => {
 };
 
 export default AdminProductBuyersPage;
+
+
+

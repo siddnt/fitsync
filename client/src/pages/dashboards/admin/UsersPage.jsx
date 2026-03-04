@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -10,8 +10,7 @@ import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
-
-
+const getUserId = (user) => user?._id ?? user?.id;
 
 const AdminUsersPage = () => {
   const navigate = useNavigate();
@@ -90,7 +89,7 @@ const AdminUsersPage = () => {
     }
 
     try {
-      await deleteUser(user._id ?? user.id).unwrap();
+      await deleteUser(getUserId(user)).unwrap();
       setNotice('User deleted successfully.');
       refetch();
     } catch (mutationError) {
@@ -107,7 +106,7 @@ const AdminUsersPage = () => {
     setErrorNotice(null);
 
     try {
-      await updateUserStatus({ userId: user._id ?? user.id, status: 'active' }).unwrap();
+      await updateUserStatus({ userId: getUserId(user), status: 'active' }).unwrap();
       setNotice(`${user.name ?? 'User'} activated.`);
       refetch();
     } catch (mutationError) {
@@ -180,7 +179,15 @@ const AdminUsersPage = () => {
               {pending.map((user) => (
                 <tr key={user._id}>
                   <td>
-                    <strong>{user.name}</strong>
+                    <strong>
+                      {getUserId(user) ? (
+                        <Link to={`/dashboard/admin/users/${getUserId(user)}`} className="dashboard-table__user--link">
+                          {user.name}
+                        </Link>
+                      ) : (
+                        user.name
+                      )}
+                    </strong>
                     <div>
                       <small>{user.profile?.headline}</small>
                     </div>
@@ -276,9 +283,9 @@ const AdminUsersPage = () => {
               <tbody>
                 {paginatedUsers.map((user) => (
                   <tr
-                    key={user._id}
+                    key={getUserId(user)}
                     className="dashboard-table__row--clickable"
-                    onClick={() => navigate(`/dashboard/admin/users/${user._id}`)}
+                    onClick={() => navigate(`/dashboard/admin/users/${getUserId(user)}`)}
                     title="Click to view details"
                   >
                     <td>

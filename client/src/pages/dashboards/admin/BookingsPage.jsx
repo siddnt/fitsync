@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -8,6 +9,9 @@ import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminBookingsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminBookingsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminBookingsQuery();
@@ -141,19 +145,39 @@ const AdminBookingsPage = () => {
                   {paginatedItems.map((b) => (
                     <tr key={b.id}>
                       <td>
-                        <strong>{b.user?.name ?? '—'}</strong>
+                        <strong>
+                          {getUserId(b.user) ? (
+                            <Link to={`/dashboard/admin/users/${getUserId(b.user)}`} className="dashboard-table__user--link">
+                              {b.user?.name}
+                            </Link>
+                          ) : (
+                            b.user?.name ?? '-'
+                          )}
+                        </strong>
                         <div><small>{b.user?.email}</small></div>
                       </td>
                       <td>
-                        {b.trainer?.name ?? '—'}
+                        {getUserId(b.trainer) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(b.trainer)}`} className="dashboard-table__user--link">
+                            {b.trainer?.name}
+                          </Link>
+                        ) : (
+                          b.trainer?.name ?? '-'
+                        )}
                         <div><small>{b.trainer?.email}</small></div>
                       </td>
                       <td>
-                        {b.gym?.name ?? b.gymName ?? '—'}
+                        {getGymId(b.gym) ? (
+                          <Link to={`/dashboard/admin/gyms/${getGymId(b.gym)}`} className="dashboard-table__user--link">
+                            {b.gym?.name ?? b.gymName}
+                          </Link>
+                        ) : (
+                          b.gym?.name ?? b.gymName ?? '-'
+                        )}
                         <div><small>{b.gym?.city}</small></div>
                       </td>
                       <td>{formatDate(b.bookingDate)}</td>
-                      <td>{b.startTime} – {b.endTime}</td>
+                      <td>{b.startTime} - {b.endTime}</td>
                       <td>{formatStatus(b.type)}</td>
                       <td>
                         <span className={`status-pill status-pill--${b.status === 'confirmed' || b.status === 'completed' ? 'success' : b.status === 'cancelled' ? 'warning' : 'default'}`}>
@@ -161,7 +185,7 @@ const AdminBookingsPage = () => {
                         </span>
                       </td>
                       <td>{formatStatus(b.paymentStatus)}</td>
-                      <td>₹{b.price}</td>
+                      <td>Rs {b.price}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -178,3 +202,4 @@ const AdminBookingsPage = () => {
 };
 
 export default AdminBookingsPage;
+

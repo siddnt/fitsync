@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -8,6 +9,9 @@ import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminTrainerAssignmentsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminTrainerAssignmentsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminTrainerAssignmentsQuery();
@@ -126,11 +130,25 @@ const AdminTrainerAssignmentsPage = () => {
                   {paginatedItems.map((a) => (
                     <tr key={a.id}>
                       <td>
-                        <strong>{a.trainer?.name ?? '—'}</strong>
+                        <strong>
+                          {getUserId(a.trainer) ? (
+                            <Link to={`/dashboard/admin/users/${getUserId(a.trainer)}`} className="dashboard-table__user--link">
+                              {a.trainer?.name}
+                            </Link>
+                          ) : (
+                            a.trainer?.name ?? '-'
+                          )}
+                        </strong>
                         <div><small>{a.trainer?.email}</small></div>
                       </td>
                       <td>
-                        {a.gym?.name ?? '—'}
+                        {getGymId(a.gym) ? (
+                          <Link to={`/dashboard/admin/gyms/${getGymId(a.gym)}`} className="dashboard-table__user--link">
+                            {a.gym?.name}
+                          </Link>
+                        ) : (
+                          a.gym?.name ?? '-'
+                        )}
                         <div><small>{a.gym?.city}</small></div>
                       </td>
                       <td>
@@ -142,8 +160,16 @@ const AdminTrainerAssignmentsPage = () => {
                         {a.trainees?.length ? (
                           <div className="admin-trainee-list">
                             {a.trainees.map((t, i) => (
-                              <div key={t.trainee?.id ?? i} className="admin-trainee-chip">
-                                <span>{t.trainee?.name ?? 'Unknown'}</span>
+                              <div key={getUserId(t.trainee) ?? i} className="admin-trainee-chip">
+                                <span>
+                                  {getUserId(t.trainee) ? (
+                                    <Link to={`/dashboard/admin/users/${getUserId(t.trainee)}`} className="dashboard-table__user--link">
+                                      {t.trainee?.name ?? 'Unknown'}
+                                    </Link>
+                                  ) : (
+                                    t.trainee?.name ?? 'Unknown'
+                                  )}
+                                </span>
                                 <small className={`status-dot status-dot--${t.status === 'active' ? 'success' : 'default'}`}>{formatStatus(t.status)}</small>
                               </div>
                             ))}
@@ -153,7 +179,7 @@ const AdminTrainerAssignmentsPage = () => {
                         )}
                       </td>
                       <td>{formatDate(a.requestedAt)}</td>
-                      <td>{a.approvedAt ? formatDate(a.approvedAt) : '—'}</td>
+                      <td>{a.approvedAt ? formatDate(a.approvedAt) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -170,3 +196,4 @@ const AdminTrainerAssignmentsPage = () => {
 };
 
 export default AdminTrainerAssignmentsPage;
+

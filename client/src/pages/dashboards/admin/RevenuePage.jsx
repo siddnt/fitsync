@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import DistributionPieChart from '../components/DistributionPieChart.jsx';
@@ -18,6 +19,8 @@ const STREAM_COLORS = {
   Sponsorship: '#4dabf7',
   Marketplace: '#51cf66',
 };
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminRevenuePage = () => {
   const [granularity, setGranularity] = useState('monthly');
@@ -118,15 +121,23 @@ const AdminRevenuePage = () => {
 
   const totalRevenueValue = totals.listing + totals.sponsorship + totals.marketplace;
 
-  /* ── Top Contributors (computed client-side) ── */
+  /* -- Top Contributors (computed client-side) -- */
 
   const topSellers = useMemo(() => {
     const sellerMap = {};
     allOrders.forEach((order) => {
       const seller = order.seller;
       if (!seller?.name) return;
-      const key = seller.id || seller.name;
-      if (!sellerMap[key]) sellerMap[key] = { name: seller.name, email: seller.email, orders: 0, revenue: 0 };
+      const key = getUserId(seller) || seller.name;
+      if (!sellerMap[key]) {
+        sellerMap[key] = {
+          id: getUserId(seller),
+          name: seller.name,
+          email: seller.email,
+          orders: 0,
+          revenue: 0,
+        };
+      }
       sellerMap[key].orders += 1;
       const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
       sellerMap[key].revenue += amount;
@@ -139,8 +150,16 @@ const AdminRevenuePage = () => {
     allOrders.forEach((order) => {
       const user = order.user;
       if (!user?.name) return;
-      const key = user.id || user.name;
-      if (!buyerMap[key]) buyerMap[key] = { name: user.name, email: user.email, orders: 0, spent: 0 };
+      const key = getUserId(user) || user.name;
+      if (!buyerMap[key]) {
+        buyerMap[key] = {
+          id: getUserId(user),
+          name: user.name,
+          email: user.email,
+          orders: 0,
+          spent: 0,
+        };
+      }
       buyerMap[key].orders += 1;
       const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
       buyerMap[key].spent += amount;
@@ -150,19 +169,33 @@ const AdminRevenuePage = () => {
 
   const topGyms = useMemo(() => {
     const gymMap = {};
-    const addToGym = (gymName, ownerName, amount, stream) => {
+    const addToGym = ({ gym, owner, amount, stream }) => {
+      const gymId = getGymId(gym);
+      const gymName = gym?.name;
       if (!gymName) return;
-      if (!gymMap[gymName]) gymMap[gymName] = { name: gymName, owner: ownerName, listing: 0, sponsorship: 0, total: 0 };
-      gymMap[gymName][stream] += amount;
-      gymMap[gymName].total += amount;
+      const key = gymId || gymName;
+      if (!gymMap[key]) {
+        gymMap[key] = {
+          id: gymId,
+          name: gymName,
+          ownerId: getUserId(owner),
+          ownerName: owner?.name ?? null,
+          ownerEmail: owner?.email ?? null,
+          listing: 0,
+          sponsorship: 0,
+          total: 0,
+        };
+      }
+      gymMap[key][stream] += amount;
+      gymMap[key].total += amount;
     };
     allListings.forEach((sub) => {
       const amount = Number(sub.amount) || 0;
-      addToGym(sub.gym?.name, sub.owner?.name, amount, 'listing');
+      addToGym({ gym: sub.gym, owner: sub.owner, amount, stream: 'listing' });
     });
     allSponsorships.forEach((sub) => {
       const amount = Number(sub.amount) || 0;
-      addToGym(sub.gym?.name, sub.owner?.name, amount, 'sponsorship');
+      addToGym({ gym: sub.gym, owner: sub.owner, amount, stream: 'sponsorship' });
     });
     return Object.values(gymMap).sort((a, b) => b.total - a.total).slice(0, 5);
   }, [allListings, allSponsorships]);
@@ -300,7 +333,7 @@ const AdminRevenuePage = () => {
             <div className="pie-card__meta">
               <div className="pie-card__stat">
                 <span>Top category</span>
-                <strong>{topMarketplaceCategory?.name ?? '—'}</strong>
+                <strong>{topMarketplaceCategory?.name ?? '-'}</strong>
                 <small>{formatCurrency(topMarketplaceCategory?.value ?? 0)}</small>
               </div>
               <div className="pie-card__stat">
@@ -376,10 +409,18 @@ const AdminRevenuePage = () => {
             </thead>
             <tbody>
               {topSellers.map((s, i) => (
-                <tr key={s.name}>
+                <tr key={s.id ?? s.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td>
-                    <strong>{s.name}</strong>
+                    <strong>
+                      {s.id ? (
+                        <Link to={`/dashboard/admin/users/${s.id}`} className="dashboard-table__user--link">
+                          {s.name}
+                        </Link>
+                      ) : (
+                        s.name
+                      )}
+                    </strong>
                     <div><small>{s.email}</small></div>
                   </td>
                   <td>{s.orders}</td>
@@ -410,10 +451,18 @@ const AdminRevenuePage = () => {
             </thead>
             <tbody>
               {topBuyers.map((b, i) => (
-                <tr key={b.name}>
+                <tr key={b.id ?? b.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td>
-                    <strong>{b.name}</strong>
+                    <strong>
+                      {b.id ? (
+                        <Link to={`/dashboard/admin/users/${b.id}`} className="dashboard-table__user--link">
+                          {b.name}
+                        </Link>
+                      ) : (
+                        b.name
+                      )}
+                    </strong>
                     <div><small>{b.email}</small></div>
                   </td>
                   <td>{b.orders}</td>
@@ -446,10 +495,27 @@ const AdminRevenuePage = () => {
             </thead>
             <tbody>
               {topGyms.map((g, i) => (
-                <tr key={g.name}>
+                <tr key={g.id ?? g.name}>
                   <td><strong>{i + 1}</strong></td>
-                  <td><strong>{g.name}</strong></td>
-                  <td>{g.owner ?? '—'}</td>
+                  <td>
+                    {g.id ? (
+                      <Link to={`/dashboard/admin/gyms/${g.id}`} className="dashboard-table__user--link">
+                        <strong>{g.name}</strong>
+                      </Link>
+                    ) : (
+                      <strong>{g.name}</strong>
+                    )}
+                  </td>
+                  <td>
+                    {g.ownerId ? (
+                      <Link to={`/dashboard/admin/users/${g.ownerId}`} className="dashboard-table__user--link">
+                        {g.ownerName}
+                      </Link>
+                    ) : (
+                      g.ownerName ?? '-'
+                    )}
+                    {g.ownerEmail ? <div><small>{g.ownerEmail}</small></div> : null}
+                  </td>
                   <td>{formatCurrency(g.listing)}</td>
                   <td>{formatCurrency(g.sponsorship)}</td>
                   <td><strong>{formatCurrency(g.total)}</strong></td>
@@ -467,3 +533,4 @@ const AdminRevenuePage = () => {
 };
 
 export default AdminRevenuePage;
+
