@@ -53,6 +53,7 @@ const ContactPage = () => {
                                 id="name"
                                 type="text"
                                 placeholder="Your Name"
+                                autoComplete="name"
                                 {...register('name', {
                                     required: 'Name is required',
                                     pattern: {
@@ -73,6 +74,7 @@ const ContactPage = () => {
                                 id="email"
                                 type="email"
                                 placeholder="your@email.com"
+                                autoComplete="email"
                                 {...register('email', {
                                     required: 'Email is required',
                                     pattern: {
@@ -90,17 +92,18 @@ const ContactPage = () => {
 
                     <div className="form-group">
                         <label htmlFor="subject">Subject</label>
-                            <input
-                                id="subject"
-                                type="text"
-                                placeholder="What is this about?"
-                                {...register('subject', {
-                                    required: 'Subject is required',
-                                    validate: (value) =>
-                                        value.trim().length > 0 || 'Subject cannot be empty',
-                                })}
-                                className={errors.subject ? 'error' : ''}
-                            />
+                        <input
+                            id="subject"
+                            type="text"
+                            placeholder="What is this about?"
+                            autoComplete="on"
+                            {...register('subject', {
+                                required: 'Subject is required',
+                                validate: (value) =>
+                                    value.trim().length > 0 || 'Subject cannot be empty',
+                            })}
+                            className={errors.subject ? 'error' : ''}
+                        />
                         {errors.subject && (
                             <span className="error-message">{errors.subject.message}</span>
                         )}
@@ -108,17 +111,18 @@ const ContactPage = () => {
 
                     <div className="form-group">
                         <label htmlFor="message">Message</label>
-                            <textarea
-                                id="message"
-                                rows="5"
-                                placeholder="How can we help you?"
-                                {...register('message', {
-                                    required: 'Message is required',
-                                    validate: (value) =>
-                                        value.trim().length > 0 || 'Message cannot be empty',
-                                })}
-                                className={errors.message ? 'error' : ''}
-                            />
+                        <textarea
+                            id="message"
+                            rows="5"
+                            placeholder="How can we help you?"
+                            autoComplete="on"
+                            {...register('message', {
+                                required: 'Message is required',
+                                validate: (value) =>
+                                    value.trim().length > 0 || 'Message cannot be empty',
+                            })}
+                            className={errors.message ? 'error' : ''}
+                        />
                         {errors.message && (
                             <span className="error-message">{errors.message.message}</span>
                         )}
