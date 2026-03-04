@@ -1,0 +1,833 @@
+% ============================================================
+%  FitSync – Full Website Wireframe (Overleaf-ready)
+%  Compile with: pdflatex (or xelatex)
+% ============================================================
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[margin=1.8cm]{geometry}
+\usepackage{tikz}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+
+\usetikzlibrary{positioning, calc, fit, backgrounds, arrows.meta}
+
+% ── Colours ──
+\definecolor{primary}{HTML}{E50914}
+\definecolor{surface}{HTML}{1F1F1F}
+\definecolor{surfaceLight}{HTML}{2A2A2A}
+\definecolor{borderGray}{HTML}{444444}
+\definecolor{mutedText}{HTML}{999999}
+\definecolor{accentGreen}{HTML}{51CF66}
+\definecolor{accentBlue}{HTML}{74C0FC}
+\definecolor{accentYellow}{HTML}{FFD43B}
+
+% ── Page style ──
+\pagestyle{fancy} s
+\fancyhf{}
+\fancyhead[L]{\textbf{FitSync} – Wireframe Document}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section formatting ──
+\titleformat{\section}{\Large\bfseries\color{primary}}{}{0em}{}[\vspace{-0.3em}\rule{\textwidth}{0.5pt}]
+\titleformat{\subsection}{\large\bfseries}{}{0em}{}
+
+% ── TikZ styles ──
+\tikzset{
+  wire/.style={draw=borderGray, fill=surface, rounded corners=3pt, text=white, font=\footnotesize},
+  header/.style={wire, fill=surfaceLight, minimum height=0.9cm, font=\footnotesize\bfseries},
+  sidebar/.style={wire, fill=surfaceLight, minimum width=3.2cm},
+  card/.style={wire, minimum height=1.6cm, align=center},
+  btn/.style={draw=primary, fill=primary, rounded corners=2pt, text=white, font=\scriptsize\bfseries, minimum height=0.5cm, minimum width=1.6cm},
+  btnOutline/.style={draw=borderGray, fill=surface, rounded corners=2pt, text=white, font=\scriptsize, minimum height=0.5cm, minimum width=1.6cm},
+  input/.style={draw=borderGray, fill=surfaceLight, rounded corners=2pt, text=mutedText, font=\scriptsize, minimum height=0.45cm, minimum width=4cm, align=left},
+  label/.style={font=\scriptsize\color{mutedText}, anchor=west},
+  heading/.style={font=\small\bfseries\color{white}, anchor=west},
+  subtext/.style={font=\scriptsize\color{mutedText}, anchor=west},
+  badge/.style={draw=none, fill=primary, rounded corners=2pt, text=white, font=\tiny\bfseries, inner sep=2pt},
+  placeholder/.style={draw=borderGray, fill=surfaceLight, rounded corners=2pt, minimum height=1cm, minimum width=1cm},
+  navlink/.style={font=\scriptsize\color{white}},
+  sidelink/.style={font=\scriptsize\color{white}, anchor=west},
+  page/.style={draw=borderGray, fill=surface, rounded corners=4pt},
+}
+
+% ── Helper: full-width page frame ──
+\newcommand{\pageframe}[2]{%
+  \begin{tikzpicture}[remember picture]
+    \node[page, minimum width=15cm, minimum height=#1, anchor=north west] (frame) at (0,0) {};
+    \node[anchor=north west, font=\tiny\color{mutedText}] at ([shift={(0.3cm,-0.15cm)}]frame.north west) {#2};
+  \end{tikzpicture}%
+}
+
+\begin{document}
+
+% ════════════════════════════════════════════════════════════
+\begin{center}
+  {\Huge\bfseries\color{primary} FitSync}\\[6pt]
+  {\Large Website Wireframe}\\[4pt]
+  {\color{mutedText}\today}
+\end{center}
+\vspace{1em}
+
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════
+\section{Global Components}
+% ════════════════════════════════════════════════════════════
+
+\subsection{App Header (Navigation Bar)}
+\begin{center}
+\begin{tikzpicture}
+  % bar
+  \node[header, minimum width=15cm, minimum height=0.9cm] (hdr) {};
+  % logo
+  \node[font=\footnotesize\bfseries\color{primary}, anchor=west] at ([xshift=0.4cm]hdr.west) {FitSync};
+  % nav links
+  \node[navlink] (n1) at ([xshift=-6cm]hdr.center) {Gyms};
+  \node[navlink] (n2) at ([xshift=-4.2cm]hdr.center) {About Us};
+  \node[navlink] (n3) at ([xshift=-2.2cm]hdr.center) {Marketplace};
+  \node[navlink] (n4) at ([xshift=-0.4cm]hdr.center) {Cart};
+  \node[navlink, font=\scriptsize\bfseries\color{white}] (n5) at ([xshift=1.4cm]hdr.center) {Dashboard};
+  % right side
+  \node[placeholder, minimum height=0.5cm, minimum width=0.5cm] (avatar) at ([xshift=-1.8cm]hdr.east) {};
+  \node[btnOutline, minimum width=1cm] at ([xshift=-0.5cm]hdr.east) {Logout};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Dashboard Sidebar}
+\begin{center}
+\begin{tikzpicture}
+  \node[sidebar, minimum height=7cm, anchor=north west] (sb) at (0,0) {};
+  \node[font=\scriptsize\bfseries\color{primary}, anchor=north west] at ([shift={(0.4cm,-0.4cm)}]sb.north west) {Dashboard};
+  % links (example: manager)
+  \foreach \i/\t in {1/Overview, 2/Approvals, 3/Sellers, 4/Gym Owners, 5/Gyms, 6/Products, 7/Marketplace, 8/Messages} {
+    \node[sidelink] at ([shift={(0.4cm,-0.6cm-\i*0.7cm)}]sb.north west) {\t};
+  }
+\end{tikzpicture}
+\end{center}
+\vspace{0.5em}
+{\footnotesize\color{mutedText} Sidebar links change based on user role (Trainee, Trainer, Gym Owner, Seller, Manager, Admin).}
+
+\subsection{Suspended / Deactivated Overlay}
+\begin{center}
+\begin{tikzpicture}
+  \node[page, minimum width=12cm, minimum height=5cm] (overlay) {};
+  \node[font=\Large] at ([yshift=1.2cm]overlay.center) {\emoji{prohibited}};
+  \node[font=\normalsize\bfseries\color{primary}] at ([yshift=0.4cm]overlay.center) {Account Deactivated};
+  \node[subtext, anchor=center, text width=9cm, align=center] at ([yshift=-0.4cm]overlay.center) {Your account has been deactivated by an administrator. You cannot access your dashboard until reactivated.};
+  \node[btn] (b1) at ([xshift=-2.5cm, yshift=-1.6cm]overlay.center) {Go to Home};
+  \node[btnOutline] (b2) at (overlay.center |- b1) {Contact Support};
+  \node[btnOutline, text=mutedText] (b3) at ([xshift=2.5cm]b2) {Log Out};
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Public Pages}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Landing Page \normalfont\texttt{/}}
+\begin{center}
+\begin{tikzpicture}
+  % Header
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+
+  % Hero
+  \node[wire, minimum width=15cm, minimum height=3.5cm, below=0.15cm of hdr] (hero) {};
+  \node[font=\normalsize\bfseries\color{white}] at ([yshift=0.8cm]hero.center) {Your Fitness Journey Starts Here};
+  \node[subtext, anchor=center] at ([yshift=0.1cm]hero.center) {Discover gyms, hire trainers, shop fitness gear — all in one platform.};
+  \node[btn, minimum width=2.5cm] (cta1) at ([xshift=-1.5cm, yshift=-0.8cm]hero.center) {Explore Gyms};
+  \node[btnOutline, minimum width=2.5cm] (cta2) at ([xshift=1.5cm, yshift=-0.8cm]hero.center) {Shop Now};
+
+  % Features row
+  \node[wire, minimum width=15cm, minimum height=2cm, below=0.15cm of hero] (feat) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]feat.north west) {Why FitSync?};
+  \node[card, minimum width=3.2cm, minimum height=1cm] at ([xshift=-4.5cm]feat.center) {\scriptsize Gym Discovery};
+  \node[card, minimum width=3.2cm, minimum height=1cm] at ([xshift=-1.2cm]feat.center) {\scriptsize Personal Training};
+  \node[card, minimum width=3.2cm, minimum height=1cm] at ([xshift=2.1cm]feat.center) {\scriptsize Marketplace};
+  \node[card, minimum width=3.2cm, minimum height=1cm] at ([xshift=5.4cm]feat.center) {\scriptsize Multi-Role};
+
+  % Gallery
+  \node[wire, minimum width=15cm, minimum height=1.8cm, below=0.15cm of feat] (gallery) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]gallery.north west) {Gallery};
+  \foreach \i in {0,...,4} {
+    \node[placeholder, minimum width=2.5cm, minimum height=1cm] at ([xshift={-5cm+\i*2.7cm}]gallery.center) {};
+  }
+
+  % Footer
+  \node[header, minimum width=15cm, below=0.15cm of gallery] (ftr) {Footer — Links · Privacy · Terms · Contact};
+\end{tikzpicture}
+\end{center}
+
+\subsection{About Page \normalfont\texttt{/about}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=2cm, below=0.15cm of hdr] (s1) {};
+  \node[font=\normalsize\bfseries\color{white}] at ([yshift=0.3cm]s1.center) {About FitSync};
+  \node[subtext, anchor=center, text width=10cm, align=center] at ([yshift=-0.4cm]s1.center) {Our mission, team, and the story behind building the ultimate fitness platform.};
+
+  \node[wire, minimum width=15cm, minimum height=2.5cm, below=0.15cm of s1] (s2) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]s2.north west) {Our Mission};
+  \node[placeholder, minimum width=5cm, minimum height=1.5cm] at ([xshift=-3.5cm]s2.center) {};
+  \node[subtext, anchor=west, text width=7cm] at ([xshift=1cm]s2.center) {Text block describing the mission, values, and vision of FitSync platform.};
+
+  \node[wire, minimum width=15cm, minimum height=2cm, below=0.15cm of s2] (s3) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]s3.north west) {The Team};
+  \foreach \i in {0,...,3} {
+    \node[card, minimum width=3cm, minimum height=1.2cm] at ([xshift={-4.5cm+\i*3.3cm}]s3.center) {\scriptsize Team Member \the\numexpr\i+1};
+  }
+\end{tikzpicture}
+\end{center}
+
+\subsection{Contact Page \normalfont\texttt{/contact}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=5cm, below=0.15cm of hdr] (form) {};
+  \node[font=\normalsize\bfseries\color{white}] at ([shift={(0cm,2cm)}]form.center) {Get in Touch};
+
+  \node[label] at ([shift={(2cm,1.2cm)}]form.west) {Name};
+  \node[input] at ([shift={(4.5cm,0.7cm)}]form.west) {Your name};
+  \node[label] at ([shift={(2cm,0.1cm)}]form.west) {Email};
+  \node[input] at ([shift={(4.5cm,-0.4cm)}]form.west) {you@example.com};
+  \node[label] at ([shift={(2cm,-1cm)}]form.west) {Message};
+  \node[input, minimum height=1cm] at ([shift={(4.5cm,-1.7cm)}]form.west) {Your message...};
+  \node[btn, minimum width=2cm] at ([shift={(4.5cm,-2.5cm)}]form.west) {Send};
+
+  \node[card, minimum width=4.5cm, minimum height=3.5cm] at ([xshift=3.5cm]form.center) {\scriptsize Contact Info\\[4pt]\scriptsize Email · Phone\\Location};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Privacy \& Terms Pages \normalfont\texttt{/privacy} · \texttt{/terms}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=4cm, below=0.15cm of hdr] (body) {};
+  \node[font=\normalsize\bfseries\color{white}] at ([yshift=1.4cm]body.center) {Privacy Policy / Terms of Service};
+  \node[subtext, anchor=center, text width=12cm, align=center] at (body.center) {Long-form legal text content rendered in scrollable sections with headings and paragraphs. Table of contents sidebar optional.};
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Gym \& Marketplace Pages}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Gym Explorer \normalfont\texttt{/gyms}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  % Search / Filter bar
+  \node[wire, minimum width=15cm, minimum height=1cm, below=0.15cm of hdr] (search) {};
+  \node[input, minimum width=5cm] at ([xshift=-3.5cm]search.center) {Search gyms...};
+  \node[btnOutline, minimum width=1.5cm] at ([xshift=0.5cm]search.center) {City \(\downarrow\)};
+  \node[btnOutline, minimum width=1.8cm] at ([xshift=2.5cm]search.center) {Amenities};
+  \node[btn, minimum width=1.2cm] at ([xshift=4.5cm]search.center) {Search};
+
+  % Grid
+  \node[wire, minimum width=15cm, minimum height=5cm, below=0.15cm of search] (grid) {};
+  \foreach \r in {0,1} {
+    \foreach \c in {0,1,2} {
+      \node[card, minimum width=4.4cm, minimum height=2cm] at ([xshift={-4.6cm+\c*4.7cm}, yshift={1cm-\r*2.3cm}]grid.center) {
+        \scriptsize [Gym Image]\\[2pt]
+        \scriptsize\bfseries Gym Name\\
+        \scriptsize City · Rating ★
+      };
+    }
+  }
+\end{tikzpicture}
+\end{center}
+
+\subsection{Gym Details \normalfont\texttt{/gyms/:gymId}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+
+  % Hero
+  \node[wire, minimum width=15cm, minimum height=2.5cm, below=0.15cm of hdr] (hero) {};
+  \node[placeholder, minimum width=6cm, minimum height=2cm] at ([xshift=-3.5cm]hero.center) {};
+  \node[heading] at ([xshift=2.5cm, yshift=0.6cm]hero.center) {Gym Name};
+  \node[subtext, anchor=west] at ([xshift=2.5cm, yshift=0cm]hero.center) {City · Open Hours · Rating};
+  \node[btn] at ([xshift=2.5cm, yshift=-0.7cm]hero.center) {Join Gym};
+
+  % Tabs
+  \node[wire, minimum width=15cm, minimum height=0.7cm, below=0.15cm of hero] (tabs) {};
+  \node[navlink, font=\scriptsize\bfseries\color{primary}] at ([xshift=-4cm]tabs.center) {Overview};
+  \node[navlink] at ([xshift=-2cm]tabs.center) {Amenities};
+  \node[navlink] at ([xshift=0cm]tabs.center) {Gallery};
+  \node[navlink] at ([xshift=1.8cm]tabs.center) {Trainers};
+  \node[navlink] at ([xshift=3.6cm]tabs.center) {Reviews};
+
+  % Content
+  \node[wire, minimum width=15cm, minimum height=3cm, below=0.15cm of tabs] (content) {};
+  \node[subtext, anchor=center, text width=13cm, align=center] at (content.center) {Tab content area — gym description, amenities grid, image gallery, trainer cards, or review list depending on selected tab.};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Marketplace \normalfont\texttt{/marketplace}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=1cm, below=0.15cm of hdr] (search) {};
+  \node[input, minimum width=5cm] at ([xshift=-3.5cm]search.center) {Search products...};
+  \node[btnOutline, minimum width=2cm] at ([xshift=0.8cm]search.center) {Category \(\downarrow\)};
+  \node[btnOutline, minimum width=1.5cm] at ([xshift=3cm]search.center) {Sort \(\downarrow\)};
+
+  \node[wire, minimum width=15cm, minimum height=5cm, below=0.15cm of search] (grid) {};
+  \foreach \r in {0,1} {
+    \foreach \c in {0,1,2,3} {
+      \node[card, minimum width=3.2cm, minimum height=2cm] at ([xshift={-5cm+\c*3.5cm}, yshift={1cm-\r*2.3cm}]grid.center) {
+        \scriptsize [Image]\\[2pt]
+        \scriptsize\bfseries Product\\
+        \scriptsize \(\rupee\)Price · ★Rating
+      };
+    }
+  }
+\end{tikzpicture}
+\end{center}
+
+\subsection{Product Page \normalfont\texttt{/marketplace/products/:id}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=4.5cm, below=0.15cm of hdr] (body) {};
+
+  \node[placeholder, minimum width=5cm, minimum height=3.5cm] at ([xshift=-3.5cm]body.center) {};
+  \node[heading] at ([xshift=1.5cm, yshift=1.4cm]body.center) {Product Name};
+  \node[subtext, anchor=west] at ([xshift=1.5cm, yshift=0.8cm]body.center) {Seller Name · Category};
+  \node[font=\small\bfseries\color{accentGreen}, anchor=west] at ([xshift=1.5cm, yshift=0.2cm]body.center) {\(\rupee\)1,299};
+  \node[subtext, anchor=west, text width=6cm] at ([xshift=1.5cm, yshift=-0.5cm]body.center) {Product description text. Features, materials, specs, etc.};
+  \node[btn, minimum width=2.5cm] at ([xshift=2.5cm, yshift=-1.5cm]body.center) {Add to Cart};
+
+  \node[wire, minimum width=15cm, minimum height=1.5cm, below=0.15cm of body] (rev) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]rev.north west) {Reviews};
+  \node[subtext, anchor=center] at (rev.center) {★★★★☆ — "Great quality!" — User Name};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Cart \& Checkout \normalfont\texttt{/cart} · \texttt{/checkout}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=9.5cm, minimum height=4cm, below=0.15cm of hdr, anchor=north west, xshift=0cm] (cart) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]cart.north west) {Shopping Cart};
+
+  \foreach \i in {1,2,3} {
+    \node[wire, minimum width=8.5cm, minimum height=0.7cm] at ([yshift={1.2cm-\i*0.9cm}]cart.center) {};
+    \node[subtext, anchor=west] at ([shift={(0.3cm, 1.2cm-\i*0.9cm)}]cart.west) {Product \i\quad Qty: 1\quad \(\rupee\)599};
+  }
+
+  \node[wire, minimum width=4.8cm, minimum height=4cm, below=0.15cm of hdr, anchor=north east, xshift=15cm] (summary) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]summary.north west) {Order Summary};
+  \node[subtext, anchor=west] at ([shift={(0.3cm,-1cm)}]summary.north west) {Subtotal: \(\rupee\)1,797};
+  \node[subtext, anchor=west] at ([shift={(0.3cm,-1.5cm)}]summary.north west) {Shipping: \(\rupee\)99};
+  \node[font=\scriptsize\bfseries\color{white}, anchor=west] at ([shift={(0.3cm,-2.1cm)}]summary.north west) {Total: \(\rupee\)1,896};
+  \node[btn, minimum width=3.5cm] at ([yshift=-3.2cm]summary.north) {Proceed to Checkout};
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Authentication Pages}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Login Page \normalfont\texttt{/auth/login}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=6cm, below=0.15cm of hdr] (body) {};
+
+  % Left hero
+  \node[wire, minimum width=6.5cm, minimum height=5cm] at ([xshift=-3.5cm]body.center) (lhero) {};
+  \node[font=\small\bfseries\color{white}] at ([yshift=1.5cm]lhero.center) {Welcome Back};
+  \node[subtext, anchor=center, text width=5cm, align=center] at ([yshift=0.5cm]lhero.center) {Your Fitness Command Center. Log in to manage your workouts, clients, or facility.};
+  \node[badge] at ([xshift=-1.5cm, yshift=-0.5cm]lhero.center) {Trainees};
+  \node[badge] at ([yshift=-0.5cm]lhero.center) {Trainers};
+  \node[badge] at ([xshift=1.5cm, yshift=-0.5cm]lhero.center) {Owners};
+
+  % Right form
+  \node[wire, minimum width=6.5cm, minimum height=5cm] at ([xshift=3.5cm]body.center) (rform) {};
+  \node[font=\small\bfseries\color{white}] at ([yshift=1.8cm]rform.center) {Sign In};
+  \node[label] at ([shift={(0.5cm, 1cm)}]rform.west) {Email};
+  \node[input] at ([shift={(3cm, 0.5cm)}]rform.west) {you@example.com};
+  \node[label] at ([shift={(0.5cm, -0.1cm)}]rform.west) {Password};
+  \node[input] at ([shift={(3cm, -0.6cm)}]rform.west) {********};
+  \node[btn, minimum width=5cm] at ([yshift=-1.5cm]rform.center) {Sign In};
+  \node[subtext, anchor=center] at ([yshift=-2.1cm]rform.center) {Don't have an account? Register};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Register Page \normalfont\texttt{/auth/register}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=7cm, below=0.15cm of hdr] (body) {};
+
+  % Left hero
+  \node[wire, minimum width=6.5cm, minimum height=6cm] at ([xshift=-3.5cm]body.center) (lhero) {};
+  \node[font=\small\bfseries\color{white}] at ([yshift=2cm]lhero.center) {Join FitSync};
+  \node[subtext, anchor=center, text width=5cm, align=center] at ([yshift=1cm]lhero.center) {Create your account and choose your role to get started.};
+
+  % Right form
+  \node[wire, minimum width=6.5cm, minimum height=6cm] at ([xshift=3.5cm]body.center) (rform) {};
+  \node[font=\small\bfseries\color{white}] at ([yshift=2.3cm]rform.center) {Create Account};
+  \node[label] at ([shift={(0.5cm, 1.6cm)}]rform.west) {First Name};
+  \node[input, minimum width=2.5cm] at ([shift={(2.2cm, 1.15cm)}]rform.west) {First};
+  \node[label] at ([shift={(3.5cm, 1.6cm)}]rform.west) {Last Name};
+  \node[input, minimum width=2.5cm] at ([shift={(5.2cm, 1.15cm)}]rform.west) {Last};
+  \node[label] at ([shift={(0.5cm, 0.5cm)}]rform.west) {Email};
+  \node[input] at ([shift={(3cm, 0.05cm)}]rform.west) {you@example.com};
+  \node[label] at ([shift={(0.5cm, -0.6cm)}]rform.west) {Password};
+  \node[input] at ([shift={(3cm, -1.05cm)}]rform.west) {********};
+  \node[label] at ([shift={(0.5cm, -1.7cm)}]rform.west) {Role};
+  \node[input] at ([shift={(3cm, -2.15cm)}]rform.west) {Select role \(\downarrow\)};
+  \node[btn, minimum width=5cm] at ([yshift=-2.7cm]rform.center) {Create Account};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Role Select Page \normalfont\texttt{/auth/roles}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=4.5cm, below=0.15cm of hdr] (body) {};
+  \node[font=\normalsize\bfseries\color{white}] at ([yshift=1.6cm]body.center) {Choose Your Role};
+  \node[subtext, anchor=center] at ([yshift=0.9cm]body.center) {Select how you want to use FitSync};
+
+  \foreach \i/\t/\d in {0/Trainee/Track workouts, 1/Trainer/Manage clients, 2/Gym Owner/Run your gym, 3/Seller/Sell products} {
+    \node[card, minimum width=3.2cm, minimum height=2cm] at ([xshift={-4.8cm+\i*3.5cm}, yshift=-0.6cm]body.center) {
+      \scriptsize\bfseries \t\\[4pt]\scriptsize \d
+    };
+  }
+\end{tikzpicture}
+\end{center}
+
+\subsection{Profile Page \normalfont\texttt{/profile}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=5.5cm, below=0.15cm of hdr] (body) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]body.north west) {My Profile};
+
+  \node[placeholder, minimum width=1.5cm, minimum height=1.5cm, rounded corners=1cm] at ([shift={(1.5cm,-1.7cm)}]body.north west) {};
+  \node[heading] at ([shift={(3cm,-1.3cm)}]body.north west) {User Name};
+  \node[subtext, anchor=west] at ([shift={(3cm,-1.8cm)}]body.north west) {email@example.com · Trainee · Active};
+
+  \node[label] at ([shift={(1cm,-2.8cm)}]body.north west) {First Name};
+  \node[input, minimum width=5cm] at ([shift={(4.5cm,-3.2cm)}]body.north west) {Siddhant};
+  \node[label] at ([shift={(8cm,-2.8cm)}]body.north west) {Last Name};
+  \node[input, minimum width=5cm] at ([shift={(11.5cm,-3.2cm)}]body.north west) {Kumar};
+  \node[label] at ([shift={(1cm,-3.8cm)}]body.north west) {Bio / Headline};
+  \node[input, minimum width=12cm] at ([shift={(7.5cm,-4.2cm)}]body.north west) {Fitness enthusiast...};
+  \node[btn, minimum width=2cm] at ([shift={(2cm,-5cm)}]body.north west) {Save};
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Trainee Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/trainee}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=7cm, below=0.15cm of hdr] (body) {};
+
+  % Sidebar hint
+  \node[sidebar, minimum height=6.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {Progress};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {Diet};
+  \node[sidelink] at ([shift={(0.3cm,-2.3cm)}]sb.north west) {Orders};
+
+  % Content
+  \node[wire, minimum width=11cm, minimum height=6.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  % Stat cards
+  \node[card, minimum width=3.2cm, minimum height=1.2cm] at ([shift={(2cm,-1.2cm)}]main.north west) {\scriptsize Active Memberships\\[2pt]\bfseries 2};
+  \node[card, minimum width=3.2cm, minimum height=1.2cm] at ([shift={(5.5cm,-1.2cm)}]main.north west) {\scriptsize Attendance Streak\\[2pt]\bfseries 12 days};
+  \node[card, minimum width=3.2cm, minimum height=1.2cm] at ([shift={(9cm,-1.2cm)}]main.north west) {\scriptsize Pending Orders\\[2pt]\bfseries 1};
+
+  % Memberships
+  \node[heading] at ([shift={(0.4cm,-2.5cm)}]main.north west) {Active Memberships};
+  \node[wire, minimum width=10cm, minimum height=1.5cm] at ([shift={(5.5cm,-3.8cm)}]main.north west) {};
+
+  % Recent Orders
+  \node[heading] at ([shift={(0.4cm,-4.8cm)}]main.north west) {Recent Orders};
+  \node[wire, minimum width=10cm, minimum height=1.2cm] at ([shift={(5.5cm,-5.8cm)}]main.north west) {};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Progress Page \normalfont\texttt{/dashboard/trainee/progress}}
+\begin{center}
+\begin{tikzpicture}
+  \node[wire, minimum width=11cm, minimum height=5cm] (main) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]main.north west) {My Progress};
+  \node[card, minimum width=10cm, minimum height=2cm] at ([yshift=0.5cm]main.center) {\scriptsize Progress Chart / Workout Log};
+  \node[card, minimum width=10cm, minimum height=1.5cm] at ([yshift=-1.3cm]main.center) {\scriptsize Trainer Feedback \& Notes};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Diet Page \normalfont\texttt{/dashboard/trainee/diet}}
+\begin{center}
+\begin{tikzpicture}
+  \node[wire, minimum width=11cm, minimum height=4cm] (main) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]main.north west) {Diet Plan};
+  \node[card, minimum width=10cm, minimum height=2.5cm] at (main.center) {\scriptsize Diet plan from trainer — meals, macros, notes};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Orders Page \normalfont\texttt{/dashboard/trainee/orders}}
+\begin{center}
+\begin{tikzpicture}
+  \node[wire, minimum width=11cm, minimum height=4cm] (main) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]main.north west) {My Orders};
+  % Table header
+  \node[wire, minimum width=10cm, minimum height=0.5cm, fill=surfaceLight] at ([yshift=0.8cm]main.center) (th) {};
+  \node[subtext, anchor=west] at ([xshift=-4.5cm]th.center) {Order \#};
+  \node[subtext] at ([xshift=-1.5cm]th.center) {Total};
+  \node[subtext] at ([xshift=1cm]th.center) {Status};
+  \node[subtext] at ([xshift=3.5cm]th.center) {Date};
+  % rows
+  \foreach \i in {1,2,3} {
+    \node[wire, minimum width=10cm, minimum height=0.5cm] at ([yshift={0.8cm-\i*0.6cm}]main.center) {};
+  }
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Gym Owner Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/gym-owner}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=7cm, below=0.15cm of hdr] (body) {};
+
+  \node[sidebar, minimum height=6.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {My Gyms};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {People};
+  \node[sidelink] at ([shift={(0.3cm,-2.3cm)}]sb.north west) {Subscriptions};
+  \node[sidelink] at ([shift={(0.3cm,-2.9cm)}]sb.north west) {Sponsorship};
+  \node[sidelink] at ([shift={(0.3cm,-3.5cm)}]sb.north west) {Analytics};
+
+  \node[wire, minimum width=11cm, minimum height=6.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(1.5cm,-1cm)}]main.north west) {\scriptsize Total Gyms\\[2pt]\bfseries 3};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(4.2cm,-1cm)}]main.north west) {\scriptsize Members\\[2pt]\bfseries 142};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(6.9cm,-1cm)}]main.north west) {\scriptsize Revenue\\[2pt]\bfseries \(\rupee\)45K};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(9.6cm,-1cm)}]main.north west) {\scriptsize Impressions\\[2pt]\bfseries 2.1K};
+
+  \node[heading] at ([shift={(0.4cm,-2.2cm)}]main.north west) {My Gyms};
+  \node[card, minimum width=10cm, minimum height=1.5cm] at ([shift={(5.5cm,-3.5cm)}]main.north west) {\scriptsize Gym Card — Name · City · Members · Status};
+
+  \node[heading] at ([shift={(0.4cm,-4.7cm)}]main.north west) {Revenue Chart};
+  \node[card, minimum width=10cm, minimum height=1.5cm] at ([shift={(5.5cm,-5.8cm)}]main.north west) {\scriptsize [Line Chart Placeholder]};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Sub-pages}
+{\footnotesize
+\begin{itemize}[nosep]
+  \item \textbf{My Gyms} \texttt{/gyms} — List of owned gyms with edit/publish actions
+  \item \textbf{People / Roster} \texttt{/people} — Members \& trainers at each gym
+  \item \textbf{Subscriptions} \texttt{/subscriptions} — Listing subscription plans \& status
+  \item \textbf{Sponsorship} \texttt{/sponsorship} — Boost gym visibility, manage promotions
+  \item \textbf{Analytics} \texttt{/analytics} — Charts for impressions, memberships, revenue
+\end{itemize}
+}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Trainer Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/trainer}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=6cm, below=0.15cm of hdr] (body) {};
+
+  \node[sidebar, minimum height=5.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {My Trainees};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {Updates};
+
+  \node[wire, minimum width=11cm, minimum height=5.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(2cm,-1cm)}]main.north west) {\scriptsize Active Trainees\\[2pt]\bfseries 8};
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(5.5cm,-1cm)}]main.north west) {\scriptsize Sessions This Month\\[2pt]\bfseries 24};
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(9cm,-1cm)}]main.north west) {\scriptsize Avg Rating\\[2pt]\bfseries 4.7★};
+
+  \node[heading] at ([shift={(0.4cm,-2.2cm)}]main.north west) {My Trainees};
+  \node[card, minimum width=10cm, minimum height=2cm] at ([shift={(5.5cm,-3.8cm)}]main.north west) {\scriptsize Trainee list — Name · Gym · Progress · Last Session};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Sub-pages}
+{\footnotesize
+\begin{itemize}[nosep]
+  \item \textbf{Trainees} \texttt{/trainees} — Full list with progress logs, diet plans, send updates
+  \item \textbf{Updates} \texttt{/updates} — Post progress updates, diet plans, workout routines for trainees
+\end{itemize}
+}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Seller Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/seller}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=6cm, below=0.15cm of hdr] (body) {};
+
+  \node[sidebar, minimum height=5.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {Inventory};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {Orders};
+
+  \node[wire, minimum width=11cm, minimum height=5.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(2cm,-1cm)}]main.north west) {\scriptsize Total Products\\[2pt]\bfseries 15};
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(5.5cm,-1cm)}]main.north west) {\scriptsize Total Orders\\[2pt]\bfseries 67};
+  \node[card, minimum width=3.2cm, minimum height=1.1cm] at ([shift={(9cm,-1cm)}]main.north west) {\scriptsize Revenue\\[2pt]\bfseries \(\rupee\)28K};
+
+  \node[heading] at ([shift={(0.4cm,-2.2cm)}]main.north west) {Recent Orders};
+  \node[card, minimum width=10cm, minimum height=2cm] at ([shift={(5.5cm,-3.8cm)}]main.north west) {\scriptsize Order table — \# · Buyer · Items · Total · Status};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Sub-pages}
+{\footnotesize
+\begin{itemize}[nosep]
+  \item \textbf{Inventory} \texttt{/inventory} — Product list with add/edit/delete, stock management
+  \item \textbf{Orders} \texttt{/orders} — Full order list with status updates (confirmed, shipped, delivered)
+\end{itemize}
+}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Manager Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/manager}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=7cm, below=0.15cm of hdr] (body) {};
+
+  \node[sidebar, minimum height=6.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {Approvals};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {Sellers};
+  \node[sidelink] at ([shift={(0.3cm,-2.3cm)}]sb.north west) {Gym Owners};
+  \node[sidelink] at ([shift={(0.3cm,-2.9cm)}]sb.north west) {Gyms};
+  \node[sidelink] at ([shift={(0.3cm,-3.5cm)}]sb.north west) {Products};
+  \node[sidelink] at ([shift={(0.3cm,-4.1cm)}]sb.north west) {Marketplace};
+  \node[sidelink] at ([shift={(0.3cm,-4.7cm)}]sb.north west) {Messages};
+
+  \node[wire, minimum width=11cm, minimum height=6.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(1.5cm,-1cm)}]main.north west) {\scriptsize Pending\\[2pt]\bfseries 5};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(4.2cm,-1cm)}]main.north west) {\scriptsize Sellers\\[2pt]\bfseries 12};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(6.9cm,-1cm)}]main.north west) {\scriptsize Gym Owners\\[2pt]\bfseries 8};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(9.6cm,-1cm)}]main.north west) {\scriptsize Messages\\[2pt]\bfseries 3};
+
+  \node[heading] at ([shift={(0.4cm,-2.2cm)}]main.north west) {Recent Pending Approvals};
+  \node[wire, minimum width=10cm, minimum height=0.5cm, fill=surfaceLight] at ([shift={(5.5cm,-3cm)}]main.north west) (th) {};
+  \node[subtext, anchor=west] at ([xshift=-4.5cm]th.center) {User};
+  \node[subtext] at ([xshift=-1cm]th.center) {Email};
+  \node[subtext] at ([xshift=2cm]th.center) {Role};
+  \node[subtext] at ([xshift=4cm]th.center) {Date};
+  \foreach \i in {1,2,3} {
+    \node[wire, minimum width=10cm, minimum height=0.5cm] at ([shift={(5.5cm,{-3cm-\i*0.6cm})}]main.north west) {};
+  }
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Admin Dashboard}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Overview \normalfont\texttt{/dashboard/admin}}
+\begin{center}
+\begin{tikzpicture}
+  \node[header, minimum width=15cm] (hdr) at (0,0) {Navigation Bar};
+  \node[wire, minimum width=15cm, minimum height=8cm, below=0.15cm of hdr] (body) {};
+
+  \node[sidebar, minimum height=7.5cm, anchor=north west] at ([shift={(0.15cm,-0.15cm)}]body.north west) (sb) {};
+  \node[sidelink] at ([shift={(0.3cm,-0.5cm)}]sb.north west) {\bfseries Overview};
+  \node[sidelink] at ([shift={(0.3cm,-1.1cm)}]sb.north west) {Users};
+  \node[sidelink] at ([shift={(0.3cm,-1.7cm)}]sb.north west) {Gyms};
+  \node[sidelink] at ([shift={(0.3cm,-2.3cm)}]sb.north west) {Memberships};
+  \node[sidelink] at ([shift={(0.3cm,-2.9cm)}]sb.north west) {Products};
+  \node[sidelink] at ([shift={(0.3cm,-3.5cm)}]sb.north west) {Revenue};
+  \node[sidelink] at ([shift={(0.3cm,-4.1cm)}]sb.north west) {Marketplace};
+  \node[sidelink] at ([shift={(0.3cm,-4.7cm)}]sb.north west) {Reviews};
+  \node[sidelink] at ([shift={(0.3cm,-5.3cm)}]sb.north west) {Subscriptions};
+  \node[sidelink] at ([shift={(0.3cm,-5.9cm)}]sb.north west) {Messages};
+  \node[sidelink] at ([shift={(0.3cm,-6.5cm)}]sb.north west) {Settings};
+
+  \node[wire, minimum width=11cm, minimum height=7.5cm, anchor=north east] at ([shift={(-0.15cm,-0.15cm)}]body.north east) (main) {};
+
+  % Stats row 1
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(1.5cm,-1cm)}]main.north west) {\scriptsize Users\\[2pt]\bfseries 248};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(4.2cm,-1cm)}]main.north west) {\scriptsize Gyms\\[2pt]\bfseries 34};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(6.9cm,-1cm)}]main.north west) {\scriptsize Revenue\\[2pt]\bfseries \(\rupee\)1.2L};
+  \node[card, minimum width=2.4cm, minimum height=1.1cm] at ([shift={(9.6cm,-1cm)}]main.north west) {\scriptsize Orders\\[2pt]\bfseries 312};
+
+  % Revenue Chart
+  \node[heading] at ([shift={(0.4cm,-2.2cm)}]main.north west) {Revenue (30 days)};
+  \node[card, minimum width=10cm, minimum height=2cm] at ([shift={(5.5cm,-3.8cm)}]main.north west) {\scriptsize [Revenue Line/Bar Chart]};
+
+  % User distribution
+  \node[heading] at ([shift={(0.4cm,-5.2cm)}]main.north west) {User Breakdown};
+  \node[card, minimum width=4.5cm, minimum height=1.5cm] at ([shift={(2.8cm,-6.5cm)}]main.north west) {\scriptsize [Pie Chart — Roles]};
+  \node[card, minimum width=4.5cm, minimum height=1.5cm] at ([shift={(8.2cm,-6.5cm)}]main.north west) {\scriptsize [Bar Chart — Registrations]};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Users Page \normalfont\texttt{/dashboard/admin/users}}
+\begin{center}
+\begin{tikzpicture}
+  \node[wire, minimum width=13cm, minimum height=5cm] (main) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]main.north west) {All Users};
+  \node[input, minimum width=5cm] at ([shift={(9cm,-0.3cm)}]main.north west) {Search users...};
+
+  \node[wire, minimum width=12cm, minimum height=0.5cm, fill=surfaceLight] at ([yshift=1cm]main.center) (th) {};
+  \node[subtext, anchor=west] at ([xshift=-5.5cm]th.center) {User};
+  \node[subtext] at ([xshift=-2cm]th.center) {Email};
+  \node[subtext] at ([xshift=1cm]th.center) {Role};
+  \node[subtext] at ([xshift=3cm]th.center) {Status};
+  \node[subtext] at ([xshift=5cm]th.center) {Actions};
+  \foreach \i in {1,2,3,4} {
+    \node[wire, minimum width=12cm, minimum height=0.5cm] at ([yshift={1cm-\i*0.6cm}]main.center) {};
+  }
+\end{tikzpicture}
+\end{center}
+
+\subsection{User Detail \normalfont\texttt{/dashboard/admin/users/:userId}}
+\begin{center}
+\begin{tikzpicture}
+  \node[wire, minimum width=13cm, minimum height=6cm] (main) {};
+  \node[btnOutline, minimum width=2.5cm] at ([shift={(1.8cm,-0.4cm)}]main.north west) {\(\leftarrow\) Back to Users};
+  \node[btnOutline, minimum width=1.5cm] at ([shift={(4.8cm,-0.4cm)}]main.north west) {Refresh};
+
+  % Profile header
+  \node[wire, minimum width=12cm, minimum height=2.5cm] at ([yshift=0.6cm]main.center) (profile) {};
+  \node[placeholder, minimum width=1cm, minimum height=1cm, rounded corners=0.8cm] at ([shift={(1cm, 0cm)}]profile.west) {};
+  \node[heading] at ([shift={(2.5cm, 0.5cm)}]profile.west) {User Name};
+  \node[subtext, anchor=west] at ([shift={(2.5cm, 0cm)}]profile.west) {email@example.com};
+  \node[badge] at ([shift={(2.8cm, -0.5cm)}]profile.west) {MANAGER};
+  \node[badge, fill=accentGreen] at ([shift={(4.5cm, -0.5cm)}]profile.west) {ACTIVE};
+
+  \node[btn, fill=accentYellow, text=surface, minimum width=1.5cm] at ([shift={(-3cm, -0.8cm)}]profile.east) {Suspend};
+  \node[btn, minimum width=1.5cm] at ([shift={(-1.2cm, -0.8cm)}]profile.east) {Delete};
+
+  % Role section
+  \node[wire, minimum width=12cm, minimum height=1.5cm] at ([yshift=-2cm]main.center) (role) {};
+  \node[heading] at ([shift={(0.3cm,-0.3cm)}]role.north west) {Manager Role};
+  \node[subtext, anchor=west, text width=10cm] at ([shift={(0.3cm,-0.9cm)}]role.north west) {This user has the Manager role — they can approve sellers and gym-owners, moderate listings and handle support messages.};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Admin Sub-pages}
+{\footnotesize
+\begin{itemize}[nosep]
+  \item \textbf{Gyms} \texttt{/gyms} — All gyms table with status, owner, actions (view, delete)
+  \item \textbf{Gym Detail} \texttt{/gyms/:gymId} — Full gym info, members, trainers, revenue
+  \item \textbf{Memberships} \texttt{/memberships} — All active memberships across platform
+  \item \textbf{Products} \texttt{/products} — All marketplace products, seller info
+  \item \textbf{Product Buyers} \texttt{/products/:id} — Buyer list for specific product
+  \item \textbf{Revenue} \texttt{/revenue} — Platform-wide revenue charts and breakdown
+  \item \textbf{Marketplace} \texttt{/marketplace} — Order management, seller settlements
+  \item \textbf{Reviews} \texttt{/reviews} — All gym \& product reviews, moderation
+  \item \textbf{Subscriptions} \texttt{/subscriptions} — Gym listing subscription management
+  \item \textbf{Messages} \texttt{/messages} — Contact form submissions from users
+  \item \textbf{Settings} \texttt{/settings} — Platform toggles (maintenance mode, feature flags)
+\end{itemize}
+}
+
+\newpage
+% ════════════════════════════════════════════════════════════
+\section{Page Inventory}
+% ════════════════════════════════════════════════════════════
+
+{\footnotesize
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Section} & \textbf{Route} & \textbf{Page} \\ \hline\hline
+Public & \texttt{/} & Landing Page \\ \hline
+Public & \texttt{/about} & About Page \\ \hline
+Public & \texttt{/contact} & Contact Page \\ \hline
+Public & \texttt{/privacy} & Privacy Policy \\ \hline
+Public & \texttt{/terms} & Terms of Service \\ \hline
+Public & \texttt{/gyms} & Gym Explorer \\ \hline
+Public & \texttt{/gyms/:gymId} & Gym Details \\ \hline
+Public & \texttt{/marketplace} & Marketplace \\ \hline
+Public & \texttt{/marketplace/products/:id} & Product Page \\ \hline
+Public & \texttt{/cart} & Cart \\ \hline
+Public & \texttt{/checkout} & Checkout \\ \hline
+Public & \texttt{/profile} & User Profile \\ \hline\hline
+Auth & \texttt{/auth/login} & Login \\ \hline
+Auth & \texttt{/auth/register} & Register \\ \hline
+Auth & \texttt{/auth/roles} & Role Select \\ \hline\hline
+Trainee & \texttt{/dashboard/trainee} & Overview \\ \hline
+Trainee & \texttt{/dashboard/trainee/progress} & Progress \\ \hline
+Trainee & \texttt{/dashboard/trainee/diet} & Diet Plan \\ \hline
+Trainee & \texttt{/dashboard/trainee/orders} & Orders \\ \hline\hline
+Gym Owner & \texttt{/dashboard/gym-owner} & Overview \\ \hline
+Gym Owner & \texttt{/dashboard/gym-owner/gyms} & My Gyms \\ \hline
+Gym Owner & \texttt{/dashboard/gym-owner/people} & Roster \\ \hline
+Gym Owner & \texttt{/dashboard/gym-owner/subscriptions} & Subscriptions \\ \hline
+Gym Owner & \texttt{/dashboard/gym-owner/sponsorship} & Sponsorship \\ \hline
+Gym Owner & \texttt{/dashboard/gym-owner/analytics} & Analytics \\ \hline\hline
+Seller & \texttt{/dashboard/seller} & Overview \\ \hline
+Seller & \texttt{/dashboard/seller/inventory} & Inventory \\ \hline
+Seller & \texttt{/dashboard/seller/orders} & Orders \\ \hline\hline
+Trainer & \texttt{/dashboard/trainer} & Overview \\ \hline
+Trainer & \texttt{/dashboard/trainer/trainees} & Trainees \\ \hline
+Trainer & \texttt{/dashboard/trainer/updates} & Updates \\ \hline\hline
+Manager & \texttt{/dashboard/manager} & Overview \\ \hline
+Manager & \texttt{/dashboard/manager/approvals} & Approvals \\ \hline
+Manager & \texttt{/dashboard/manager/sellers} & Sellers \\ \hline
+Manager & \texttt{/dashboard/manager/gym-owners} & Gym Owners \\ \hline
+Manager & \texttt{/dashboard/manager/gyms} & Gyms \\ \hline
+Manager & \texttt{/dashboard/manager/gyms/:gymId} & Gym Detail \\ \hline
+Manager & \texttt{/dashboard/manager/products} & Products \\ \hline
+Manager & \texttt{/dashboard/manager/products/:id} & Product Buyers \\ \hline
+Manager & \texttt{/dashboard/manager/marketplace} & Marketplace \\ \hline
+Manager & \texttt{/dashboard/manager/messages} & Messages \\ \hline
+Manager & \texttt{/dashboard/manager/users/:userId} & User Detail \\ \hline\hline
+Admin & \texttt{/dashboard/admin} & Overview \\ \hline
+Admin & \texttt{/dashboard/admin/users} & Users \\ \hline
+Admin & \texttt{/dashboard/admin/users/:userId} & User Detail \\ \hline
+Admin & \texttt{/dashboard/admin/gyms} & Gyms \\ \hline
+Admin & \texttt{/dashboard/admin/gyms/:gymId} & Gym Detail \\ \hline
+Admin & \texttt{/dashboard/admin/memberships} & Memberships \\ \hline
+Admin & \texttt{/dashboard/admin/products} & Products \\ \hline
+Admin & \texttt{/dashboard/admin/products/:id} & Product Buyers \\ \hline
+Admin & \texttt{/dashboard/admin/revenue} & Revenue \\ \hline
+Admin & \texttt{/dashboard/admin/marketplace} & Marketplace \\ \hline
+Admin & \texttt{/dashboard/admin/reviews} & Reviews \\ \hline
+Admin & \texttt{/dashboard/admin/subscriptions} & Subscriptions \\ \hline
+Admin & \texttt{/dashboard/admin/messages} & Messages \\ \hline
+Admin & \texttt{/dashboard/admin/settings} & Settings \\ \hline\hline
+Error & \texttt{*} & 404 Not Found \\ \hline
+\end{tabular}
+\end{center}
+}
+
+\end{document}

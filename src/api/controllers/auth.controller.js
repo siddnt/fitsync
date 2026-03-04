@@ -165,19 +165,3 @@ export const logout = asyncHandler(async (req, res) => {
   res.clearCookie('refreshToken', cookieOptions);
   return res.status(204).send();
 });
-
-export const me = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
-
-  if (!userId) {
-    throw new ApiError(401, 'Unauthorized');
-  }
-
-  const user = await User.findById(userId).select('-password -refreshToken');
-
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  return res.status(200).json(new ApiResponse(200, serializeUser(user), 'Fetched profile'));
-});

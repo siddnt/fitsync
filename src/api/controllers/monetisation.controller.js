@@ -1,27 +1,16 @@
-import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
 import Revenue from '../../models/revenue.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import toObjectId from '../../utils/toObjectId.js';
 import {
   LISTING_PLANS,
   SPONSORSHIP_PACKAGES,
   resolveListingPlan,
   resolveSponsorshipPackage,
 } from '../../config/monetisation.config.js';
-
-const toObjectId = (value, label) => {
-  if (!value) {
-    throw new ApiError(400, `${label} is required.`);
-  }
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    throw new ApiError(400, `${label} is invalid.`);
-  }
-};
 
 const assertGymAccess = async (user, gymId) => {
   const gym = await Gym.findById(gymId).select('owner sponsorship analytics name location lastUpdatedBy');

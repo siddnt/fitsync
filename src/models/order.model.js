@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // Order Item Schema (for products within an order)
-export const ORDER_ITEM_STATUSES = [
+const ORDER_ITEM_STATUSES = [
     "processing",
     "in-transit",
     "out-for-delivery",

@@ -9,24 +9,16 @@ import Order from '../../models/order.model.js';
 import Product from '../../models/product.model.js';
 import ProductReview from '../../models/productReview.model.js';
 import User from '../../models/user.model.js';
-import Booking from '../../models/booking.model.js';
 import Review from '../../models/review.model.js';
 import Gallery from '../../models/gallery.model.js';
-import PaymentSession from '../../models/paymentSession.model.js';
 import {
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
-
-const toObjectId = (value) => {
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    return null;
-  }
-};
+import toObjectId from '../../utils/toObjectId.js';
+import { normaliseOrderItemStatus, summariseOrderStatus } from '../../utils/orderStatus.js';
 
 const daysBetween = (from, to) => {
   const start = from instanceof Date ? from : new Date(from);
@@ -232,48 +224,8 @@ const applyWeeklyAmount = (timeline, date, key, amount) => {
   bucket[key] = (bucket[key] || 0) + (Number(amount) || 0);
 };
 
-const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
-
 const REVENUE_EARNING_TYPES = ['membership', 'enrollment', 'renewal'];
 const TRAINER_PLAN_CODES = ['trainer-access', 'trainerAccess', 'trainer'];
-
-const normaliseOrderItemStatus = (status) => {
-  if (!status) {
-    return 'processing';
-  }
-  const value = status.toString().toLowerCase();
-  if (ORDER_STATUS_KEYS.includes(value)) {
-    return value;
-  }
-  if (value === 'shipped') {
-    return 'in-transit';
-  }
-  if (value === 'placed' || value === 'cancelled') {
-    return 'processing';
-  }
-  return 'processing';
-};
-
-
-const summariseOrderStatus = (order) => {
-  const items = order?.orderItems || [];
-  if (!items.length) {
-    return 'processing';
-  }
-
-  const statuses = items.map((item) => normaliseOrderItemStatus(item.status));
-
-  if (statuses.every((status) => status === 'delivered')) {
-    return 'delivered';
-  }
-  if (statuses.some((status) => status === 'out-for-delivery')) {
-    return 'out-for-delivery';
-  }
-  if (statuses.some((status) => status === 'in-transit')) {
-    return 'in-transit';
-  }
-  return 'processing';
-};
 
 const buildOrderSummary = (orders = []) =>
   orders.map((order) => ({
@@ -1733,8 +1685,7 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
 /* ── Admin: Gym Detail ── */
 export const getAdminGymDetail = asyncHandler(async (req, res) => {
   const { gymId } = req.params;
-  const oid = toObjectId(gymId);
-  if (!oid) throw new ApiError(400, 'Invalid gym ID');
+  const oid = toObjectId(gymId, 'Gym id');
 
   const gym = await Gym.findById(oid)
     .populate({ path: 'owner', select: 'name email profilePicture contactNumber' })
@@ -2152,8 +2103,7 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
 
 export const getAdminUserDetail = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-  const oid = toObjectId(userId);
-  if (!oid) throw new ApiError(400, 'Invalid user ID');
+  const oid = toObjectId(userId, 'User id');
 
   const user = await User.findById(oid)
     .select('-password -refreshToken')
@@ -2544,68 +2494,6 @@ export const getAdminMemberships = asyncHandler(async (_req, res) => {
   return res.status(200).json(new ApiResponse(200, { memberships: data }, 'Admin memberships fetched successfully'));
 });
 
-/* ── Admin: Trainer Assignments ── */
-
-export const getAdminTrainerAssignments = asyncHandler(async (_req, res) => {
-  const assignments = await TrainerAssignment.find()
-    .sort({ createdAt: -1 })
-    .populate({ path: 'trainer', select: 'name email profilePicture' })
-    .populate({ path: 'gym', select: 'name location.city' })
-    .populate({ path: 'trainees.trainee', select: 'name email' })
-    .lean();
-
-  const data = assignments.map((a) => ({
-    id: a._id,
-    trainer: a.trainer ? { id: a.trainer._id, name: a.trainer.name, email: a.trainer.email } : null,
-    gym: a.gym ? { id: a.gym._id, name: a.gym.name, city: a.gym.location?.city } : null,
-    trainees: (a.trainees || []).map((t) => ({
-      trainee: t.trainee ? { id: t.trainee._id, name: t.trainee.name, email: t.trainee.email } : null,
-      status: t.status,
-      assignedAt: t.assignedAt,
-      goals: t.goals,
-    })),
-    status: a.status,
-    requestedAt: a.requestedAt,
-    approvedAt: a.approvedAt,
-    notes: a.notes,
-    createdAt: a.createdAt,
-  }));
-
-  return res.status(200).json(new ApiResponse(200, { assignments: data }, 'Admin trainer assignments fetched successfully'));
-});
-
-/* ── Admin: Bookings ── */
-
-export const getAdminBookings = asyncHandler(async (_req, res) => {
-  const bookings = await Booking.find()
-    .sort({ bookingDate: -1 })
-    .populate({ path: 'user', select: 'name email' })
-    .populate({ path: 'trainer', select: 'name email' })
-    .populate({ path: 'gym', select: 'name location.city' })
-    .lean();
-
-  const data = bookings.map((b) => ({
-    id: b._id,
-    user: b.user ? { id: b.user._id, name: b.user.name, email: b.user.email } : null,
-    trainer: b.trainer ? { id: b.trainer._id, name: b.trainer.name, email: b.trainer.email } : null,
-    gym: b.gym ? { id: b.gym._id, name: b.gym.name, city: b.gym.location?.city } : null,
-    gymName: b.gymName,
-    day: b.day,
-    startTime: b.startTime,
-    endTime: b.endTime,
-    bookingDate: b.bookingDate,
-    status: b.status,
-    type: b.type,
-    paymentStatus: b.paymentStatus,
-    price: b.price,
-    notes: b.notes,
-    feedback: b.sessionFeedback?.rating ? { rating: b.sessionFeedback.rating, comment: b.sessionFeedback.comment } : null,
-    createdAt: b.createdAt,
-  }));
-
-  return res.status(200).json(new ApiResponse(200, { bookings: data }, 'Admin bookings fetched successfully'));
-});
-
 /* ── Admin: Products ── */
 
 export const getAdminProducts = asyncHandler(async (_req, res) => {
@@ -2646,8 +2534,7 @@ export const getAdminProducts = asyncHandler(async (_req, res) => {
 /* ── Admin: Product Buyers ── */
 export const getAdminProductBuyers = asyncHandler(async (req, res) => {
   const { productId } = req.params;
-  const oid = toObjectId(productId);
-  if (!oid) throw new ApiError(400, 'Invalid product ID');
+  const oid = toObjectId(productId, 'Product id');
 
   const product = await Product.findById(oid)
     .populate({ path: 'seller', select: 'name email profilePicture' })

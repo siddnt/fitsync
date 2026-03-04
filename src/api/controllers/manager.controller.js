@@ -1,29 +1,22 @@
-import mongoose from 'mongoose';
 import User from '../../models/user.model.js';
 import Gym from '../../models/gym.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
-import GymListingSubscription from '../../models/gymListingSubscription.model.js';
-import TrainerAssignment from '../../models/trainerAssignment.model.js';
-import TrainerProgress from '../../models/trainerProgress.model.js';
-import Order from '../../models/order.model.js';
-import Revenue from '../../models/revenue.model.js';
 import Product from '../../models/product.model.js';
-import Cart from '../../models/cart.model.js';
-import ProductReview from '../../models/productReview.model.js';
+import Revenue from '../../models/revenue.model.js';
+import Order from '../../models/order.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
-
-const toObjectId = (value, label) => {
-  if (!value) {
-    throw new ApiError(400, `${label} is required.`);
-  }
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    throw new ApiError(400, `${label} is invalid.`);
-  }
-};
+import toObjectId from '../../utils/toObjectId.js';
+import { normaliseOrderItemStatus, summariseOrderStatus } from '../../utils/orderStatus.js';
+import {
+  cancelMembershipsForUser,
+  cleanOrdersForUser,
+  deactivateGymsForOwner,
+  deactivateSellerProducts,
+  cascadeDeleteGym,
+  cascadeDeleteProduct,
+} from '../../services/cascade.service.js';
 
 /* ──────── role guard ──────── */
 const MANAGEABLE_ROLES = new Set(['seller', 'gym-owner']);
@@ -35,48 +28,6 @@ const ensureManager = (req) => {
   if (req.user.status !== 'active') {
     throw new ApiError(403, 'Your manager account is awaiting admin approval.');
   }
-};
-
-/* ──────── cascade helpers (same pattern as admin) ──────── */
-const cancelMembershipsForUser = async (userId) => {
-  await GymMembership.updateMany(
-    { trainee: userId, status: { $in: ['active', 'paused'] } },
-    { $set: { status: 'cancelled' } },
-  );
-};
-
-const cleanOrdersForUser = async (userId) => {
-  await Order.updateMany(
-    { user: userId, status: { $ne: 'delivered' } },
-    { $set: { status: 'delivered', 'orderItems.$[].status': 'delivered' } },
-  );
-};
-
-const deactivateGymsForOwner = async (ownerId) => {
-  const gyms = await Gym.find({ owner: ownerId }).select('_id').lean();
-  if (!gyms.length) return [];
-
-  const gymIds = gyms.map((g) => g._id);
-
-  await Promise.all([
-    Gym.updateMany({ _id: { $in: gymIds } }, { $set: { status: 'suspended', isPublished: false } }),
-    GymListingSubscription.updateMany(
-      { gym: { $in: gymIds }, status: { $in: ['active', 'grace'] } },
-      { $set: { status: 'cancelled', autoRenew: false } },
-    ),
-    TrainerAssignment.deleteMany({ gym: { $in: gymIds } }),
-    TrainerProgress.deleteMany({ gym: { $in: gymIds } }),
-    GymMembership.updateMany({ gym: { $in: gymIds } }, { $set: { status: 'cancelled' } }),
-  ]);
-
-  return gymIds;
-};
-
-const deactivateSellerProducts = async (sellerId) => {
-  await Product.updateMany(
-    { seller: sellerId, isPublished: true },
-    { $set: { isPublished: false } },
-  );
 };
 
 /* ──────── PENDING APPROVALS (sellers + gym-owners) ──────── */
@@ -373,16 +324,7 @@ export const deleteManagerGym = asyncHandler(async (req, res) => {
   const gym = await Gym.findById(gymId).lean();
   if (!gym) throw new ApiError(404, 'Gym not found.');
 
-  // Cascade cleanup - same as admin
-  await Promise.all([
-    TrainerAssignment.deleteMany({ gym: gymId }),
-    TrainerProgress.deleteMany({ gym: gymId }),
-    GymMembership.updateMany({ gym: gymId }, { $set: { status: 'cancelled' } }),
-    GymListingSubscription.deleteMany({ gym: gymId }),
-    Revenue.deleteMany({ 'metadata.gym': gymId.toString() }),
-  ]);
-
-  await Gym.findByIdAndDelete(gymId);
+  await cascadeDeleteGym(gymId);
 
   return res
     .status(200)
@@ -400,25 +342,6 @@ export const getManagerMarketplace = asyncHandler(async (req, res) => {
     .populate({ path: 'seller', select: 'name email' })
     .populate({ path: 'orderItems.seller', select: 'name email' })
     .lean();
-
-  const normaliseStatus = (status) => {
-    if (!status) return 'processing';
-    const val = status.toString().toLowerCase();
-    const validStatuses = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
-    if (validStatuses.includes(val)) return val;
-    if (val === 'shipped') return 'in-transit';
-    return 'processing';
-  };
-
-  const summariseOrderStatus = (order) => {
-    const items = order?.orderItems || [];
-    if (!items.length) return 'processing';
-    const statuses = items.map((item) => normaliseStatus(item.status));
-    if (statuses.every((s) => s === 'delivered')) return 'delivered';
-    if (statuses.some((s) => s === 'out-for-delivery')) return 'out-for-delivery';
-    if (statuses.some((s) => s === 'in-transit')) return 'in-transit';
-    return 'processing';
-  };
 
   const toContact = (entity) =>
     entity?._id ? { id: entity._id, name: entity.name, email: entity.email } : null;
@@ -438,7 +361,7 @@ export const getManagerMarketplace = asyncHandler(async (req, res) => {
         name: item.name,
         quantity: item.quantity,
         price: item.price,
-        status: normaliseStatus(item.status),
+        status: normaliseOrderItemStatus(item.status),
       })) ?? [],
     };
   });
@@ -459,15 +382,7 @@ export const deleteManagerProduct = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Product not found.');
   }
 
-  await Promise.all([
-    Cart.updateMany(
-      { 'items.product': productId },
-      { $pull: { items: { product: productId } } },
-    ),
-    ProductReview.deleteMany({ product: productId }),
-  ]);
-
-  await Product.findByIdAndDelete(productId);
+  await cascadeDeleteProduct(productId);
 
   return res
     .status(200)

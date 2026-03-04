@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import Product from '../../models/product.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
@@ -7,43 +6,12 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
-
-const toObjectId = (value, label) => {
-  if (!value) {
-    throw new ApiError(400, `${label} is required.`);
-  }
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    throw new ApiError(400, `${label} is invalid.`);
-  }
-};
+import toObjectId from '../../utils/toObjectId.js';
+import { MODERN_ITEM_STATUSES, normaliseOrderItemStatus } from '../../utils/orderStatus.js';
 
 const SELLER_PAYOUT_RATE = 0.85;
 
-const MODERN_ITEM_STATUSES = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
-const LEGACY_STATUS_FALLBACKS = new Map([
-  ['placed', 'processing'],
-  ['cancelled', 'processing'],
-  ['shipped', 'in-transit'],
-]);
-
-const normaliseItemStatus = (status) => {
-  if (!status) {
-    return 'processing';
-  }
-
-  const lower = String(status).trim().toLowerCase();
-  if (MODERN_ITEM_STATUSES.includes(lower)) {
-    return lower;
-  }
-
-  if (LEGACY_STATUS_FALLBACKS.has(lower)) {
-    return LEGACY_STATUS_FALLBACKS.get(lower);
-  }
-
-  return 'processing';
-};
+const normaliseItemStatus = normaliseOrderItemStatus;
 
 const SELLER_STATUS_FLAGS = new Set(MODERN_ITEM_STATUSES);
 const STATUS_SEQUENCE = [...MODERN_ITEM_STATUSES];
@@ -1188,10 +1156,4 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
         }
         : undefined,
     }, 'Order status updated successfully'));
-});
-
-export const settleSellerOrder = asyncHandler(async (req, res) => {
-  req.params.itemId = 'all';
-  req.body = { ...(req.body ?? {}), status: 'delivered' };
-  return updateSellerOrderStatus(req, res);
 });

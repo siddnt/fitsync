@@ -17,7 +17,7 @@ const LoginPage = () => {
   const { register, handleSubmit } = useForm();
 
   useEffect(() => {
-    if (user) {
+    if (user && user.status !== 'suspended') {
       navigate(`/dashboard/${user.role ?? 'trainee'}`, { replace: true });
     }
   }, [user, navigate]);
@@ -29,6 +29,12 @@ const LoginPage = () => {
       const authPayload = apiResponse?.data ?? apiResponse;
 
       dispatch(authActions.authSuccess(authPayload));
+
+      if (authPayload?.user?.status === 'suspended') {
+        // Don't navigate — show deactivation notice on this page
+        return;
+      }
+
       navigate(`/dashboard/${authPayload?.user?.role ?? 'trainee'}`);
     } catch (err) {
       dispatch(authActions.authFailure(err?.data?.message ?? 'Login failed'));
@@ -73,6 +79,13 @@ const LoginPage = () => {
           </div>
 
           {status === 'failed' && <p className="form-error">{error}</p>}
+
+          {user?.status === 'suspended' && (
+            <div className="form-error" style={{ background: 'rgba(255,107,107,0.1)', border: '1px solid var(--danger-color, #ff6b6b)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
+              <strong>Account Deactivated</strong>
+              <p style={{ margin: '0.5rem 0 0' }}>Your account has been deactivated by an administrator. You cannot access your dashboard until it is reactivated. Please contact support for assistance.</p>
+            </div>
+          )}
 
           <button type="submit" className="primary-button" disabled={isLoading}>
             {isLoading ? 'Signing in...' : 'Sign in'}
