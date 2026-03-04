@@ -4,6 +4,7 @@ import {
   listMarketplaceCatalogue,
   getMarketplaceProduct,
   createMarketplaceOrder,
+  createMarketplaceProductReview,
   listSellerProducts,
   createSellerProduct,
   updateSellerProduct,
@@ -19,6 +20,7 @@ const router = Router();
 router.get('/products', listMarketplaceCatalogue);
 router.get('/products/:productId', getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
+router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
 
 router.use(verifyJWT, authorizeRoles('seller', 'admin'));
 

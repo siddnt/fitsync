@@ -1,14 +1,12 @@
-import { Link } from 'react-router-dom';
 import './AppFooter.css';
 
 const AppFooter = () => (
   <footer className="app-footer">
-    <p>(c) {new Date().getFullYear()} FitSync. All rights reserved.</p>
+    <p>© {new Date().getFullYear()} FitSync. All rights reserved.</p>
     <div className="app-footer__links">
-      <Link to="/contact">Contact Us</Link>
-      <Link to="/privacy">Privacy</Link>
-      <Link to="/terms">Terms</Link>
-      <Link to="/support">Support</Link>
+      <a href="/contact">Contact Us</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
     </div>
   </footer>
 );

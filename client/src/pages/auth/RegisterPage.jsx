@@ -8,12 +8,40 @@ import { useRegisterMutation } from '../../services/authApi.js';
 import './AuthPage.css';
 
 const roles = ['trainee', 'trainer', 'gym-owner', 'seller'];
+const genderOptions = ['male', 'female', 'others'];
 
 const baseSchema = {
-  firstName: yup.string().required('First name is required'),
-  lastName: yup.string().required('Last name is required'),
-  email: yup.string().email('Provide a valid email').required('Email is required'),
-  password: yup.string().min(6, 'Password must have at least 6 characters').required('Password is required'),
+  firstName: yup
+    .string()
+    .matches(/^[A-Za-z]+$/, 'First name must contain only letters')
+    .required('First name is required'),
+  lastName: yup
+    .string()
+    .matches(/^[A-Za-z]+$/, 'Last name must contain only letters')
+    .required('Last name is required'),
+  age: yup
+    .number()
+    .typeError('Age must be a number')
+    .integer('Age must be a whole number')
+    .min(14, 'Age must be at least 14')
+    .max(60, 'Age must be 60 or below')
+    .required('Age is required'),
+  gender: yup
+    .string()
+    .oneOf(genderOptions, 'Select a valid gender')
+    .required('Gender is required'),
+  email: yup
+    .string()
+    .required('Email is required')
+    .matches(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, 'Provide a valid email'),
+  password: yup
+    .string()
+    .min(8, 'Password must have at least 8 characters')
+    .matches(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s])(?!.*\s).{8,}$/,
+      'Password needs upper, lower, number, special char, and no spaces'
+    )
+    .required('Password is required'),
   confirmPassword: yup
     .string()
     .oneOf([yup.ref('password'), null], 'Passwords must match')
@@ -40,11 +68,13 @@ const RegisterPage = () => {
     defaultValues: {
       role: preselectedRole && roles.includes(preselectedRole) ? preselectedRole : 'trainee',
       amenities: [],
+      age: 18,
+      gender: 'male',
     },
   });
 
   const onSubmit = async (values) => {
-    const payload = { ...values };
+    const payload = { ...values, age: Number(values.age) };
     if (payload.confirmPassword) delete payload.confirmPassword;
 
     try {
@@ -106,6 +136,31 @@ const RegisterPage = () => {
               <span>Last name</span>
               <input type="text" {...register('lastName')} placeholder="Morgan" autoComplete="family-name" />
               {errors.lastName && <p className="input-error">{errors.lastName.message}</p>}
+            </label>
+          </div>
+
+          <div className="auth-card__grid">
+            <label>
+              <span>Age</span>
+              <input
+                type="number"
+                min="14"
+                max="60"
+                {...register('age', { valueAsNumber: true })}
+                placeholder="18"
+              />
+              {errors.age && <p className="input-error">{errors.age.message}</p>}
+            </label>
+            <label>
+              <span>Gender</span>
+              <select {...register('gender')}>
+                {genderOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </option>
+                ))}
+              </select>
+              {errors.gender && <p className="input-error">{errors.gender.message}</p>}
             </label>
           </div>
 

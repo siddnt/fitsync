@@ -30,6 +30,10 @@ export const gymsApi = apiSlice.injectEndpoints({
       query: (id) => `/gyms/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Gym', id }],
     }),
+    getGymReviews: builder.query({
+      query: (id) => `/gyms/${id}/reviews`,
+      providesTags: (_result, _error, id) => [{ type: 'GymReview', id }],
+    }),
     createGym: builder.mutation({
       query: (payload) => ({
         url: '/gyms',
@@ -71,6 +75,18 @@ export const gymsApi = apiSlice.injectEndpoints({
         'Dashboard',
       ],
     }),
+    submitGymReview: builder.mutation({
+      query: ({ gymId, ...payload }) => ({
+        url: `/gyms/${gymId}/reviews`,
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: (_result, _error, { gymId }) => [
+        { type: 'Gym', id: gymId },
+        { type: 'GymReview', id: gymId },
+        { type: 'GymList', id: 'LIST' },
+      ],
+    }),
     recordImpression: builder.mutation({
       query: (id) => ({
         url: `/gyms/${id}/impressions`,
@@ -105,6 +121,8 @@ export const {
   useGetGymTrainersQuery,
   useJoinGymMutation,
   useLeaveGymMutation,
+  useGetGymReviewsQuery,
+  useSubmitGymReviewMutation,
   useRecordImpressionMutation,
   useUpdateGymMutation,
 } = gymsApi;

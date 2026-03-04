@@ -20,8 +20,10 @@ const AdminUsersPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const roleOptions = useMemo(() => {
-    const values = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
-    return ['all', ...values];
+    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'admin'];
+    const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
+    const merged = [...new Set([...knownRoles, ...dynamicRoles])];
+    return ['all', ...merged];
   }, [recent]);
 
   const statusOptions = useMemo(() => {
@@ -175,7 +177,7 @@ const AdminUsersPage = () => {
                         {isUpdatingStatus ? 'Approving…' : 'Approve'}
                       </button>
                       <button type="button" onClick={() => handleDelete(user)} disabled={isDeleting}>
-                      {isDeleting ? 'Deleting…' : 'Delete'}
+                        {isDeleting ? 'Deleting…' : 'Delete'}
                       </button>
                     </div>
                   </td>

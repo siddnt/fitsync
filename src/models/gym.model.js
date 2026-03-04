@@ -1,186 +1,214 @@
-import mongoose from 'mongoose';
-
-const locationSchema = new mongoose.Schema(
-  {
-    addressLine1: { type: String, trim: true },
-    addressLine2: { type: String, trim: true },
-    city: { type: String, trim: true, index: true },
-    state: { type: String, trim: true },
-    postalCode: { type: String, trim: true },
-    country: { type: String, trim: true, default: 'India' },
-    coordinates: {
-      type: {
-        type: String,
-        enum: ['Point'],
-      },
-      coordinates: {
-        type: [Number],
-        default: undefined,
-        validate: {
-          validator: (value) => !value || value.length === 2,
-          message: 'Coordinates must be an array of [longitude, latitude] values.',
-        },
-      },
-    },
-    landmark: { type: String, trim: true },
-  },
-  { _id: false },
-);
+import mongoose from "mongoose";
 
 const pricingSchema = new mongoose.Schema(
-  {
-    mrp: { type: Number, min: 0 },
-    discounted: { type: Number, min: 0 },
-    currency: { type: String, default: 'INR' },
-    billingCycle: {
-      type: String,
-      enum: ['monthly', 'quarterly', 'half-yearly', 'yearly'],
-      default: 'monthly',
-    },
-    setupFee: { type: Number, min: 0 },
-  },
-  { _id: false },
-);
-
-const scheduleSchema = new mongoose.Schema(
-  {
-    days: {
-      type: [
-        {
-          type: String,
-          enum: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    {
+        monthlyMrp: {
+            type: Number,
+            required: true,
+            min: 0
         },
-      ],
-      default: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+        monthlyPrice: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        currency: {
+            type: String,
+            default: "INR"
+        }
     },
-    open: { type: String, default: '06:00' },
-    close: { type: String, default: '22:00' },
-  },
-  { _id: false },
+    { _id: false }
 );
 
 const contactSchema = new mongoose.Schema(
-  {
-    phone: { type: String, trim: true },
-    email: { type: String, trim: true },
-    website: { type: String, trim: true },
-    instagram: { type: String, trim: true },
-  },
-  { _id: false },
+    {
+        phone: String,
+        email: String,
+        website: String,
+        whatsapp: String
+    },
+    { _id: false }
 );
 
-const sponsorshipSchema = new mongoose.Schema(
-  {
-    tier: { type: String, enum: ['none', 'silver', 'gold', 'platinum'], default: 'none' },
-    startDate: { type: Date },
-    endDate: { type: Date },
-    status: { type: String, enum: ['inactive', 'active', 'expired'], default: 'inactive' },
-    amount: { type: Number, min: 0 },
-    monthlyBudget: { type: Number, min: 0 },
-  },
-  { _id: false },
+const locationSchema = new mongoose.Schema(
+    {
+        address: {
+            type: String,
+            required: true
+        },
+        city: String,
+        state: String,
+        postalCode: String,
+        coordinates: {
+            lat: Number,
+            lng: Number
+        }
+    },
+    { _id: false }
+);
+
+const scheduleSchema = new mongoose.Schema(
+    {
+        openTime: {
+            type: String
+        },
+        closeTime: {
+            type: String
+        },
+        workingDays: {
+            type: [String],
+            default: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        }
+    },
+    { _id: false }
 );
 
 const analyticsSchema = new mongoose.Schema(
-  {
-    impressions: { type: Number, default: 0 },
-    memberships: { type: Number, default: 0 },
-    trainers: { type: Number, default: 0 },
-    rating: { type: Number, min: 0, max: 5, default: 0 },
-    ratingCount: { type: Number, default: 0 },
-    lastImpressionAt: { type: Date },
-  },
-  { _id: false },
+    {
+        impressions: {
+            type: Number,
+            default: 0
+        },
+        rating: {
+            type: Number,
+            default: 0
+        },
+        ratingCount: {
+            type: Number,
+            default: 0
+        },
+        lastImpressionAt: Date,
+        lastReviewAt: Date
+    },
+    { _id: false }
+);
+
+const sponsorshipSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["none", "active", "expired"],
+            default: "none"
+        },
+        expiresAt: Date,
+        package: String
+    },
+    { _id: false }
 );
 
 const gymSchema = new mongoose.Schema(
-  {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
+    {
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        description: {
+            type: String,
+            trim: true
+        },
+        location: {
+            type: locationSchema,
+            required: true
+        },
+        pricing: {
+            type: pricingSchema,
+            required: true
+        },
+        features: {
+            type: [String],
+            default: []
+        },
+        keyFeatures: {
+            type: [String],
+            default: []
+        },
+        amenities: {
+            type: [String],
+            default: []
+        },
+        tags: {
+            type: [String],
+            default: []
+        },
+        images: {
+            type: [String],
+            default: []
+        },
+        gallery: {
+            type: [String],
+            default: []
+        },
+        owner: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        trainers: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ],
+        contact: contactSchema,
+        schedule: scheduleSchema,
+        analytics: {
+            type: analyticsSchema,
+            default: () => ({})
+        },
+        sponsorship: {
+            type: sponsorshipSchema,
+            default: () => ({})
+        },
+        status: {
+            type: String,
+            enum: ["active", "paused", "suspended"],
+            default: "active"
+        },
+        isPublished: {
+            type: Boolean,
+            default: true
+        },
+        sponsor: {
+            type: Boolean,
+            default: false
+        },
+        sponsorExpiresAt: Date,
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        approvalStatus: {
+            type: String,
+            enum: ["approved", "pending", "rejected"],
+            default: "approved"
+        },
+        approvedAt: Date,
+        lastUpdatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        }
     },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    slug: {
-      type: String,
-      trim: true,
-      unique: true,
-      index: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-    },
-    keyFeatures: {
-      type: [String],
-      default: [],
-    },
-    amenities: {
-      type: [String],
-      default: [],
-    },
-    location: {
-      type: locationSchema,
-      required: true,
-    },
-    contact: contactSchema,
-    pricing: pricingSchema,
-    schedule: scheduleSchema,
-    gallery: {
-      type: [String],
-      default: [],
-    },
-    isPublished: {
-      type: Boolean,
-      default: false,
-    },
-    status: {
-      type: String,
-      enum: ['draft', 'active', 'paused', 'suspended'],
-      default: 'draft',
-    },
-    sponsorship: sponsorshipSchema,
-    analytics: analyticsSchema,
-    tags: {
-      type: [String],
-      default: [],
-      index: true,
-    },
-    lastUpdatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-    },
-    approvedAt: { type: Date },
-  },
-  {
-    timestamps: true,
-  },
+    {
+        timestamps: true
+    }
 );
 
-gymSchema.index({ name: 'text', description: 'text', tags: 'text', keyFeatures: 'text' });
-gymSchema.index({ 'location.coordinates': '2dsphere' }, { sparse: true });
+gymSchema.index({ "location.city": 1, sponsor: -1, createdAt: -1 });
+gymSchema.index({ status: 1, isPublished: 1 });
+gymSchema.index({ owner: 1 });
 
-gymSchema.pre('save', function generateSlug(next) {
-  if (!this.isModified('name')) {
-    return next();
-  }
-
-  const slugBase = this.name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
-
-  this.slug = slugBase ? `${slugBase}-${Date.now().toString().slice(-6)}` : undefined;
-  next();
+gymSchema.virtual("isSponsored").get(function () {
+    if (!this.sponsor) return false;
+    if (!this.sponsorExpiresAt) return this.sponsor;
+    return this.sponsorExpiresAt > new Date();
 });
 
-const Gym = mongoose.model('Gym', gymSchema);
+gymSchema.set("toJSON", { virtuals: true });
+
+gymSchema.set("toObject", { virtuals: true });
+
+const Gym = mongoose.model("Gym", gymSchema);
 
 export default Gym;
-export { Gym };
+

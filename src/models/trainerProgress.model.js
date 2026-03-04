@@ -70,6 +70,13 @@ const feedbackSchema = new mongoose.Schema(
   },
 );
 
+const traineeFeedbackSchema = new mongoose.Schema(
+  {
+    message: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+);
+
 const trainerProgressSchema = new mongoose.Schema(
   {
     trainer: {
@@ -107,6 +114,10 @@ const trainerProgressSchema = new mongoose.Schema(
     },
     feedback: {
       type: [feedbackSchema],
+      default: [],
+    },
+    traineeFeedback: {
+      type: [traineeFeedbackSchema],
       default: [],
     },
     summary: { type: String },

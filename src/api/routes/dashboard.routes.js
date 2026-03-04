@@ -15,10 +15,12 @@ import {
   getTrainerOverview,
   getTrainerTrainees,
   getTrainerUpdates,
+  getTrainerFeedbackInbox,
   getTraineeDiet,
   getTraineeOrders,
   getTraineeOverview,
   getTraineeProgress,
+  submitTrainerFeedback,
 } from '../controllers/dashboard.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 
@@ -30,6 +32,7 @@ router.get('/trainee/overview', authorizeRoles('trainee', 'member'), getTraineeO
 router.get('/trainee/progress', authorizeRoles('trainee', 'member'), getTraineeProgress);
 router.get('/trainee/diet', authorizeRoles('trainee', 'member'), getTraineeDiet);
 router.get('/trainee/orders', authorizeRoles('trainee', 'member'), getTraineeOrders);
+router.post('/trainee/feedback', authorizeRoles('trainee', 'member'), submitTrainerFeedback);
 
 router.get('/gym-owner/overview', authorizeRoles('gym-owner'), getGymOwnerOverview);
 router.get('/gym-owner/gyms', authorizeRoles('gym-owner'), getGymOwnerGyms);
@@ -41,6 +44,7 @@ router.get('/gym-owner/roster', authorizeRoles('gym-owner'), getGymOwnerRoster);
 router.get('/trainer/overview', authorizeRoles('trainer'), getTrainerOverview);
 router.get('/trainer/trainees', authorizeRoles('trainer'), getTrainerTrainees);
 router.get('/trainer/updates', authorizeRoles('trainer'), getTrainerUpdates);
+router.get('/trainer/feedback', authorizeRoles('trainer'), getTrainerFeedbackInbox);
 
 router.get('/admin/overview', authorizeRoles('admin'), getAdminOverview);
 router.get('/admin/users', authorizeRoles('admin'), getAdminUsers);

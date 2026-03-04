@@ -264,6 +264,26 @@
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+.gym-highlight__reviews-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gym-highlight__reviews-header span {
+  color: var(--muted-text-color);
+  font-size: 0.95rem;
+}
+
+.gym-highlight__reviews-list {
+  margin-top: 1rem;
+}
+
+.gym-highlight__reviews-empty {
+  color: var(--muted-text-color);
+  margin: 0;
+}
+
 .gym-highlight__reviews article header {
   display: flex;
   justify-content: space-between;
@@ -277,6 +297,74 @@
 .gym-highlight__reviews p {
   margin: 0;
   color: var(--light-text-color);
+}
+
+.gym-highlight__review-form {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 1.5rem;
+}
+
+.gym-highlight__review-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gym-highlight__review-form label {
+  font-size: 0.9rem;
+  color: var(--muted-text-color);
+}
+
+.gym-highlight__review-form select,
+.gym-highlight__review-form textarea {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: var(--light-text-color);
+  padding: 0.65rem 0.85rem;
+  font: inherit;
+}
+
+.gym-highlight__review-form textarea {
+  resize: vertical;
+  min-height: 130px;
+}
+
+.gym-highlight__review-form button {
+  align-self: flex-start;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gym-highlight__review-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gym-highlight__review-form button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(229, 9, 20, 0.35);
+}
+
+.gym-highlight__review-error {
+  color: #ff6b6b;
+  margin: 0;
+}
+
+.gym-highlight__review-success {
+  color: #4ade80;
+  margin: 0;
+}
+
+.gym-highlight__review-notice {
+  color: var(--muted-text-color);
+  margin: 0;
 }
 
 @media (max-width: 960px) {
