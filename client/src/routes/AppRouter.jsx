@@ -30,13 +30,6 @@ import AdminGymDetailsPage from '../pages/dashboards/admin/GymDetailsPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
-import AdminBookingsPage from '../pages/dashboards/admin/BookingsPage.jsx';
-import AdminMembershipsPage from '../pages/dashboards/admin/MembershipsPage.jsx';
-import AdminSubscriptionsPage from '../pages/dashboards/admin/SubscriptionsPage.jsx';
-import AdminProductsPage from '../pages/dashboards/admin/ProductsPage.jsx';
-import AdminProductBuyersPage from '../pages/dashboards/admin/ProductBuyersPage.jsx';
-import AdminReviewsPage from '../pages/dashboards/admin/ReviewsPage.jsx';
-import AdminTrainerAssignmentsPage from '../pages/dashboards/admin/TrainerAssignmentsPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
@@ -102,13 +95,6 @@ const AppRouter = () => (
           <Route path="gyms/:gymId" element={<AdminGymDetailsPage />} />
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
-          <Route path="bookings" element={<AdminBookingsPage />} />
-          <Route path="memberships" element={<AdminMembershipsPage />} />
-          <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
-          <Route path="products" element={<AdminProductsPage />} />
-          <Route path="products/:productId" element={<AdminProductBuyersPage />} />
-          <Route path="reviews" element={<AdminReviewsPage />} />
-          <Route path="trainer-assignments" element={<AdminTrainerAssignmentsPage />} />
           <Route path="messages" element={<AdminMessagesPage />} />
         </Route>
       </Route>
