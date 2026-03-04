@@ -133,6 +133,280 @@ const resolveGymPrice = (gym) => {
   return Number.isFinite(price) && price > 0 ? price : null;
 };
 
+const parseBoolean = (value, defaultValue = false) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalised = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalised)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalised)) {
+      return false;
+    }
+  }
+  return defaultValue;
+};
+
+export const preparePaidMembershipContext = async ({
+  actor,
+  gymId,
+  trainerId,
+} = {}) => {
+  if (!actor || !['trainee', 'trainer'].includes(actor.role)) {
+    throw new ApiError(403, 'Only trainees or trainers can join a gym.');
+  }
+
+  const gym = await ensureGymForMembership(gymId);
+
+  if (String(gym.owner) === String(actor._id)) {
+    throw new ApiError(400, 'Gym owners cannot join their own gym as a member.');
+  }
+
+  const existingMembership = await GymMembership.findOne({
+    gym: gym._id,
+    trainee: actor._id,
+    status: { $in: ['pending', 'active', 'paused'] },
+  }).lean();
+
+  if (actor.role === 'trainee') {
+    const otherGymMembership = await GymMembership.findOne({
+      trainee: actor._id,
+      gym: { $ne: gym._id },
+      plan: { $ne: 'trainer-access' },
+      status: { $in: ['pending', 'active', 'paused'] },
+    })
+      .select('_id gym status plan')
+      .lean();
+
+    if (otherGymMembership) {
+      throw new ApiError(409, 'You already have an active membership in another gym.');
+    }
+  }
+
+  if (existingMembership && existingMembership.plan !== 'trainer-access') {
+    throw new ApiError(409, 'You already have an active membership for this gym.');
+  }
+
+  if (!trainerId || !isObjectId(trainerId)) {
+    throw new ApiError(400, 'Select a trainer to continue.');
+  }
+
+  const assignment = await TrainerAssignment.findOne({
+    gym: gym._id,
+    trainer: trainerId,
+    status: 'active',
+  })
+    .populate({ path: 'trainer', select: 'name email profilePicture role status' })
+    .lean();
+
+  if (!assignment || !assignment.trainer || assignment.trainer.role !== 'trainer') {
+    throw new ApiError(400, 'Selected trainer is not available for this gym.');
+  }
+
+  if (assignment.trainer.status !== 'active') {
+    throw new ApiError(400, 'Trainer is not active at the moment.');
+  }
+
+  const monthlyFee = resolveGymPrice(gym);
+
+  if (!monthlyFee) {
+    throw new ApiError(400, 'This gym does not have a valid monthly price configured.');
+  }
+
+  return {
+    gym,
+    assignment,
+    monthlyFee,
+  };
+};
+
+export const activatePaidGymMembership = async ({
+  actor,
+  gymId,
+  trainerId,
+  paymentReference,
+  autoRenew = true,
+  benefits,
+  notes,
+  billing = {},
+} = {}) => {
+  const { gym, assignment, monthlyFee } = await preparePaidMembershipContext({
+    actor,
+    gymId,
+    trainerId,
+  });
+
+  if (!paymentReference) {
+    throw new ApiError(400, 'Payment reference is required to activate the membership.');
+  }
+
+  const startDate = new Date();
+  const endDate = (() => {
+    const result = new Date(startDate);
+    result.setMonth(result.getMonth() + 1);
+    return result;
+  })();
+
+  if (Number.isNaN(endDate.getTime())) {
+    throw new ApiError(400, 'Invalid membership end date.');
+  }
+
+  const membershipPayload = {
+    trainee: actor._id,
+    gym: gym._id,
+    plan: 'monthly',
+    startDate,
+    endDate,
+    status: 'active',
+    autoRenew: parseBoolean(autoRenew, true),
+    benefits: Array.isArray(benefits) ? benefits : undefined,
+    notes,
+    trainer: assignment.trainer._id,
+  };
+
+  const billingDetails = {
+    amount: monthlyFee,
+    currency: billing.currency ?? 'INR',
+    paymentGateway: billing.paymentGateway,
+    paymentReference,
+    status: 'paid',
+  };
+
+  membershipPayload.billing = {
+    amount: billingDetails.amount,
+    currency: billingDetails.currency,
+    paymentGateway: billingDetails.paymentGateway,
+    paymentReference: billingDetails.paymentReference,
+    status: billingDetails.status,
+  };
+
+  const membership = await GymMembership.create(membershipPayload);
+
+  const trainerShare = Math.round(monthlyFee * 0.5);
+  const ownerShare = Math.max(Math.round(monthlyFee - trainerShare), 0);
+
+  const updates = [
+    Gym.updateOne(
+      { _id: gym._id },
+      {
+        $inc: { 'analytics.memberships': 1 },
+        $set: { lastUpdatedBy: actor._id },
+      },
+    ),
+  ];
+
+  if (actor.role === 'trainee') {
+    updates.push(
+      User.updateOne(
+        { _id: actor._id },
+        {
+          $inc: { 'traineeMetrics.activeMemberships': 1 },
+          $set: { 'traineeMetrics.primaryGym': gym._id },
+        },
+      ),
+    );
+  }
+
+  if (actor.role === 'trainer') {
+    updates.push(User.updateOne({ _id: actor._id }, { $addToSet: { 'trainerMetrics.gyms': gym._id } }));
+  }
+
+  updates.push(
+    User.updateOne(
+      { _id: assignment.trainer._id },
+      {
+        $addToSet: { 'trainerMetrics.gyms': gym._id },
+        $inc: { 'trainerMetrics.activeTrainees': 1 },
+      },
+    ),
+  );
+
+  updates.push(
+    User.updateOne(
+      { _id: gym.owner },
+      {
+        $inc: {
+          'ownerMetrics.monthlyEarnings': ownerShare,
+        },
+      },
+    ),
+  );
+
+  await Promise.all(updates);
+
+  const assignmentUpdate = await TrainerAssignment.findOneAndUpdate(
+    { trainer: assignment.trainer._id, gym: gym._id, 'trainees.trainee': actor._id },
+    {
+      $set: {
+        status: 'active',
+        'trainees.$.status': 'active',
+        'trainees.$.assignedAt': new Date(),
+      },
+    },
+    { new: true },
+  );
+
+  if (!assignmentUpdate) {
+    await TrainerAssignment.findOneAndUpdate(
+      { trainer: assignment.trainer._id, gym: gym._id },
+      {
+        $setOnInsert: {
+          trainer: assignment.trainer._id,
+          gym: gym._id,
+          status: 'active',
+        },
+        $set: { status: 'active' },
+        $push: {
+          trainees: {
+            trainee: actor._id,
+            status: 'active',
+            assignedAt: new Date(),
+          },
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  const metadataBase = [
+    ['gymId', String(gym._id)],
+    ['memberId', String(actor._id)],
+    ['membershipId', String(membership._id)],
+    ['paymentReference', paymentReference],
+    ['plan', 'monthly'],
+  ];
+
+  await Promise.all([
+    Revenue.create({
+      amount: trainerShare,
+      user: assignment.trainer._id,
+      type: 'membership',
+      description: `Trainer share for ${gym.name} membership`,
+      metadata: new Map(
+        [...metadataBase, ['share', 'trainer'], ['trainerId', String(assignment.trainer._id)], ['amount', String(trainerShare)]],
+      ),
+    }),
+    Revenue.create({
+      amount: ownerShare,
+      user: gym.owner,
+      type: 'membership',
+      description: `Gym share for ${gym.name} membership`,
+      metadata: new Map(
+        [...metadataBase, ['share', 'gym'], ['trainerId', String(assignment.trainer._id)], ['amount', String(ownerShare)]],
+      ),
+    }),
+  ]);
+
+  const populated = await GymMembership.findById(membership._id)
+    .populate({ path: 'gym', select: 'name location pricing' })
+    .populate({ path: 'trainer', select: 'name profilePicture' })
+    .lean();
+
+  return mapMembership(populated);
+};
+
 export const joinGym = asyncHandler(async (req, res) => {
   const { gymId } = req.params;
   const user = req.user;
