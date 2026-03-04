@@ -22,6 +22,28 @@ export const ownerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'Analytics'],
     }),
+    createListingStripeCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/owner/subscriptions/checkout-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    createSponsorshipStripeCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/owner/sponsorships/checkout-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    confirmOwnerPaymentSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/owner/confirm',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: ['Subscription', 'Dashboard', 'Analytics', 'Gym'],
+    }),
     getTrainerRequests: builder.query({
       query: () => '/owner/trainers/requests',
       providesTags: ['TrainerRequest', 'Dashboard'],
@@ -61,6 +83,9 @@ export const {
   useGetMonetisationOptionsQuery,
   useCheckoutListingSubscriptionMutation,
   usePurchaseSponsorshipMutation,
+  useCreateListingStripeCheckoutSessionMutation,
+  useCreateSponsorshipStripeCheckoutSessionMutation,
+  useConfirmOwnerPaymentSessionMutation,
   useGetTrainerRequestsQuery,
   useApproveTrainerRequestMutation,
   useDeclineTrainerRequestMutation,

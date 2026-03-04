@@ -2,8 +2,10 @@ import PropTypes from 'prop-types';
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { AMENITY_OPTIONS } from '../../../constants/amenities.js';
+import { INDIAN_CITIES } from '../../../constants/indianLocations.js';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 
-const GymFilters = ({ filters, onChange }) => {
+const GymFilters = ({ filters, onChange, searchSuggestions }) => {
   const { control, setValue } = useForm({
     defaultValues: filters,
   });
@@ -41,13 +43,18 @@ const GymFilters = ({ filters, onChange }) => {
           control={control}
           name="search"
           render={({ field }) => (
-            <input
-              {...field}
-              type="text"
+            <AutosuggestInput
+              value={field.value ?? ''}
               placeholder="Search by gym"
-              onChange={(event) => {
-                field.onChange(event);
-                handleFieldChange('search', event.target.value);
+              ariaLabel="Search gyms"
+              suggestions={searchSuggestions}
+              onChange={(val) => {
+                field.onChange(val);
+                handleFieldChange('search', val);
+              }}
+              onSelect={(val) => {
+                field.onChange(val);
+                handleFieldChange('search', val);
               }}
             />
           )}
@@ -60,14 +67,15 @@ const GymFilters = ({ filters, onChange }) => {
           control={control}
           name="city"
           render={({ field }) => (
-            <input
-              {...field}
-              type="text"
-              placeholder="e.g. Mumbai"
-              onChange={(event) => {
-                field.onChange(event);
-                handleFieldChange('city', event.target.value);
+            <AutosuggestInput
+              value={field.value}
+              onChange={(val) => {
+                field.onChange(val);
+                handleFieldChange('city', val);
               }}
+              suggestions={INDIAN_CITIES}
+              placeholder="e.g. Mumbai"
+              ariaLabel="City filter"
             />
           )}
         />
@@ -108,6 +116,11 @@ GymFilters.propTypes = {
     amenities: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
   onChange: PropTypes.func.isRequired,
+  searchSuggestions: PropTypes.arrayOf(PropTypes.string),
+};
+
+GymFilters.defaultProps = {
+  searchSuggestions: [],
 };
 
 export default GymFilters;

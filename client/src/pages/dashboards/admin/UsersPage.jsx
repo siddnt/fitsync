@@ -1,26 +1,36 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import Pagination from '../components/Pagination.jsx';
+import useTableSort from '../components/useTableSort.js';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
+
+
 const AdminUsersPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
-  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'seller');
+  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const userSuggestions = useMemo(() => recent.flatMap((u) => [u.name, u.email].filter(Boolean)), [recent]);
+
   const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'admin'];
+    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
     const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
     const merged = [...new Set([...knownRoles, ...dynamicRoles])];
     return ['all', ...merged];
@@ -48,6 +58,13 @@ const AdminUsersPage = () => {
       return haystacks.some((value) => value.includes(query));
     });
   }, [recent, roleFilter, statusFilter, searchTerm]);
+
+  const { sorted, sortKey, sortDir, onSort } = useTableSort(filteredUsers, 'name');
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const paginatedUsers = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
 
   const filtersActive = useMemo(
     () => Boolean(searchTerm.trim() || roleFilter !== 'all' || statusFilter !== 'all'),
@@ -130,6 +147,10 @@ const AdminUsersPage = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--stacked">
+      <div className="admin-page-header">
+        <h1>User Management</h1>
+        <p>Review pending approvals, search users, and manage accounts across all roles.</p>
+      </div>
       <DashboardSection
         title="Pending approvals"
         action={(
@@ -186,7 +207,7 @@ const AdminUsersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No pending approvals. All caught up!" />
+          <EmptyState message="No pending manager approvals. All caught up!" />
         )}
       </DashboardSection>
 
@@ -194,13 +215,13 @@ const AdminUsersPage = () => {
         title="Users"
         action={(
           <div className="users-toolbar">
-            <input
-              type="search"
+            <AutosuggestInput
               className="inventory-toolbar__input"
               placeholder="Search name or email"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label="Search users"
+              onChange={setSearchTerm}
+              suggestions={userSuggestions}
+              ariaLabel="Search users"
             />
             <select
               className="inventory-toolbar__input inventory-toolbar__input--select"
@@ -238,39 +259,53 @@ const AdminUsersPage = () => {
         )}
       >
         {filteredUsers.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user._id}>
-                  <td>
-                    <div className="dashboard-table__user">
-                      {user.profilePicture ? (
-                        <img src={user.profilePicture} alt={user.name} />
-                      ) : (
-                        <div className="dashboard-table__user-placeholder">
-                          {user.name?.charAt(0) ?? '?'}
-                        </div>
-                      )}
-                      <span>{user.name}</span>
-                    </div>
-                  </td>
-                  <td>{user.email}</td>
-                  <td>{formatStatus(user.role)}</td>
-                  <td>{formatStatus(user.status)}</td>
-                  <td>{formatDate(user.createdAt)}</td>
+          <>
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th className={thCls('name')} onClick={() => onSort('name')}>Name</th>
+                  <th className={thCls('email')} onClick={() => onSort('email')}>Email</th>
+                  <th className={thCls('role')} onClick={() => onSort('role')}>Role</th>
+                  <th className={thCls('status')} onClick={() => onSort('status')}>Status</th>
+                  <th className={thCls('memberships')} onClick={() => onSort('memberships')}>Memberships</th>
+                  <th className={thCls('orders')} onClick={() => onSort('orders')}>Orders</th>
+                  <th className={thCls('gymsOwned')} onClick={() => onSort('gymsOwned')}>Gyms Owned</th>
+                  <th className={thCls('createdAt')} onClick={() => onSort('createdAt')}>Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedUsers.map((user) => (
+                  <tr
+                    key={user._id}
+                    className="dashboard-table__row--clickable"
+                    onClick={() => navigate(`/dashboard/admin/users/${user._id}`)}
+                    title="Click to view details"
+                  >
+                    <td>
+                      <div className="dashboard-table__user">
+                        {user.profilePicture ? (
+                          <img src={user.profilePicture} alt={user.name} />
+                        ) : (
+                          <div className="dashboard-table__user-placeholder">
+                            {user.name?.charAt(0) ?? '?'}
+                          </div>
+                        )}
+                        <span>{user.name}</span>
+                      </div>
+                    </td>
+                    <td>{user.email}</td>
+                    <td>{formatStatus(user.role)}</td>
+                    <td>{formatStatus(user.status)}</td>
+                    <td>{user.memberships ?? 0}</td>
+                    <td>{user.orders ?? 0}</td>
+                    <td>{user.gymsOwned ?? 0}</td>
+                    <td>{formatDate(user.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={currentPage} totalPages={totalPages} from={(currentPage - 1) * PAGE_SIZE + 1} to={Math.min(currentPage * PAGE_SIZE, sorted.length)} total={sorted.length} onPageChange={setCurrentPage} />
+          </>
         ) : (
           <EmptyState message="No users match the current filters." />
         )}

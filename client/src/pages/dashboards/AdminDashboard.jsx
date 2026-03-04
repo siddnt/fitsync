@@ -107,24 +107,29 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--stacked">
+      <div className="admin-page-header">
+        <h1>Admin Overview</h1>
+        <p>Monitor platform performance, revenue streams, and user activity at a glance.</p>
+      </div>
+
       <DashboardSection title="Platform performance">
         {overview ? (
           <div className="stat-grid">
-            <div className="stat-card">
+            <div className="stat-card stat-card--blue">
               <small>Total users</small>
               <strong>{formatNumber(totalUsers)}</strong>
               <small>
                 Trainers {formatNumber(overview.users?.trainer ?? 0)} · Trainees {formatNumber(overview.users?.trainee ?? 0)} · Gym Owners {formatNumber(overview.users?.['gym-owner'] ?? 0)}
               </small>
             </div>
-            <div className="stat-card">
+            <div className="stat-card stat-card--purple">
               <small>Gyms live</small>
               <strong>{formatNumber(overview.gyms?.published ?? 0)}</strong>
               <small>
                 {formatNumber(overview.gyms?.sponsored ?? 0)} sponsored · {formatNumber(overview.gyms?.totalImpressions ?? 0)} impressions
               </small>
             </div>
-            <div className="stat-card">
+            <div className="stat-card stat-card--cyan">
               <small>Total listed items</small>
               <strong>{formatNumber(overview.marketplace?.totalItems ?? 0)}</strong>
               <small>{formatNumber(overview.marketplace?.totalOrders ?? 0)} total orders</small>
@@ -139,12 +144,12 @@ const AdminDashboard = () => {
         {overview?.revenue ? (
           <div className="stat-grid">
             {overview.revenue.map((item) => (
-              <div className="stat-card" key={item.type}>
+              <div className="stat-card stat-card--green" key={item.type}>
                 <small>{item.type === 'marketplace' ? 'Marketplace' : item.type === 'listing' ? 'Listing Plans' : item.type === 'sponsorship' ? 'Sponsorships' : item.type} Revenue</small>
                 <strong>{formatCurrency(item.amount)}</strong>
               </div>
             ))}
-             <div className="stat-card">
+            <div className="stat-card stat-card--orange">
               <small>Total Revenue</small>
               <strong>{formatCurrency(overview.revenue.reduce((sum, item) => sum + (Number(item.amount?.amount) || 0), 0))}</strong>
             </div>

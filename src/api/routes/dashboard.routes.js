@@ -4,6 +4,7 @@ import {
   getAdminMarketplace,
   getAdminOverview,
   getAdminRevenue,
+  getAdminSubscriptions,
   getAdminUsers,
   getAdminInsights,
   getGymOwnerAnalytics,
@@ -51,6 +52,7 @@ router.get('/admin/users', authorizeRoles('admin'), getAdminUsers);
 router.get('/admin/gyms', authorizeRoles('admin'), getAdminGyms);
 router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
+router.get('/admin/subscriptions', authorizeRoles('admin'), getAdminSubscriptions);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
 
 export default router;

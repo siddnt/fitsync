@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { SubmissionError, reset as resetForm } from 'redux-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SubmissionError } from 'redux-form';
 import { useDispatch } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -10,6 +11,8 @@ import {
 } from '../../../services/dashboardApi.js';
 import {
   useGetMonetisationOptionsQuery,
+  useCreateSponsorshipStripeCheckoutSessionMutation,
+  useConfirmOwnerPaymentSessionMutation,
   usePurchaseSponsorshipMutation,
 } from '../../../services/ownerApi.js';
 import SponsorshipForm from '../../../features/monetisation/SponsorshipForm.jsx';
@@ -19,6 +22,9 @@ import '../Dashboard.css';
 
 const GymOwnerSponsorshipPage = () => {
   const dispatch = useDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const processedSessionRef = useRef(null);
+  const [stripeNotice, setStripeNotice] = useState(null);
 
   const {
     data: sponsorshipResponse,
@@ -41,6 +47,8 @@ const GymOwnerSponsorshipPage = () => {
     refetch: refetchPackages,
   } = useGetMonetisationOptionsQuery();
 
+  const [createSponsorshipStripeCheckoutSession] = useCreateSponsorshipStripeCheckoutSessionMutation();
+  const [confirmOwnerPaymentSession] = useConfirmOwnerPaymentSessionMutation();
   const [purchaseSponsorship] = usePurchaseSponsorshipMutation();
 
   const sponsorships = sponsorshipResponse?.data?.sponsorships ?? [];
@@ -48,6 +56,9 @@ const GymOwnerSponsorshipPage = () => {
   const packages = monetisationResponse?.data?.sponsorshipPackages ?? [];
 
   const [sponsorshipGymFilter, setSponsorshipGymFilter] = useState('all');
+  const stripeStatus = searchParams.get('stripe');
+  const paymentSessionId = searchParams.get('payment_session_id');
+  const stripeSessionId = searchParams.get('session_id');
 
   const sponsorshipGymOptions = useMemo(() => {
     const visibleGyms = gymOptions.map((gym) => ({ value: gym.id, label: gym.name ?? 'Unnamed gym' }));
@@ -69,29 +80,116 @@ const GymOwnerSponsorshipPage = () => {
     tier: packages[0]?.tier ?? '',
   };
 
+  useEffect(() => {
+    const clearStripeQuery = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('stripe');
+      nextParams.delete('payment_session_id');
+      nextParams.delete('session_id');
+      setSearchParams(nextParams, { replace: true });
+    };
+
+    if (!stripeStatus) {
+      processedSessionRef.current = null;
+      return;
+    }
+
+    if (stripeStatus === 'cancelled') {
+      setStripeNotice('Stripe checkout was cancelled. No sponsorship changes were made.');
+      clearStripeQuery();
+      return;
+    }
+
+    if (stripeStatus !== 'success' || !paymentSessionId) {
+      clearStripeQuery();
+      return;
+    }
+
+    if (processedSessionRef.current === paymentSessionId) {
+      return;
+    }
+    processedSessionRef.current = paymentSessionId;
+
+    const confirmPayment = async () => {
+      try {
+        const response = await confirmOwnerPaymentSession({
+          paymentSessionId,
+          sessionId: stripeSessionId || undefined,
+        }).unwrap();
+
+        const reference =
+          response?.data?.paymentReference ||
+          response?.data?.sponsorship?.paymentReference ||
+          null;
+
+        if (reference) {
+          dispatch(setLastReceipt(reference));
+        }
+
+        setStripeNotice('Payment successful. Sponsorship activated.');
+        await Promise.all([refetchSponsorships(), refetchGyms()]);
+      } catch (error) {
+        const message = error?.data?.message ?? 'Payment completed, but sponsorship confirmation failed.';
+        setStripeNotice(message);
+      } finally {
+        clearStripeQuery();
+      }
+    };
+
+    confirmPayment();
+  }, [
+    stripeStatus,
+    paymentSessionId,
+    stripeSessionId,
+    confirmOwnerPaymentSession,
+    dispatch,
+    refetchSponsorships,
+    refetchGyms,
+    searchParams,
+    setSearchParams,
+  ]);
+
   const handlePurchase = async (values) => {
     try {
       const payload = {
         gymId: values.gymId,
         tier: values.tier,
-        paymentReference: values.paymentReference?.trim() || undefined,
       };
 
-      const response = await purchaseSponsorship(payload).unwrap();
+      const response = await createSponsorshipStripeCheckoutSession(payload).unwrap();
+      const checkoutUrl = response?.data?.checkoutUrl;
+      if (!checkoutUrl) {
+        throw new Error('Missing Stripe checkout URL.');
+      }
 
-      const paymentReference =
-        response?.data?.sponsorship?.paymentReference ||
-        payload.paymentReference ||
-        `${payload.tier}-${payload.gymId}`;
-
-      dispatch(setLastReceipt(paymentReference));
       dispatch(selectSponsorshipTier(null));
       dispatch(selectGym(null));
-
-      await Promise.all([refetchSponsorships(), refetchGyms()]);
-      dispatch(resetForm('sponsorshipPurchase'));
+      window.location.assign(checkoutUrl);
     } catch (error) {
-      const message = error?.data?.message ?? 'We could not activate this sponsorship. Please try again.';
+      if (error?.status === 503) {
+        try {
+          const fallbackReference = `manual-${Date.now()}`;
+          const response = await purchaseSponsorship({
+            gymId: values.gymId,
+            tier: values.tier,
+            paymentReference: fallbackReference,
+          }).unwrap();
+
+          const reference =
+            response?.data?.sponsorship?.paymentReference ||
+            fallbackReference;
+
+          dispatch(setLastReceipt(reference));
+          setStripeNotice('Stripe is unavailable; sponsorship activated with manual fallback.');
+          await Promise.all([refetchSponsorships(), refetchGyms()]);
+          return;
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError?.data?.message ?? 'Unable to activate this sponsorship.';
+          throw new SubmissionError({ _error: fallbackMessage });
+        }
+      }
+
+      const message = error?.data?.message ?? error?.message ?? 'Unable to start Stripe checkout. Please try again.';
       throw new SubmissionError({ _error: message });
     }
   };
@@ -130,6 +228,7 @@ const GymOwnerSponsorshipPage = () => {
   return (
     <div className="dashboard-grid dashboard-grid--owner">
       <DashboardSection title="Launch sponsorship" className="dashboard-section--span-12">
+        {stripeNotice ? <p className="form-success">{stripeNotice}</p> : null}
         {gymOptions.length && packages.length ? (
           <SponsorshipForm
             onSubmit={handlePurchase}

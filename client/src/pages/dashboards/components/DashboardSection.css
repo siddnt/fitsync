@@ -1,10 +1,39 @@
 .dashboard-section {
   background: var(--surface-elevated-color);
-  border-radius: 18px;
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1.75rem;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--section-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  animation: sectionEnter 0.45s ease both;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.dashboard-section:hover {
+  box-shadow: var(--section-shadow-hover);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient accent bar at top */
+.dashboard-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--section-border-gradient);
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.dashboard-section:hover::before {
+  opacity: 1;
 }
 
 .dashboard-section header {
@@ -20,16 +49,99 @@
   font-size: 1.15rem;
   font-weight: 600;
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
-.dashboard-section header > *:last-child {
+.dashboard-section header>*:last-child {
   margin-left: auto;
+}
+
+/* Premium section action buttons (Refresh, Retry, etc.) */
+.dashboard-section header button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: var(--muted-text-color);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.5rem 1.1rem;
+  transition: background 0.25s ease, color 0.25s ease, border-color 0.25s ease,
+    box-shadow 0.25s ease, transform 0.15s ease;
+}
+
+.dashboard-section header button:hover {
+  background: rgba(132, 94, 247, 0.18);
+  border-color: rgba(132, 94, 247, 0.4);
+  color: #c4b5fd;
+  box-shadow: 0 4px 16px rgba(132, 94, 247, 0.15);
+  transform: translateY(-1px);
+}
+
+.dashboard-section header button:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+}
+
+/* ── Collapsible chevron indicator ── */
+.dashboard-section__chevron {
+  display: inline-block;
+  font-size: 0.85em;
+  margin-right: 0.45rem;
+  transition: transform 0.25s ease;
+  color: var(--muted-text-color);
+}
+
+.dashboard-section--collapsed .dashboard-section__chevron {
+  transform: rotate(0deg);
+}
+
+.dashboard-section:not(.dashboard-section--collapsed) .dashboard-section__chevron {
+  transform: rotate(-90deg);
+}
+
+.dashboard-section--collapsible header:hover h2 {
+  color: #c4b5fd;
 }
 
 .dashboard-section__body {
   color: var(--muted-text-color);
 }
 
-.dashboard-section {
-  height: 100%;
+/* Staggered entry animation */
+@keyframes sectionEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dashboard-section:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.dashboard-section:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.dashboard-section:nth-child(3) {
+  animation-delay: 0.12s;
+}
+
+.dashboard-section:nth-child(4) {
+  animation-delay: 0.18s;
+}
+
+.dashboard-section:nth-child(5) {
+  animation-delay: 0.24s;
+}
+
+.dashboard-section:nth-child(6) {
+  animation-delay: 0.3s;
 }

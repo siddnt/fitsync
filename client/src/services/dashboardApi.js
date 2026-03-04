@@ -86,6 +86,10 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/admin/marketplace',
       providesTags: ['Dashboard', 'Marketplace'],
     }),
+    getAdminSubscriptions: builder.query({
+      query: () => '/dashboards/admin/subscriptions',
+      providesTags: ['Dashboard', 'Subscription', 'Gym'],
+    }),
     getAdminInsights: builder.query({
       query: () => '/dashboards/admin/insights',
       providesTags: ['Dashboard', 'Analytics', 'Notification'],
@@ -114,5 +118,6 @@ export const {
   useGetAdminGymsQuery,
   useGetAdminRevenueQuery,
   useGetAdminMarketplaceQuery,
+  useGetAdminSubscriptionsQuery,
   useGetAdminInsightsQuery,
 } = dashboardApi;
