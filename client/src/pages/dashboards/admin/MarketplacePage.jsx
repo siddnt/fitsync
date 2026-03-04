@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -8,6 +9,8 @@ import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
 
 const AdminMarketplacePage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
@@ -150,8 +153,16 @@ const AdminMarketplacePage = () => {
     orders.forEach((order) => {
       const s = order.seller;
       if (!s?.name) return;
-      const key = s.id || s.name;
-      if (!map[key]) map[key] = { name: s.name, email: s.email, orders: 0, revenue: 0 };
+      const key = getUserId(s) || s.name;
+      if (!map[key]) {
+        map[key] = {
+          id: getUserId(s),
+          name: s.name,
+          email: s.email,
+          orders: 0,
+          revenue: 0,
+        };
+      }
       map[key].orders += 1;
       const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
       map[key].revenue += amount;
@@ -164,8 +175,16 @@ const AdminMarketplacePage = () => {
     orders.forEach((order) => {
       const u = order.user;
       if (!u?.name) return;
-      const key = u.id || u.name;
-      if (!map[key]) map[key] = { name: u.name, email: u.email, orders: 0, spent: 0 };
+      const key = getUserId(u) || u.name;
+      if (!map[key]) {
+        map[key] = {
+          id: getUserId(u),
+          name: u.name,
+          email: u.email,
+          orders: 0,
+          spent: 0,
+        };
+      }
       map[key].orders += 1;
       const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
       map[key].spent += amount;
@@ -244,7 +263,7 @@ const AdminMarketplacePage = () => {
             <div className="stat-card stat-card--green">
               <small>Fulfilled</small>
               <strong>{summary.fulfilled}</strong>
-              <small>{orders.length ? `${Math.round((summary.fulfilled / orders.length) * 100)}% success` : '—'}</small>
+              <small>{orders.length ? `${Math.round((summary.fulfilled / orders.length) * 100)}% success` : '-'}</small>
             </div>
             <div className="stat-card stat-card--orange">
               <small>Gross revenue</small>
@@ -323,7 +342,7 @@ const AdminMarketplacePage = () => {
                 {paginatedOrders.map((order) => {
                   const itemList = order.items ?? [];
                   const categories = [...new Set(itemList.map((i) => i.category).filter(Boolean))];
-                  const categoryDisplay = categories.length > 1 ? 'Mixed' : (categories[0] || '—');
+                  const categoryDisplay = categories.length > 1 ? 'Mixed' : (categories[0] || '-');
 
                   return (
                     <tr key={order.id}>
@@ -334,11 +353,23 @@ const AdminMarketplacePage = () => {
                         </div>
                       </td>
                       <td>
-                        {order.user?.name ?? '—'}
+                        {getUserId(order.user) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(order.user)}`} className="dashboard-table__user--link">
+                            {order.user?.name}
+                          </Link>
+                        ) : (
+                          order.user?.name ?? '-'
+                        )}
                         <div><small>{order.user?.email}</small></div>
                       </td>
                       <td>
-                        {order.seller?.name ?? '—'}
+                        {getUserId(order.seller) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(order.seller)}`} className="dashboard-table__user--link">
+                            {order.seller?.name}
+                          </Link>
+                        ) : (
+                          order.seller?.name ?? '-'
+                        )}
                         <div><small>{order.seller?.email}</small></div>
                       </td>
                       <td>
@@ -400,10 +431,18 @@ const AdminMarketplacePage = () => {
             </thead>
             <tbody>
               {topSellers.map((s, i) => (
-                <tr key={s.name}>
+                <tr key={s.id ?? s.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td>
-                    <strong>{s.name}</strong>
+                    <strong>
+                      {s.id ? (
+                        <Link to={`/dashboard/admin/users/${s.id}`} className="dashboard-table__user--link">
+                          {s.name}
+                        </Link>
+                      ) : (
+                        s.name
+                      )}
+                    </strong>
                     <div><small>{s.email}</small></div>
                   </td>
                   <td>{s.orders}</td>
@@ -430,10 +469,18 @@ const AdminMarketplacePage = () => {
             </thead>
             <tbody>
               {topBuyers.map((b, i) => (
-                <tr key={b.name}>
+                <tr key={b.id ?? b.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td>
-                    <strong>{b.name}</strong>
+                    <strong>
+                      {b.id ? (
+                        <Link to={`/dashboard/admin/users/${b.id}`} className="dashboard-table__user--link">
+                          {b.name}
+                        </Link>
+                      ) : (
+                        b.name
+                      )}
+                    </strong>
                     <div><small>{b.email}</small></div>
                   </td>
                   <td>{b.orders}</td>
@@ -478,3 +525,4 @@ const AdminMarketplacePage = () => {
 };
 
 export default AdminMarketplacePage;
+

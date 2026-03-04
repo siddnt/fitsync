@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -8,6 +9,9 @@ import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminMembershipsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminMembershipsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminMembershipsQuery();
@@ -139,14 +143,34 @@ const AdminMembershipsPage = () => {
                   {paginatedItems.map((m) => (
                     <tr key={m.id}>
                       <td>
-                        <strong>{m.trainee?.name ?? '—'}</strong>
+                        <strong>
+                          {getUserId(m.trainee) ? (
+                            <Link to={`/dashboard/admin/users/${getUserId(m.trainee)}`} className="dashboard-table__user--link">
+                              {m.trainee?.name}
+                            </Link>
+                          ) : (
+                            m.trainee?.name ?? '-'
+                          )}
+                        </strong>
                         <div><small>{m.trainee?.email}</small></div>
                       </td>
                       <td>
-                        {m.gym?.name ?? '—'}
+                        {getGymId(m.gym) ? (
+                          <Link to={`/dashboard/admin/gyms/${getGymId(m.gym)}`} className="dashboard-table__user--link">
+                            {m.gym?.name}
+                          </Link>
+                        ) : (
+                          m.gym?.name ?? '-'
+                        )}
                         <div><small>{m.gym?.city}</small></div>
                       </td>
-                      <td>{m.trainer?.name ?? '—'}</td>
+                      <td>{getUserId(m.trainer) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(m.trainer)}`} className="dashboard-table__user--link">
+                            {m.trainer?.name}
+                          </Link>
+                        ) : (
+                          m.trainer?.name ?? '-'
+                        )}</td>
                       <td>{formatStatus(m.plan)}</td>
                       <td>
                         <span className={`status-pill status-pill--${m.status === 'active' ? 'success' : m.status === 'expired' ? 'warning' : 'default'}`}>
@@ -158,10 +182,10 @@ const AdminMembershipsPage = () => {
                       <td>
                         {m.billing ? (
                           <>
-                            ₹{m.billing.amount}
+                            Rs {m.billing.amount}
                             <div><small>{formatStatus(m.billing.status)}</small></div>
                           </>
-                        ) : '—'}
+                        ) : '-'}
                       </td>
                       <td>{m.autoRenew ? 'Yes' : 'No'}</td>
                     </tr>
@@ -180,3 +204,4 @@ const AdminMembershipsPage = () => {
 };
 
 export default AdminMembershipsPage;
+

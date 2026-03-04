@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -10,6 +10,9 @@ import { useGetAdminGymsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteGymMutation } from '../../../services/adminApi.js';
 import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?.id ?? user?._id ?? null;
+const getGymId = (gym) => gym?.id ?? gym?._id ?? null;
 
 const AdminGymsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminGymsQuery();
@@ -47,7 +50,7 @@ const AdminGymsPage = () => {
   const filtersActive = searchTerm.trim() || statusFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); };
 
-  /* ── Contributor Rankings ── */
+  /* -- Contributor Rankings -- */
 
   const topGymsByMembers = useMemo(() =>
     [...gyms].sort((a, b) => (b.activeMembers ?? 0) - (a.activeMembers ?? 0)).slice(0, 5),
@@ -62,8 +65,17 @@ const AdminGymsPage = () => {
     gyms.forEach((g) => {
       const o = g.owner;
       if (!o?.name) return;
-      const key = o.id || o.name;
-      if (!map[key]) map[key] = { name: o.name, email: o.email, gyms: 0, totalMembers: 0, totalImpressions: 0 };
+      const key = getUserId(o) || o.name;
+      if (!map[key]) {
+        map[key] = {
+          id: getUserId(o),
+          name: o.name,
+          email: o.email,
+          gyms: 0,
+          totalMembers: 0,
+          totalImpressions: 0,
+        };
+      }
       map[key].gyms += 1;
       map[key].totalMembers += g.activeMembers ?? 0;
       map[key].totalImpressions += g.analytics?.impressions ?? 0;
@@ -171,15 +183,25 @@ const AdminGymsPage = () => {
                 </thead>
                 <tbody>
                   {paginatedGyms.map((gym) => (
-                    <tr key={gym.id}>
+                    <tr key={getGymId(gym) ?? gym.name}>
                       <td>
-                        <Link to={`/dashboard/admin/gyms/${gym.id}`} className="dashboard-table__user--link">
-                          {gym.name}
-                        </Link>
+                        {getGymId(gym) ? (
+                          <Link to={`/dashboard/admin/gyms/${getGymId(gym)}`} className="dashboard-table__user--link">
+                            {gym.name}
+                          </Link>
+                        ) : (
+                          <strong>{gym.name}</strong>
+                        )}
                         <div><small>{gym.city}{gym.state ? `, ${gym.state}` : ''}</small></div>
                       </td>
                       <td>
-                        {gym.owner?.name ?? '—'}
+                        {getUserId(gym.owner) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(gym.owner)}`} className="dashboard-table__user--link">
+                            {gym.owner?.name}
+                          </Link>
+                        ) : (
+                          gym.owner?.name ?? '-'
+                        )}
                         <div><small>{gym.owner?.email}</small></div>
                       </td>
                       <td>
@@ -194,7 +216,7 @@ const AdminGymsPage = () => {
                       <td>{formatDate(gym.createdAt)}</td>
                       <td>
                         <button type="button" onClick={() => handleDelete(gym)} disabled={isDeleting}>
-                          {isDeleting ? 'Removing…' : 'Delete'}
+                          {isDeleting ? 'Removing...' : 'Delete'}
                         </button>
                       </td>
                     </tr>
@@ -209,7 +231,7 @@ const AdminGymsPage = () => {
         )}
       </DashboardSection>
 
-      {/* ── Contributor Rankings ── */}
+      {/* -- Contributor Rankings -- */}
       <DashboardSection title="Top Gyms by Members" collapsible>
         {topGymsByMembers.length ? (
           <table className="dashboard-table">
@@ -225,10 +247,18 @@ const AdminGymsPage = () => {
             </thead>
             <tbody>
               {topGymsByMembers.map((g, i) => (
-                <tr key={g.id}>
+                <tr key={getGymId(g) ?? g.name}>
                   <td><strong>{i + 1}</strong></td>
-                  <td><strong>{g.name}</strong></td>
-                  <td>{g.city ?? '—'}</td>
+                  <td>
+                    {getGymId(g) ? (
+                      <Link to={`/dashboard/admin/gyms/${getGymId(g)}`} className="dashboard-table__user--link">
+                        <strong>{g.name}</strong>
+                      </Link>
+                    ) : (
+                      <strong>{g.name}</strong>
+                    )}
+                  </td>
+                  <td>{g.city ?? '-'}</td>
                   <td><strong>{g.activeMembers ?? 0}</strong></td>
                   <td>{g.activeTrainers ?? 0}</td>
                   <td>{formatNumber(g.analytics?.impressions ?? 0)}</td>
@@ -255,10 +285,18 @@ const AdminGymsPage = () => {
             </thead>
             <tbody>
               {topGymsByImpressions.map((g, i) => (
-                <tr key={g.id}>
+                <tr key={getGymId(g) ?? g.name}>
                   <td><strong>{i + 1}</strong></td>
-                  <td><strong>{g.name}</strong></td>
-                  <td>{g.city ?? '—'}</td>
+                  <td>
+                    {getGymId(g) ? (
+                      <Link to={`/dashboard/admin/gyms/${getGymId(g)}`} className="dashboard-table__user--link">
+                        <strong>{g.name}</strong>
+                      </Link>
+                    ) : (
+                      <strong>{g.name}</strong>
+                    )}
+                  </td>
+                  <td>{g.city ?? '-'}</td>
                   <td><strong>{formatNumber(g.analytics?.impressions ?? 0)}</strong></td>
                   <td>{g.activeMembers ?? 0}</td>
                 </tr>
@@ -284,10 +322,18 @@ const AdminGymsPage = () => {
             </thead>
             <tbody>
               {topOwners.map((o, i) => (
-                <tr key={o.name}>
+                <tr key={o.id ?? o.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td>
-                    <strong>{o.name}</strong>
+                    <strong>
+                      {o.id ? (
+                        <Link to={`/dashboard/admin/users/${o.id}`} className="dashboard-table__user--link">
+                          {o.name}
+                        </Link>
+                      ) : (
+                        o.name
+                      )}
+                    </strong>
                     <div><small>{o.email}</small></div>
                   </td>
                   <td>{o.gyms}</td>
@@ -320,7 +366,7 @@ const AdminGymsPage = () => {
                 <tr key={c.name}>
                   <td><strong>{i + 1}</strong></td>
                   <td><strong>{c.name}</strong></td>
-                  <td>{c.state ?? '—'}</td>
+                  <td>{c.state ?? '-'}</td>
                   <td>{c.gyms}</td>
                   <td>{c.totalMembers}</td>
                   <td>{c.totalTrainers}</td>
@@ -337,3 +383,5 @@ const AdminGymsPage = () => {
 };
 
 export default AdminGymsPage;
+
+

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -10,6 +10,8 @@ import { useGetAdminProductsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteProductMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
 
 const AdminProductsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminProductsQuery();
@@ -112,7 +114,7 @@ const AdminProductsPage = () => {
           <div className="stat-card stat-card--green"><small>Published</small><strong>{summary.published}</strong></div>
           <div className="stat-card stat-card--red"><small>Out of Stock</small><strong>{summary.outOfStock}</strong></div>
           <div className="stat-card stat-card--purple"><small>Total Stock</small><strong>{summary.totalStock}</strong></div>
-          <div className="stat-card stat-card--orange"><small>Avg Rating</small><strong>{summary.avgRating} ★</strong></div>
+          <div className="stat-card stat-card--orange"><small>Avg Rating</small><strong>{summary.avgRating} *</strong></div>
         </div>
       </DashboardSection>
 
@@ -176,19 +178,25 @@ const AdminProductsPage = () => {
                         </div>
                       </td>
                       <td>
-                        {p.seller?.name ?? '—'}
+                        {getUserId(p.seller) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(p.seller)}`} className="dashboard-table__user--link">
+                            {p.seller?.name}
+                          </Link>
+                        ) : (
+                          p.seller?.name ?? '-'
+                        )}
                         <div><small>{p.seller?.email}</small></div>
                       </td>
                       <td>{formatStatus(p.category)}</td>
-                      <td>₹{p.price}</td>
-                      <td>₹{p.mrp}</td>
+                      <td>Rs {p.price}</td>
+                      <td>Rs {p.mrp}</td>
                       <td>{p.stock}</td>
                       <td>
                         <span className={`status-pill status-pill--${p.status === 'available' ? 'success' : 'warning'}`}>
                           {formatStatus(p.status)}
                         </span>
                       </td>
-                      <td>{p.reviews?.avgRating ? `${p.reviews.avgRating} ★` : '—'}</td>
+                      <td>{p.reviews?.avgRating ? `${p.reviews.avgRating} *` : '-'}</td>
                       <td>{p.reviews?.reviewCount ?? 0}</td>
                       <td>{formatDate(p.createdAt)}</td>
                       <td>
@@ -217,3 +225,4 @@ const AdminProductsPage = () => {
 };
 
 export default AdminProductsPage;
+

@@ -1,5 +1,6 @@
-// ...existing code...
+﻿// ...existing code...
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
   LineChart,
@@ -22,6 +23,8 @@ import {
 } from '../../services/dashboardApi.js';
 import { formatCurrency, formatNumber, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
+
+const getUserId = (user) => user?._id ?? user?.id ?? null;
 
 const AdminDashboard = () => {
   const [timeframe, setTimeframe] = useState('weekly');
@@ -119,14 +122,14 @@ const AdminDashboard = () => {
               <small>Total users</small>
               <strong>{formatNumber(totalUsers)}</strong>
               <small>
-                Trainers {formatNumber(overview.users?.trainer ?? 0)} · Trainees {formatNumber(overview.users?.trainee ?? 0)} · Gym Owners {formatNumber(overview.users?.['gym-owner'] ?? 0)}
+                Trainers {formatNumber(overview.users?.trainer ?? 0)} | Trainees {formatNumber(overview.users?.trainee ?? 0)} | Gym Owners {formatNumber(overview.users?.['gym-owner'] ?? 0)}
               </small>
             </div>
             <div className="stat-card stat-card--purple">
               <small>Gyms live</small>
               <strong>{formatNumber(overview.gyms?.published ?? 0)}</strong>
               <small>
-                {formatNumber(overview.gyms?.sponsored ?? 0)} sponsored · {formatNumber(overview.gyms?.totalImpressions ?? 0)} impressions
+                {formatNumber(overview.gyms?.sponsored ?? 0)} sponsored | {formatNumber(overview.gyms?.totalImpressions ?? 0)} impressions
               </small>
             </div>
             <div className="stat-card stat-card--cyan">
@@ -186,7 +189,15 @@ const AdminDashboard = () => {
                       <small>{formatDate(order.createdAt)}</small>
                     </div>
                   </td>
-                  <td>{order.user?.name ?? '—'}</td>
+                  <td>
+                    {getUserId(order.user) ? (
+                      <Link to={`/dashboard/admin/users/${getUserId(order.user)}`} className="dashboard-table__user--link">
+                        {order.user?.name}
+                      </Link>
+                    ) : (
+                      order.user?.name ?? '-'
+                    )}
+                  </td>
                   <td>{order.status}</td>
                   <td>{formatCurrency(order.total)}</td>
                 </tr>
@@ -214,4 +225,5 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+
 

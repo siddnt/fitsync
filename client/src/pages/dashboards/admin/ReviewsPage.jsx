@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -10,6 +11,8 @@ import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const TABS = ['gym', 'product'];
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminReviewsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminReviewsQuery();
@@ -90,8 +93,8 @@ const AdminReviewsPage = () => {
 
       <DashboardSection title="Reviews Overview">
         <div className="stat-grid">
-          <div className="stat-card stat-card--purple"><small>Gym Reviews</small><strong>{gymSummary.total}</strong><small>Avg {gymSummary.avgRating} ★</small></div>
-          <div className="stat-card stat-card--cyan"><small>Product Reviews</small><strong>{productSummary.total}</strong><small>Avg {productSummary.avgRating} ★</small></div>
+          <div className="stat-card stat-card--purple"><small>Gym Reviews</small><strong>{gymSummary.total}</strong><small>Avg {gymSummary.avgRating} *</small></div>
+          <div className="stat-card stat-card--cyan"><small>Product Reviews</small><strong>{productSummary.total}</strong><small>Avg {productSummary.avgRating} *</small></div>
           <div className="stat-card stat-card--green"><small>Verified Purchases</small><strong>{productSummary.verified}</strong></div>
         </div>
       </DashboardSection>
@@ -122,7 +125,7 @@ const AdminReviewsPage = () => {
             />
             <select className="inventory-toolbar__input inventory-toolbar__input--select" value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)} aria-label="Filter by rating">
               <option value="all">All ratings</option>
-              {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
+              {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} *</option>)}
             </select>
             {filtersActive ? <button type="button" className="users-toolbar__reset" onClick={resetFilters}>Reset</button> : null}
             <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>Refresh</button>
@@ -148,28 +151,42 @@ const AdminReviewsPage = () => {
                   {paginatedItems.map((r) => (
                     <tr key={r.id}>
                       <td>
-                        <strong>{r.user?.name ?? '—'}</strong>
+                        <strong>
+                          {getUserId(r.user) ? (
+                            <Link to={`/dashboard/admin/users/${getUserId(r.user)}`} className="dashboard-table__user--link">
+                              {r.user?.name}
+                            </Link>
+                          ) : (
+                            r.user?.name ?? '-'
+                          )}
+                        </strong>
                         <div><small>{r.user?.email}</small></div>
                       </td>
                       <td>
                         {activeTab === 'gym' ? (
                           <>
-                            {r.gym?.name ?? '—'}
+                            {getGymId(r.gym) ? (
+                              <Link to={`/dashboard/admin/gyms/${getGymId(r.gym)}`} className="dashboard-table__user--link">
+                                {r.gym?.name}
+                              </Link>
+                            ) : (
+                              r.gym?.name ?? '-'
+                            )}
                             <div><small>{r.gym?.city}</small></div>
                           </>
                         ) : (
                           <>
-                            {r.product?.name ?? '—'}
+                            {r.product?.name ?? '-'}
                             <div><small>{formatStatus(r.product?.category)}</small></div>
                           </>
                         )}
                       </td>
                       <td>
-                        <span className="admin-rating">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                        <span className="admin-rating">{'*'.repeat(r.rating)}{'*'.repeat(5 - r.rating)}</span>
                       </td>
-                      {activeTab === 'product' && <td>{r.title ?? '—'}</td>}
+                      {activeTab === 'product' && <td>{r.title ?? '-'}</td>}
                       <td>
-                        <div className="admin-review-comment">{r.comment ?? '—'}</div>
+                        <div className="admin-review-comment">{r.comment ?? '-'}</div>
                       </td>
                       {activeTab === 'product' && (
                         <td>
@@ -195,3 +212,4 @@ const AdminReviewsPage = () => {
 };
 
 export default AdminReviewsPage;
+

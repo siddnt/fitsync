@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Pagination from '../components/Pagination.jsx';
@@ -14,6 +15,8 @@ const TYPE_OPTIONS = [
   { value: 'listing', label: 'Listing Subscriptions' },
   { value: 'sponsorship', label: 'Sponsorships' },
 ];
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminSubscriptionsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery();
@@ -76,7 +79,7 @@ const AdminSubscriptionsPage = () => {
     expired: sponsorships.filter((s) => s.status === 'expired').length,
   }), [sponsorships]);
 
-  /* Plan popularity – which plans have the most subscribers */
+  /* Plan popularity - which plans have the most subscribers */
   const planPopularity = useMemo(() => {
     const map = {};
     const add = (label, type, amount, status) => {
@@ -120,7 +123,7 @@ const AdminSubscriptionsPage = () => {
       <DashboardSection title="Subscriptions Overview">
         <div className="stat-grid">
           <div className="stat-card stat-card--blue"><small>Listing Subs</small><strong>{listingSummary.total}</strong><small>{listingSummary.active} active</small></div>
-          <div className="stat-card stat-card--green"><small>Listing Revenue</small><strong>₹{listingSummary.totalRevenue.toLocaleString('en-IN')}</strong></div>
+          <div className="stat-card stat-card--green"><small>Listing Revenue</small><strong>Rs {listingSummary.totalRevenue.toLocaleString('en-IN')}</strong></div>
           <div className="stat-card stat-card--purple"><small>Sponsorships</small><strong>{sponsorshipSummary.total}</strong><small>{sponsorshipSummary.active} active</small></div>
           <div className="stat-card stat-card--red"><small>Expired Sponsorships</small><strong>{sponsorshipSummary.expired}</strong></div>
         </div>
@@ -176,7 +179,7 @@ const AdminSubscriptionsPage = () => {
             </select>
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search owner, gym…"
+              placeholder="Search owner, gym..."
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={subscriptionSuggestions}
@@ -215,15 +218,27 @@ const AdminSubscriptionsPage = () => {
                         </span>
                       </td>
                       <td>
-                        {item.gym?.name ?? '—'}
+                        {getGymId(item.gym) ? (
+                          <Link to={`/dashboard/admin/gyms/${getGymId(item.gym)}`} className="dashboard-table__user--link">
+                            {item.gym?.name}
+                          </Link>
+                        ) : (
+                          item.gym?.name ?? '-'
+                        )}
                         {item.gym?.city && <div><small>{item.gym.city}</small></div>}
                       </td>
                       <td>
-                        {item.owner?.name ?? '—'}
+                        {getUserId(item.owner) ? (
+                          <Link to={`/dashboard/admin/users/${getUserId(item.owner)}`} className="dashboard-table__user--link">
+                            {item.owner?.name}
+                          </Link>
+                        ) : (
+                          item.owner?.name ?? '-'
+                        )}
                         {item.owner?.email && <div><small>{item.owner.email}</small></div>}
                       </td>
-                      <td>{item._type === 'listing' ? formatStatus(item.planCode) : (item.package ?? '—')}</td>
-                      <td>{item._type === 'listing' ? `₹${item.amount}` : '—'}</td>
+                      <td>{item._type === 'listing' ? formatStatus(item.planCode) : (item.package ?? '-')}</td>
+                      <td>{item._type === 'listing' ? `Rs ${item.amount}` : '-'}</td>
                       <td>
                         <span className={`status-pill status-pill--${item.status === 'active' ? 'success' : item.status === 'expired' ? 'warning' : 'default'}`}>
                           {formatStatus(item.status)}
@@ -231,13 +246,13 @@ const AdminSubscriptionsPage = () => {
                       </td>
                       <td>
                         {item._type === 'listing'
-                          ? `${formatDate(item.periodStart)} – ${formatDate(item.periodEnd)}`
-                          : (item.expiresAt ? `Expires ${formatDate(item.expiresAt)}` : '—')}
+                          ? `${formatDate(item.periodStart)} - ${formatDate(item.periodEnd)}`
+                          : (item.expiresAt ? `Expires ${formatDate(item.expiresAt)}` : '-')}
                       </td>
                       <td>
                         {item._type === 'listing'
-                          ? `${item.autoRenew ? 'Auto-renew' : 'Manual'} · ${item.invoiceCount} inv.`
-                          : '—'}
+                          ? `${item.autoRenew ? 'Auto-renew' : 'Manual'} | ${item.invoiceCount} inv.`
+                          : '-'}
                       </td>
                     </tr>
                   ))}
@@ -255,3 +270,4 @@ const AdminSubscriptionsPage = () => {
 };
 
 export default AdminSubscriptionsPage;
+
