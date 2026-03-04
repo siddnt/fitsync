@@ -2415,7 +2415,6 @@ export const getAdminSubscriptions = asyncHandler(async (_req, res) => {
     ),
   );
 });
-
 export const getAdminInsights = asyncHandler(async (_req, res) => {
   const now = new Date();
 
