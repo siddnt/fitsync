@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import {
   useGetTrainerTraineesQuery,
 } from '../../../services/dashboardApi.js';
@@ -35,6 +36,8 @@ const TrainerTraineesPage = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ gym: 'all', status: 'all' });
+
+  const traineeSuggestions = useMemo(() => trainees.flatMap((t) => [t.name, t.email, t.gym?.name].filter(Boolean)), [trainees]);
 
   const gymOptions = useMemo(() => {
     const uniqueGyms = new Map();
@@ -113,12 +116,12 @@ const TrainerTraineesPage = () => {
             <div className="trainer-trainee-panel__filters">
               <label htmlFor="trainee-search">
                 <span>Search</span>
-                <input
-                  id="trainee-search"
-                  type="search"
+                <AutosuggestInput
                   placeholder="Name, email, or gym"
                   value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
+                  onChange={setSearchTerm}
+                  suggestions={traineeSuggestions}
+                  ariaLabel="Search trainees"
                 />
               </label>
               <label htmlFor="trainee-gym">
