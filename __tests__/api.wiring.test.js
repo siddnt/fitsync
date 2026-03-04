@@ -125,9 +125,11 @@ describe('API wiring smoke tests', () => {
       .send({
         name: 'QA Fitness Center',
         description: 'Automated test gym',
-        location: { city: 'Pune', addressLine1: '123 Test Lane' },
+        location: { city: 'Pune', address: '123 Test Lane' },
         amenities: ['Weights', 'Cardio'],
-        pricing: { mrp: 1500, discounted: 1200 },
+        pricing: { monthlyMrp: 1500, monthlyPrice: 1200, currency: 'INR' },
+        planCode: 'listing-1m',
+        paymentReference: `qa-txn-${Date.now()}`,
       });
 
     expect(gymRes.status).toBe(201);
