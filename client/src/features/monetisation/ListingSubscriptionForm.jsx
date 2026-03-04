@@ -24,7 +24,7 @@ const PlanOptionField = ({ input, option, onSelected }) => {
       />
       <div className="plan-card__header">
         <h4>{option.label}</h4>
-        <span className="plan-card__price">₹{option.amount} / {option.durationMonths} mo</span>
+        <span className="plan-card__price">INR {option.amount} / {option.durationMonths} mo</span>
       </div>
       <ul className="plan-card__features">
         {option.features?.map((feature) => (
@@ -125,22 +125,15 @@ const ListingSubscriptionFormComponent = ({
         type="checkbox"
       />
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-123456"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">
-          Subscription activated · Ref #{lastReceipt}
+          Subscription activated - Ref #{lastReceipt}
         </div>
       ) : null}
 
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Activating…' : 'Activate plan'}
+        {submitting ? 'Redirecting...' : 'Continue to Stripe'}
       </button>
     </form>
   );
@@ -193,3 +186,4 @@ const ListingSubscriptionForm = reduxForm({
 })(ListingSubscriptionFormComponent);
 
 export default ListingSubscriptionForm;
+

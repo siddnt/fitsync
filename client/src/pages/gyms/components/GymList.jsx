@@ -14,24 +14,41 @@ const GymList = ({ gyms, isLoading, selectedGymId, onSelect }) => {
     <ul className="gym-list">
       {gyms.map((gym) => {
         const isSponsored = gym.sponsorship?.status === 'active' && gym.sponsorship?.tier !== 'none';
+        const rating = Number(gym.analytics?.rating ?? 0);
+        const ratingCount = gym.analytics?.ratingCount ?? 0;
+        const price = gym.pricing?.discounted ?? gym.pricing?.mrp;
+
         return (
           <li
             key={gym.id}
             className={gym.id === selectedGymId ? 'gym-list__item gym-list__item--active' : 'gym-list__item'}
           >
             <button type="button" onClick={() => onSelect(gym.id)}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="gym-list__info">
+                <div className="gym-list__name-row">
                   <strong>{gym.name}</strong>
                   {isSponsored && (
                     <span className="gym-list__sponsored-badge">
-                      Sponsored
+                      ★ Sponsored
                     </span>
                   )}
                 </div>
-                <span>{gym.owner?.name ?? 'Unknown owner'}</span>
+                <span className="gym-list__location">
+                  📍 {gym.city ?? 'Unknown'}{gym.state ? `, ${gym.state}` : ''}
+                </span>
+                <div className="gym-list__stats">
+                  {rating > 0 && (
+                    <span className="gym-list__rating">
+                      {'★'.repeat(Math.round(rating))} {rating.toFixed(1)}
+                      <small>({ratingCount})</small>
+                    </span>
+                  )}
+                  {price && (
+                    <span className="gym-list__price">₹{price}/mo</span>
+                  )}
+                </div>
               </div>
-              <span>{gym.city}</span>
+              <span className="gym-list__arrow">›</span>
             </button>
           </li>
         );
@@ -46,8 +63,17 @@ GymList.propTypes = {
       id: PropTypes.string.isRequired,
       name: PropTypes.string.isRequired,
       city: PropTypes.string,
+      state: PropTypes.string,
       owner: PropTypes.shape({
         name: PropTypes.string,
+      }),
+      pricing: PropTypes.shape({
+        mrp: PropTypes.number,
+        discounted: PropTypes.number,
+      }),
+      analytics: PropTypes.shape({
+        rating: PropTypes.number,
+        ratingCount: PropTypes.number,
       }),
       sponsorship: PropTypes.shape({
         status: PropTypes.string,

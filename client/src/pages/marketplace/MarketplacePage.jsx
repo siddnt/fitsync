@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
-import { useGetMarketplaceCatalogQuery } from '../../services/marketplaceApi.js';
+import {
+  useGetMarketplaceCatalogQuery,
+  useGetMarketplaceSearchSuggestionsQuery,
+} from '../../services/marketplaceApi.js';
 import ProductFilters from './components/ProductFilters.jsx';
 import ProductCard from './components/ProductCard.jsx';
+import AutosuggestInput from '../../ui/AutosuggestInput.jsx';
 import './MarketplacePage.css';
 
 const PAGE_SIZE = 24;
@@ -30,6 +34,7 @@ const MarketplacePage = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+  const trimmedSearchInput = searchInput.trim();
 
   useEffect(() => {
     if (!feedback) {
@@ -47,6 +52,11 @@ const MarketplacePage = () => {
   useEffect(() => {
     setPage(1);
   }, [filters.category, filters.minPrice, filters.maxPrice, filters.inStockOnly, filters.sort, searchQuery]);
+
+  const { data: remoteSearchSuggestions = [] } = useGetMarketplaceSearchSuggestionsQuery(
+    { query: trimmedSearchInput, limit: 10 },
+    { skip: trimmedSearchInput.length < 2 },
+  );
 
   const queryParams = useMemo(() => {
     const params = {
@@ -94,7 +104,36 @@ const MarketplacePage = () => {
     refetch,
   } = useGetMarketplaceCatalogQuery(queryParams);
 
-  const products = data?.data?.products ?? [];
+  const products = useMemo(
+    () => (Array.isArray(data?.data?.products) ? data.data.products : []),
+    [data?.data?.products],
+  );
+
+  const localProductSuggestions = useMemo(() => products.map((p) => p.name).filter(Boolean), [products]);
+  const productSuggestions = useMemo(() => {
+    const seen = new Set();
+    const merged = [];
+
+    const push = (value) => {
+      const text = String(value || '').trim();
+      if (!text) {
+        return;
+      }
+
+      const key = text.toLowerCase();
+      if (seen.has(key)) {
+        return;
+      }
+
+      seen.add(key);
+      merged.push(text);
+    };
+
+    remoteSearchSuggestions.forEach(push);
+    localProductSuggestions.forEach(push);
+
+    return merged;
+  }, [localProductSuggestions, remoteSearchSuggestions]);
   const pagination = data?.data?.pagination;
   const totalResults = pagination?.total ?? products.length;
   const totalPages = pagination?.totalPages ?? 1;
@@ -124,6 +163,13 @@ const MarketplacePage = () => {
     event.preventDefault();
     setSearchQuery(searchInput.trim());
   }, [searchInput]);
+
+  const handleSuggestionSelect = useCallback((selectedValue) => {
+    const next = String(selectedValue || '').trim();
+    setSearchInput(next);
+    setSearchQuery(next);
+    setPage(1);
+  }, []);
 
   const addProductToCart = useCallback((product) => {
     if (!product?.id) {
@@ -160,13 +206,13 @@ const MarketplacePage = () => {
     <div className="marketplace-page">
       <header className="marketplace-hero">
         <form className="marketplace-search-simple" onSubmit={handleSearchSubmit}>
-          <input
-            id="marketplace-search"
-            type="search"
+          <AutosuggestInput
             placeholder="Search for protein, straps, or sellers"
             value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            aria-label="Search marketplace catalogue"
+            onChange={setSearchInput}
+            onSelect={handleSuggestionSelect}
+            suggestions={productSuggestions}
+            ariaLabel="Search marketplace catalogue"
           />
           <button type="submit">Search</button>
         </form>

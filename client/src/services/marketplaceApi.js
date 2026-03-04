@@ -19,6 +19,14 @@ export const marketplaceApi = apiSlice.injectEndpoints({
         ];
       },
     }),
+    getMarketplaceSearchSuggestions: builder.query({
+      query: ({ query, limit = 8 } = {}) => ({
+        url: '/marketplace/products/suggestions',
+        params: { query, limit },
+      }),
+      transformResponse: (response) => response?.data?.suggestions ?? [],
+      providesTags: [{ type: 'Marketplace', id: 'SUGGESTIONS' }],
+    }),
     getMarketplaceProduct: builder.query({
       query: (productId) => `/marketplace/products/${productId}`,
       providesTags: (_result, _error, productId) => [
@@ -29,6 +37,62 @@ export const marketplaceApi = apiSlice.injectEndpoints({
     createMarketplaceOrder: builder.mutation({
       query: (payload) => ({
         url: '/marketplace/orders',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: [
+        { type: 'Marketplace', id: 'CATALOG' },
+        'Marketplace',
+        'Dashboard',
+      ],
+    }),
+    confirmMarketplaceCodOrder: builder.mutation({
+      query: (orderId) => ({
+        url: `/marketplace/orders/${orderId}/cod-confirm`,
+        method: 'POST',
+      }),
+      invalidatesTags: [
+        { type: 'Marketplace', id: 'CATALOG' },
+        'Marketplace',
+        'Dashboard',
+      ],
+    }),
+    createMarketplacePaymentIntent: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/marketplace/payment-intent',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    createMarketplaceStripeCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/marketplace/checkout-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    createMarketplaceUpiSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/marketplace/upi/session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    confirmMarketplaceUpiPayment: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/marketplace/upi/confirm',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: [
+        { type: 'Marketplace', id: 'CATALOG' },
+        'Marketplace',
+        'Dashboard',
+      ],
+    }),
+    confirmMarketplacePaymentSession: builder.mutation({
+      query: (payload) => ({
+        url: '/payments/confirm',
         method: 'POST',
         body: payload,
       }),
@@ -56,7 +120,14 @@ export const marketplaceApi = apiSlice.injectEndpoints({
 
 export const {
   useGetMarketplaceCatalogQuery,
+  useGetMarketplaceSearchSuggestionsQuery,
   useGetMarketplaceProductQuery,
   useCreateMarketplaceOrderMutation,
+  useConfirmMarketplaceCodOrderMutation,
+  useCreateMarketplacePaymentIntentMutation,
+  useCreateMarketplaceStripeCheckoutSessionMutation,
+  useCreateMarketplaceUpiSessionMutation,
+  useConfirmMarketplaceUpiPaymentMutation,
+  useConfirmMarketplacePaymentSessionMutation,
   useSubmitProductReviewMutation,
 } = marketplaceApi;

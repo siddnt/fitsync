@@ -149,6 +149,7 @@ const GymHighlight = ({
           {gym.pricing?.mrp && gym.pricing?.discounted && (
             <span className="price--mrp">₹{gym.pricing.mrp}</span>
           )}
+          <span className="gym-highlight__per-month">/month</span>
         </div>
       </header>
 
@@ -190,7 +191,7 @@ const GymHighlight = ({
       </section>
 
       <section className="gym-highlight__features">
-        <h2>Key features</h2>
+        <h2>📋 Key features</h2>
         <div>
           {(gym.features?.length ? gym.features : ['AC', 'Locker rooms', 'Certified trainers']).map((feature) => (
             <span key={feature}>{feature}</span>
@@ -199,13 +200,13 @@ const GymHighlight = ({
       </section>
 
       <section className="gym-highlight__about">
-        <h2>About</h2>
+        <h2>📖 About</h2>
         <p>{gym.description ?? 'Gym description coming soon.'}</p>
       </section>
 
       <section className="gym-highlight__reviews">
         <div className="gym-highlight__reviews-header">
-          <h2>Member reviews</h2>
+          <h2>⭐ Member reviews</h2>
           {gym.analytics?.ratingCount ? (
             <span>
               {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} · {gym.analytics.ratingCount} ratings

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { SubmissionError, reset as resetForm } from 'redux-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SubmissionError } from 'redux-form';
 import { useDispatch } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -10,6 +11,8 @@ import {
 } from '../../../services/dashboardApi.js';
 import {
   useGetMonetisationOptionsQuery,
+  useCreateListingStripeCheckoutSessionMutation,
+  useConfirmOwnerPaymentSessionMutation,
   useCheckoutListingSubscriptionMutation,
 } from '../../../services/ownerApi.js';
 import ListingSubscriptionForm from '../../../features/monetisation/ListingSubscriptionForm.jsx';
@@ -35,6 +38,9 @@ const mapInvoices = (subscriptions = []) =>
 
 const GymOwnerSubscriptionsPage = () => {
   const dispatch = useDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const processedSessionRef = useRef(null);
+  const [stripeNotice, setStripeNotice] = useState(null);
 
   const {
     data: subscriptionsResponse,
@@ -57,7 +63,9 @@ const GymOwnerSubscriptionsPage = () => {
     refetch: refetchPlans,
   } = useGetMonetisationOptionsQuery();
 
-  const [checkoutSubscription] = useCheckoutListingSubscriptionMutation();
+  const [createStripeCheckoutSession] = useCreateListingStripeCheckoutSessionMutation();
+  const [confirmOwnerPaymentSession] = useConfirmOwnerPaymentSessionMutation();
+  const [checkoutListingSubscription] = useCheckoutListingSubscriptionMutation();
 
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
   const invoices = mapInvoices(subscriptions);
@@ -93,6 +101,9 @@ const GymOwnerSubscriptionsPage = () => {
 
   const isLoading = isSubscriptionsLoading || isGymsLoading || isPlansLoading;
   const isError = isSubscriptionsError || isGymsError || isPlansError;
+  const stripeStatus = searchParams.get('stripe');
+  const paymentSessionId = searchParams.get('payment_session_id');
+  const stripeSessionId = searchParams.get('session_id');
 
   const handleRetry = () => {
     refetchSubscriptions();
@@ -100,30 +111,119 @@ const GymOwnerSubscriptionsPage = () => {
     refetchPlans();
   };
 
+  useEffect(() => {
+    const clearStripeQuery = () => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('stripe');
+      nextParams.delete('payment_session_id');
+      nextParams.delete('session_id');
+      setSearchParams(nextParams, { replace: true });
+    };
+
+    if (!stripeStatus) {
+      processedSessionRef.current = null;
+      return;
+    }
+
+    if (stripeStatus === 'cancelled') {
+      setStripeNotice('Stripe checkout was cancelled. No changes were made.');
+      clearStripeQuery();
+      return;
+    }
+
+    if (stripeStatus !== 'success' || !paymentSessionId) {
+      clearStripeQuery();
+      return;
+    }
+
+    if (processedSessionRef.current === paymentSessionId) {
+      return;
+    }
+    processedSessionRef.current = paymentSessionId;
+
+    const confirmPayment = async () => {
+      try {
+        const response = await confirmOwnerPaymentSession({
+          paymentSessionId,
+          sessionId: stripeSessionId || undefined,
+        }).unwrap();
+
+        const reference =
+          response?.data?.paymentReference ||
+          response?.data?.subscription?.invoices?.[0]?.paymentReference ||
+          null;
+
+        if (reference) {
+          dispatch(setLastReceipt(reference));
+        }
+
+        setStripeNotice('Payment successful. Subscription activated.');
+        await Promise.all([refetchSubscriptions(), refetchGyms()]);
+      } catch (error) {
+        const message = error?.data?.message ?? 'Payment completed, but confirmation failed. Please refresh and retry.';
+        setStripeNotice(message);
+      } finally {
+        clearStripeQuery();
+      }
+    };
+
+    confirmPayment();
+  }, [
+    stripeStatus,
+    paymentSessionId,
+    stripeSessionId,
+    confirmOwnerPaymentSession,
+    dispatch,
+    refetchSubscriptions,
+    refetchGyms,
+    searchParams,
+    setSearchParams,
+  ]);
+
   const handleCheckout = async (values) => {
     try {
       const payload = {
         gymId: values.gymId,
         planCode: values.planCode,
         autoRenew: Boolean(values.autoRenew),
-        paymentReference: values.paymentReference?.trim() || undefined,
       };
 
-      const response = await checkoutSubscription(payload).unwrap();
+      const response = await createStripeCheckoutSession(payload).unwrap();
+      const checkoutUrl = response?.data?.checkoutUrl;
 
-      const paymentReference =
-        response?.data?.subscription?.invoices?.[0]?.paymentReference ||
-        payload.paymentReference ||
-        response?.data?.subscription?._id;
+      if (!checkoutUrl) {
+        throw new Error('Missing Stripe checkout URL.');
+      }
 
-      dispatch(setLastReceipt(paymentReference));
       dispatch(selectPlan(null));
       dispatch(selectGym(null));
-
-      await Promise.all([refetchSubscriptions(), refetchGyms()]);
-      dispatch(resetForm('listingSubscription'));
+      window.location.assign(checkoutUrl);
     } catch (error) {
-      const message = error?.data?.message ?? 'We could not activate this subscription. Please try again.';
+      if (error?.status === 503) {
+        try {
+          const fallbackReference = `manual-${Date.now()}`;
+          const response = await checkoutListingSubscription({
+            gymId: values.gymId,
+            planCode: values.planCode,
+            autoRenew: Boolean(values.autoRenew),
+            paymentReference: fallbackReference,
+          }).unwrap();
+
+          const reference =
+            response?.data?.subscription?.invoices?.[0]?.paymentReference ||
+            fallbackReference;
+
+          dispatch(setLastReceipt(reference));
+          setStripeNotice('Stripe is unavailable; subscription activated with manual fallback.');
+          await Promise.all([refetchSubscriptions(), refetchGyms()]);
+          return;
+        } catch (fallbackError) {
+          const fallbackMessage = fallbackError?.data?.message ?? 'Unable to activate this subscription.';
+          throw new SubmissionError({ _error: fallbackMessage });
+        }
+      }
+
+      const message = error?.data?.message ?? error?.message ?? 'Unable to start Stripe checkout. Please try again.';
       throw new SubmissionError({ _error: message });
     }
   };
@@ -156,6 +256,7 @@ const GymOwnerSubscriptionsPage = () => {
   return (
     <div className="dashboard-grid dashboard-grid--owner">
       <DashboardSection title="Activate listing plan" className="dashboard-section--span-12">
+        {stripeNotice ? <p className="form-success">{stripeNotice}</p> : null}
         {gymOptions.length && plans.length ? (
           <ListingSubscriptionForm
             onSubmit={handleCheckout}
