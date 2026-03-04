@@ -86,6 +86,34 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/admin/marketplace',
       providesTags: ['Dashboard', 'Marketplace'],
     }),
+    getAdminBookings: builder.query({
+      query: () => '/dashboards/admin/bookings',
+      providesTags: ['Dashboard', 'Booking'],
+    }),
+    getAdminMemberships: builder.query({
+      query: () => '/dashboards/admin/memberships',
+      providesTags: ['Dashboard', 'Membership'],
+    }),
+    getAdminTrainerAssignments: builder.query({
+      query: () => '/dashboards/admin/trainer-assignments',
+      providesTags: ['Dashboard', 'Trainer', 'Gym'],
+    }),
+    getAdminProducts: builder.query({
+      query: () => '/dashboards/admin/products',
+      providesTags: ['Dashboard', 'Marketplace', 'Product'],
+    }),
+    getAdminProductBuyers: builder.query({
+      query: (productId) => `/dashboards/admin/products/${productId}/buyers`,
+      providesTags: (_result, _error, productId) => [
+        'Dashboard',
+        'Marketplace',
+        { type: 'Product', id: productId },
+      ],
+    }),
+    getAdminReviews: builder.query({
+      query: () => '/dashboards/admin/reviews',
+      providesTags: ['Dashboard', 'Review', 'GymReview'],
+    }),
     getAdminSubscriptions: builder.query({
       query: () => '/dashboards/admin/subscriptions',
       providesTags: ['Dashboard', 'Subscription', 'Gym'],
@@ -118,6 +146,12 @@ export const {
   useGetAdminGymsQuery,
   useGetAdminRevenueQuery,
   useGetAdminMarketplaceQuery,
+  useGetAdminBookingsQuery,
+  useGetAdminMembershipsQuery,
+  useGetAdminTrainerAssignmentsQuery,
+  useGetAdminProductsQuery,
+  useGetAdminProductBuyersQuery,
+  useGetAdminReviewsQuery,
   useGetAdminSubscriptionsQuery,
   useGetAdminInsightsQuery,
 } = dashboardApi;

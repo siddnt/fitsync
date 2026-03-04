@@ -8,6 +8,8 @@ import Revenue from '../../models/revenue.model.js';
 import Order from '../../models/order.model.js';
 import Product from '../../models/product.model.js';
 import ProductReview from '../../models/productReview.model.js';
+import Booking from '../../models/booking.model.js';
+import Review from '../../models/review.model.js';
 import User from '../../models/user.model.js';
 import {
   loadAdminToggles,
@@ -1645,7 +1647,9 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
   const recentQuery = User.find()
     .sort({ createdAt: -1 })
     .limit(200)
-    .select('name email role status createdAt profilePicture')
+    .select(
+      'name email role status createdAt profilePicture profile bio address ownerMetrics traineeMetrics trainerMetrics',
+    )
     .lean();
 
   const [pending, recent, adminToggles] = await Promise.all([
@@ -1654,8 +1658,77 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
     loadAdminToggles(),
   ]);
 
+  const recentUserIds = recent
+    .map((user) => user?._id)
+    .filter(Boolean);
+
+  const [membershipCounts, orderCounts, gymsOwnedCounts, trainerTraineeCounts] = recentUserIds.length
+    ? await Promise.all([
+      GymMembership.aggregate([
+        {
+          $match: {
+            trainee: { $in: recentUserIds },
+            status: { $in: ['active', 'pending', 'paused'] },
+          },
+        },
+        { $group: { _id: '$trainee', count: { $sum: 1 } } },
+      ]),
+      Order.aggregate([
+        { $match: { user: { $in: recentUserIds } } },
+        { $group: { _id: '$user', count: { $sum: 1 } } },
+      ]),
+      Gym.aggregate([
+        { $match: { owner: { $in: recentUserIds } } },
+        { $group: { _id: '$owner', count: { $sum: 1 } } },
+      ]),
+      TrainerAssignment.aggregate([
+        {
+          $match: {
+            trainer: { $in: recentUserIds },
+            status: { $in: ['active', 'pending'] },
+          },
+        },
+        { $unwind: { path: '$trainees', preserveNullAndEmptyArrays: false } },
+        { $match: { 'trainees.status': 'active' } },
+        {
+          $group: {
+            _id: '$trainer',
+            traineeIds: { $addToSet: '$trainees.trainee' },
+          },
+        },
+        { $project: { count: { $size: '$traineeIds' } } },
+      ]),
+    ])
+    : [[], [], [], []];
+
+  const toCountMap = (rows = []) =>
+    rows.reduce((acc, row) => {
+      acc[String(row._id)] = Number(row.count) || 0;
+      return acc;
+    }, {});
+
+  const membershipByUser = toCountMap(membershipCounts);
+  const ordersByUser = toCountMap(orderCounts);
+  const gymsOwnedByUser = toCountMap(gymsOwnedCounts);
+  const traineesByTrainer = toCountMap(trainerTraineeCounts);
+
+  const enrichedRecent = recent.map((user) => {
+    const id = String(user._id);
+
+    return {
+      ...user,
+      memberships: membershipByUser[id] ?? user?.traineeMetrics?.activeMemberships ?? 0,
+      orders: ordersByUser[id] ?? 0,
+      gymsOwned: gymsOwnedByUser[id] ?? user?.ownerMetrics?.totalGyms ?? 0,
+      trainerMetrics: {
+        ...(user?.trainerMetrics ?? {}),
+        activeTrainees: traineesByTrainer[id] ?? user?.trainerMetrics?.activeTrainees ?? 0,
+      },
+    };
+  });
+
   return res.status(200).json(
-    new ApiResponse(200, { pending, recent, adminToggles }, 'Admin user backlog fetched successfully'),
+    new ApiResponse(200, { pending, recent: enrichedRecent, adminToggles }, 'Admin user backlog fetched successfully'),
   );
 });
 
@@ -1671,15 +1744,67 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
     loadAdminToggles(),
   ]);
 
+  const gymIds = gyms.map((gym) => gym?._id).filter(Boolean);
+
+  const [memberCounts, trainerCounts] = gymIds.length
+    ? await Promise.all([
+      GymMembership.aggregate([
+        {
+          $match: {
+            gym: { $in: gymIds },
+            status: { $in: ['active', 'pending', 'paused'] },
+          },
+        },
+        {
+          $group: {
+            _id: '$gym',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      TrainerAssignment.aggregate([
+        {
+          $match: {
+            gym: { $in: gymIds },
+            status: { $in: ['active', 'pending'] },
+          },
+        },
+        {
+          $group: {
+            _id: '$gym',
+            trainerIds: { $addToSet: '$trainer' },
+          },
+        },
+        {
+          $project: {
+            count: { $size: '$trainerIds' },
+          },
+        },
+      ]),
+    ])
+    : [[], []];
+
+  const toCountMap = (rows = []) =>
+    rows.reduce((acc, row) => {
+      acc[String(row._id)] = Number(row.count) || 0;
+      return acc;
+    }, {});
+
+  const membersByGym = toCountMap(memberCounts);
+  const trainersByGym = toCountMap(trainerCounts);
+
   const data = gyms.map((gym) => ({
     id: gym._id,
     name: gym.name,
     status: gym.status,
     isPublished: gym.isPublished,
     city: gym.location?.city,
+    state: gym.location?.state,
     owner: gym.owner ? { id: gym.owner._id, name: gym.owner.name, email: gym.owner.email } : null,
     sponsorship: gym.sponsorship,
     analytics: gym.analytics,
+    activeMembers: membersByGym[String(gym._id)] ?? gym.analytics?.memberships ?? 0,
+    activeTrainers: trainersByGym[String(gym._id)] ?? (Array.isArray(gym.trainers) ? gym.trainers.length : 0),
     createdAt: gym.createdAt,
   }));
 
@@ -1837,6 +1962,380 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { orders: data, adminToggles }, 'Admin marketplace activity fetched successfully'));
+});
+
+export const getAdminBookings = asyncHandler(async (_req, res) => {
+  const [bookings, adminToggles] = await Promise.all([
+    Booking.find()
+      .sort({ bookingDate: -1, createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'user', select: 'name email profilePicture contactNumber' })
+      .populate({ path: 'trainer', select: 'name email profilePicture contactNumber' })
+      .populate({ path: 'gym', select: 'name location' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  const toContact = (entity) => (entity?._id
+    ? {
+      id: entity._id,
+      name: entity.name,
+      email: entity.email,
+      profilePicture: entity.profilePicture,
+      contactNumber: entity.contactNumber,
+    }
+    : null);
+
+  const data = bookings.map((booking) => ({
+    id: booking._id,
+    user: toContact(booking.user),
+    trainer: toContact(booking.trainer),
+    gym: booking.gym
+      ? {
+        id: booking.gym._id,
+        name: booking.gym.name,
+        city: booking.gym.location?.city,
+      }
+      : null,
+    gymName: booking.gymName,
+    bookingDate: booking.bookingDate,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    status: booking.status,
+    type: booking.type,
+    paymentStatus: booking.paymentStatus,
+    price: Number(booking.price) || 0,
+    createdAt: booking.createdAt,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { bookings: data, adminToggles }, 'Admin bookings fetched successfully'));
+});
+
+export const getAdminMemberships = asyncHandler(async (_req, res) => {
+  const [memberships, adminToggles] = await Promise.all([
+    GymMembership.find()
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'trainee', select: 'name email profilePicture contactNumber' })
+      .populate({ path: 'trainer', select: 'name email profilePicture contactNumber' })
+      .populate({ path: 'gym', select: 'name location' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  const toContact = (entity) => (entity?._id
+    ? {
+      id: entity._id,
+      name: entity.name,
+      email: entity.email,
+      profilePicture: entity.profilePicture,
+      contactNumber: entity.contactNumber,
+    }
+    : null);
+
+  const data = memberships.map((membership) => ({
+    id: membership._id,
+    trainee: toContact(membership.trainee),
+    trainer: toContact(membership.trainer),
+    gym: membership.gym
+      ? {
+        id: membership.gym._id,
+        name: membership.gym.name,
+        city: membership.gym.location?.city,
+      }
+      : null,
+    plan: membership.plan,
+    status: membership.status,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+    billing: membership.billing
+      ? {
+        amount: Number(membership.billing.amount) || 0,
+        currency: membership.billing.currency || 'INR',
+        status: membership.billing.status || 'paid',
+      }
+      : null,
+    autoRenew: Boolean(membership.autoRenew),
+    createdAt: membership.createdAt,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { memberships: data, adminToggles }, 'Admin memberships fetched successfully'));
+});
+
+export const getAdminTrainerAssignments = asyncHandler(async (_req, res) => {
+  const [assignments, adminToggles] = await Promise.all([
+    TrainerAssignment.find()
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'trainer', select: 'name email profilePicture contactNumber' })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainees.trainee', select: 'name email profilePicture contactNumber' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  const toContact = (entity) => (entity?._id
+    ? {
+      id: entity._id,
+      name: entity.name,
+      email: entity.email,
+      profilePicture: entity.profilePicture,
+      contactNumber: entity.contactNumber,
+    }
+    : null);
+
+  const data = assignments.map((assignment) => ({
+    id: assignment._id,
+    trainer: toContact(assignment.trainer),
+    gym: assignment.gym
+      ? {
+        id: assignment.gym._id,
+        name: assignment.gym.name,
+        city: assignment.gym.location?.city,
+      }
+      : null,
+    status: assignment.status,
+    trainees: (assignment.trainees ?? []).map((entry) => ({
+      trainee: toContact(entry.trainee),
+      status: entry.status || 'active',
+      assignedAt: entry.assignedAt,
+      goals: entry.goals ?? [],
+    })),
+    requestedAt: assignment.requestedAt || assignment.createdAt,
+    approvedAt: assignment.approvedAt || null,
+    createdAt: assignment.createdAt,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { assignments: data, adminToggles }, 'Admin trainer assignments fetched successfully'));
+});
+
+export const getAdminProducts = asyncHandler(async (_req, res) => {
+  const [products, reviewStats, adminToggles] = await Promise.all([
+    Product.find()
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'seller', select: 'name email profilePicture contactNumber' })
+      .lean(),
+    ProductReview.aggregate([
+      {
+        $group: {
+          _id: '$product',
+          avgRating: { $avg: '$rating' },
+          reviewCount: { $sum: 1 },
+        },
+      },
+    ]),
+    loadAdminToggles(),
+  ]);
+
+  const reviewMap = reviewStats.reduce((acc, entry) => {
+    acc[String(entry._id)] = {
+      avgRating: Number((entry.avgRating ?? 0).toFixed(1)),
+      reviewCount: Number(entry.reviewCount) || 0,
+    };
+    return acc;
+  }, {});
+
+  const data = products.map((product) => ({
+    id: product._id,
+    seller: product.seller
+      ? {
+        id: product.seller._id,
+        name: product.seller.name,
+        email: product.seller.email,
+        profilePicture: product.seller.profilePicture,
+        contactNumber: product.seller.contactNumber,
+      }
+      : null,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    price: Number(product.price) || 0,
+    mrp: Number(product.mrp ?? product.price) || 0,
+    image: product.image,
+    stock: Number(product.stock) || 0,
+    status: product.status || (Number(product.stock) > 0 ? 'available' : 'out-of-stock'),
+    isPublished: Boolean(product.isPublished),
+    reviews: reviewMap[String(product._id)] ?? { avgRating: 0, reviewCount: 0 },
+    createdAt: product.createdAt,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { products: data, adminToggles }, 'Admin products fetched successfully'));
+});
+
+export const getAdminProductBuyers = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const parsedProductId = toObjectId(productId);
+
+  if (!parsedProductId) {
+    throw new ApiError(400, 'Invalid product id.');
+  }
+
+  const [product, reviewStats, orders, adminToggles] = await Promise.all([
+    Product.findById(parsedProductId)
+      .populate({ path: 'seller', select: 'name email profilePicture contactNumber' })
+      .lean(),
+    ProductReview.aggregate([
+      { $match: { product: parsedProductId } },
+      {
+        $group: {
+          _id: '$product',
+          avgRating: { $avg: '$rating' },
+          reviewCount: { $sum: 1 },
+        },
+      },
+    ]),
+    Order.find({ 'orderItems.product': parsedProductId })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'user', select: 'name email profilePicture contactNumber' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  if (!product) {
+    throw new ApiError(404, 'Product not found.');
+  }
+
+  const reviewSummary = reviewStats[0]
+    ? {
+      avgRating: Number((reviewStats[0].avgRating ?? 0).toFixed(1)),
+      reviewCount: Number(reviewStats[0].reviewCount) || 0,
+    }
+    : { avgRating: 0, reviewCount: 0 };
+
+  const buyers = [];
+  orders.forEach((order) => {
+    (order.orderItems ?? []).forEach((item) => {
+      if (String(item.product) !== String(parsedProductId)) {
+        return;
+      }
+
+      buyers.push({
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        user: order.user
+          ? {
+            id: order.user._id,
+            name: order.user.name,
+            email: order.user.email,
+            profilePicture: order.user.profilePicture,
+            contactNumber: order.user.contactNumber,
+          }
+          : null,
+        quantity: Number(item.quantity) || 0,
+        price: Number(item.price) || 0,
+        itemStatus: item.status || order.status || 'processing',
+        shippingAddress: {
+          city: order.shippingAddress?.city,
+          state: order.shippingAddress?.state,
+        },
+        total: Number(order.total) || 0,
+        orderDate: order.createdAt,
+      });
+    });
+  });
+
+  const shapedProduct = {
+    id: product._id,
+    seller: product.seller
+      ? {
+        id: product.seller._id,
+        name: product.seller.name,
+        email: product.seller.email,
+        profilePicture: product.seller.profilePicture,
+        contactNumber: product.seller.contactNumber,
+      }
+      : null,
+    name: product.name,
+    description: product.description,
+    category: product.category,
+    price: Number(product.price) || 0,
+    mrp: Number(product.mrp ?? product.price) || 0,
+    image: product.image,
+    stock: Number(product.stock) || 0,
+    status: product.status || (Number(product.stock) > 0 ? 'available' : 'out-of-stock'),
+    isPublished: Boolean(product.isPublished),
+    reviews: reviewSummary,
+    createdAt: product.createdAt,
+  };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { product: shapedProduct, buyers, adminToggles }, 'Admin product buyers fetched successfully'));
+});
+
+export const getAdminReviews = asyncHandler(async (_req, res) => {
+  const [gymReviewDocs, productReviewDocs, adminToggles] = await Promise.all([
+    Review.find()
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'user', select: 'name email' })
+      .populate({ path: 'gym', select: 'name location' })
+      .lean(),
+    ProductReview.find()
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .populate({ path: 'user', select: 'name email' })
+      .populate({ path: 'product', select: 'name category' })
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  const gymReviews = gymReviewDocs.map((review) => ({
+    id: review._id,
+    user: review.user
+      ? {
+        id: review.user._id,
+        name: review.user.name,
+        email: review.user.email,
+      }
+      : null,
+    gym: review.gym
+      ? {
+        id: review.gym._id,
+        name: review.gym.name,
+        city: review.gym.location?.city,
+      }
+      : null,
+    rating: Number(review.rating) || 0,
+    comment: review.comment,
+    createdAt: review.createdAt,
+  }));
+
+  const productReviews = productReviewDocs.map((review) => ({
+    id: review._id,
+    user: review.user
+      ? {
+        id: review.user._id,
+        name: review.user.name,
+        email: review.user.email,
+      }
+      : null,
+    product: review.product
+      ? {
+        id: review.product._id,
+        name: review.product.name,
+        category: review.product.category,
+      }
+      : null,
+    rating: Number(review.rating) || 0,
+    title: review.title,
+    comment: review.comment,
+    isVerifiedPurchase: Boolean(review.isVerifiedPurchase),
+    createdAt: review.createdAt,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { gymReviews, productReviews, adminToggles }, 'Admin reviews fetched successfully'));
 });
 
 export const getAdminSubscriptions = asyncHandler(async (_req, res) => {

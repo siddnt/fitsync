@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import {
   getAdminGyms,
+  getAdminBookings,
   getAdminMarketplace,
+  getAdminMemberships,
   getAdminOverview,
+  getAdminProductBuyers,
+  getAdminProducts,
   getAdminRevenue,
+  getAdminReviews,
   getAdminSubscriptions,
+  getAdminTrainerAssignments,
   getAdminUsers,
   getAdminInsights,
   getGymOwnerAnalytics,
@@ -52,6 +58,12 @@ router.get('/admin/users', authorizeRoles('admin'), getAdminUsers);
 router.get('/admin/gyms', authorizeRoles('admin'), getAdminGyms);
 router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
+router.get('/admin/bookings', authorizeRoles('admin'), getAdminBookings);
+router.get('/admin/memberships', authorizeRoles('admin'), getAdminMemberships);
+router.get('/admin/trainer-assignments', authorizeRoles('admin'), getAdminTrainerAssignments);
+router.get('/admin/products', authorizeRoles('admin'), getAdminProducts);
+router.get('/admin/products/:productId/buyers', authorizeRoles('admin'), getAdminProductBuyers);
+router.get('/admin/reviews', authorizeRoles('admin'), getAdminReviews);
 router.get('/admin/subscriptions', authorizeRoles('admin'), getAdminSubscriptions);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
 
