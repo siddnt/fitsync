@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import SellerProductForm from './SellerProductForm.jsx';
 import { SubmissionError } from 'redux-form';
 import { createSubmissionHandler, normaliseCategoryValue, categoryOptions } from './helpers.js';
@@ -133,6 +134,8 @@ const InventoryPage = () => {
     () => (Array.isArray(rawProducts) ? rawProducts : []),
     [rawProducts],
   );
+
+  const inventorySuggestions = useMemo(() => products.map((p) => p.name).filter(Boolean), [products]);
 
   const editingProduct = useMemo(
     () => products.find((product) => product.id === editingProductId) ?? null,
@@ -445,12 +448,13 @@ const InventoryPage = () => {
         </div>
 
         <div className="inventory-toolbar">
-          <input
-            type="text"
+          <AutosuggestInput
             placeholder="Search by name"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={setSearchText}
+            suggestions={inventorySuggestions}
             className="inventory-toolbar__input"
+            ariaLabel="Search products"
           />
           <select
             value={categoryFilter}
@@ -468,6 +472,7 @@ const InventoryPage = () => {
             value={minPrice}
             onChange={(e) => setMinPrice(e.target.value)}
             className="inventory-toolbar__input inventory-toolbar__input--number"
+            autoComplete="on"
           />
           <input
             type="number"
@@ -475,6 +480,7 @@ const InventoryPage = () => {
             value={maxPrice}
             onChange={(e) => setMaxPrice(e.target.value)}
             className="inventory-toolbar__input inventory-toolbar__input--number"
+            autoComplete="on"
           />
           <input
             type="number"
@@ -482,6 +488,7 @@ const InventoryPage = () => {
             value={minStock}
             onChange={(e) => setMinStock(e.target.value)}
             className="inventory-toolbar__input inventory-toolbar__input--number"
+            autoComplete="on"
           />
         </div>
 

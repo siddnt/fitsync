@@ -104,6 +104,10 @@ const AdminSettingsPage = () => {
 
   return (
     <div className="dashboard-grid">
+      <div className="admin-page-header">
+        <h1>Platform Settings</h1>
+        <p>Control feature toggles and platform-wide configuration.</p>
+      </div>
       <DashboardSection
         title="Platform toggles"
         action={(

@@ -250,6 +250,7 @@ const TraineeOrdersPage = () => {
                   maxLength={120}
                   onChange={(event) => setReviewForm((prev) => ({ ...prev, title: event.target.value }))}
                   placeholder="Summarise your experience"
+                  autoComplete="on"
                 />
               </label>
               <label className="review-modal__field">

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import Pagination from '../components/Pagination.jsx';
+import useTableSort from '../components/useTableSort.js';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import AutosuggestInput from '../../../ui/AutosuggestInput.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
@@ -13,11 +16,14 @@ const AdminMarketplacePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const orders = useMemo(
     () => (Array.isArray(rawOrders) ? rawOrders : []),
     [rawOrders],
   );
+
+  const orderSuggestions = useMemo(() => orders.flatMap((o) => [o.orderNumber, o.user?.name, o.user?.email, o.seller?.name, ...(o.items || []).map((i) => i?.name)].filter(Boolean)), [orders]);
 
   const statusOptions = useMemo(() => {
     const unique = new Set();
@@ -90,6 +96,12 @@ const AdminMarketplacePage = () => {
     });
   }, [orders, searchTerm, statusFilter, categoryFilter]);
 
+  const { sorted, sortKey, sortDir, onSort } = useTableSort(filteredOrders, 'createdAt', 'desc');
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const paginatedOrders = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
   const summary = useMemo(() => {
     if (!orders.length) {
       return {
@@ -121,13 +133,58 @@ const AdminMarketplacePage = () => {
     orders.forEach((order) => {
       (order.items || []).forEach((item) => {
         if (!item?.name) return;
-        counters.set(item.name, (counters.get(item.name) || 0) + (item.quantity || 0));
+        const prev = counters.get(item.name) || { quantity: 0, revenue: 0 };
+        prev.quantity += item.quantity || 0;
+        prev.revenue += (item.price || 0) * (item.quantity || 0);
+        counters.set(item.name, prev);
       });
     });
     return [...counters.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1].revenue - a[1].revenue)
       .slice(0, 5)
-      .map(([name, quantity]) => ({ name, quantity }));
+      .map(([name, stats]) => ({ name, ...stats }));
+  }, [orders]);
+
+  const topSellers = useMemo(() => {
+    const map = {};
+    orders.forEach((order) => {
+      const s = order.seller;
+      if (!s?.name) return;
+      const key = s.id || s.name;
+      if (!map[key]) map[key] = { name: s.name, email: s.email, orders: 0, revenue: 0 };
+      map[key].orders += 1;
+      const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
+      map[key].revenue += amount;
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [orders]);
+
+  const topBuyers = useMemo(() => {
+    const map = {};
+    orders.forEach((order) => {
+      const u = order.user;
+      if (!u?.name) return;
+      const key = u.id || u.name;
+      if (!map[key]) map[key] = { name: u.name, email: u.email, orders: 0, spent: 0 };
+      map[key].orders += 1;
+      const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
+      map[key].spent += amount;
+    });
+    return Object.values(map).sort((a, b) => b.spent - a.spent).slice(0, 5);
+  }, [orders]);
+
+  const topCategories = useMemo(() => {
+    const map = {};
+    orders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        const cat = item?.category;
+        if (!cat) return;
+        if (!map[cat]) map[cat] = { name: cat, items: 0, revenue: 0 };
+        map[cat].items += item.quantity || 0;
+        map[cat].revenue += (item.price || 0) * (item.quantity || 0);
+      });
+    });
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [orders]);
 
   if (isLoading) {
@@ -163,6 +220,11 @@ const AdminMarketplacePage = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--admin">
+      <div className="admin-page-header">
+        <h1>Marketplace</h1>
+        <p>Track all orders, filter by status or category, and view top-selling products.</p>
+      </div>
+
       <DashboardSection
         title="Marketplace overview"
         className="dashboard-section--span-12"
@@ -174,17 +236,17 @@ const AdminMarketplacePage = () => {
       >
         {orders.length ? (
           <div className="stat-grid">
-            <div className="stat-card">
+            <div className="stat-card stat-card--blue">
               <small>Total orders</small>
               <strong>{summary.total}</strong>
               <small>{summary.processing} in processing</small>
             </div>
-            <div className="stat-card">
+            <div className="stat-card stat-card--green">
               <small>Fulfilled</small>
               <strong>{summary.fulfilled}</strong>
               <small>{orders.length ? `${Math.round((summary.fulfilled / orders.length) * 100)}% success` : '—'}</small>
             </div>
-            <div className="stat-card">
+            <div className="stat-card stat-card--orange">
               <small>Gross revenue</small>
               <strong>{formatCurrency({ amount: summary.revenue })}</strong>
               <small>Including shipping & taxes</small>
@@ -200,13 +262,13 @@ const AdminMarketplacePage = () => {
         className="dashboard-section--span-12"
         action={(
           <div className="users-toolbar">
-            <input
-              type="search"
+            <AutosuggestInput
               className="inventory-toolbar__input"
               placeholder="Search order, buyer, seller"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label="Search orders"
+              onChange={setSearchTerm}
+              suggestions={orderSuggestions}
+              ariaLabel="Search orders"
             />
             <select
               className="inventory-toolbar__input inventory-toolbar__input--select"
@@ -244,79 +306,171 @@ const AdminMarketplacePage = () => {
         )}
       >
         {filteredOrders.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Order ID</th>
-                <th>Buyer</th>
-                <th>Seller</th>
-                <th>Items</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order) => {
-                const itemList = order.items ?? [];
-                const categories = [...new Set(itemList.map((i) => i.category).filter(Boolean))];
-                const categoryDisplay = categories.length > 1 ? 'Mixed' : (categories[0] || '—');
-                
-                return (
-                  <tr key={order.id}>
-                    <td>
-                      <strong>{order.orderNumber ?? order.id}</strong>
-                      <div>
-                        <small>{formatDateTime(order.createdAt)}</small>
-                      </div>
-                    </td>
-                    <td>
-                      {order.user?.name ?? '—'}
-                      <div><small>{order.user?.email}</small></div>
-                    </td>
-                    <td>
-                      {order.seller?.name ?? '—'}
-                      <div><small>{order.seller?.email}</small></div>
-                    </td>
-                    <td>
-                      {itemList.length} items
-                      <div><small>{itemList.map((i) => i.name).slice(0, 2).join(', ')}{itemList.length > 2 ? '...' : ''}</small></div>
-                    </td>
-                    <td>{formatStatus(categoryDisplay)}</td>
-                    <td>{formatStatus(order.status)}</td>
-                    <td>{formatCurrency(order.total)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <>
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th className={thCls('orderNumber')} onClick={() => onSort('orderNumber')}>Order ID</th>
+                  <th className={thCls('user.name')} onClick={() => onSort('user.name')}>Buyer</th>
+                  <th className={thCls('seller.name')} onClick={() => onSort('seller.name')}>Seller</th>
+                  <th>Items</th>
+                  <th>Category</th>
+                  <th className={thCls('status')} onClick={() => onSort('status')}>Status</th>
+                  <th className={thCls('total')} onClick={() => onSort('total')}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedOrders.map((order) => {
+                  const itemList = order.items ?? [];
+                  const categories = [...new Set(itemList.map((i) => i.category).filter(Boolean))];
+                  const categoryDisplay = categories.length > 1 ? 'Mixed' : (categories[0] || '—');
+
+                  return (
+                    <tr key={order.id}>
+                      <td>
+                        <strong>{order.orderNumber ?? order.id}</strong>
+                        <div>
+                          <small>{formatDateTime(order.createdAt)}</small>
+                        </div>
+                      </td>
+                      <td>
+                        {order.user?.name ?? '—'}
+                        <div><small>{order.user?.email}</small></div>
+                      </td>
+                      <td>
+                        {order.seller?.name ?? '—'}
+                        <div><small>{order.seller?.email}</small></div>
+                      </td>
+                      <td>
+                        {itemList.length} items
+                        <div><small>{itemList.map((i) => i.name).slice(0, 2).join(', ')}{itemList.length > 2 ? '...' : ''}</small></div>
+                      </td>
+                      <td>{formatStatus(categoryDisplay)}</td>
+                      <td>{formatStatus(order.status)}</td>
+                      <td>{formatCurrency(order.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <Pagination page={currentPage} totalPages={totalPages} from={(currentPage - 1) * PAGE_SIZE + 1} to={Math.min(currentPage * PAGE_SIZE, sorted.length)} total={sorted.length} onPageChange={setCurrentPage} />
+          </>
         ) : (
           <EmptyState message={filtersActive ? 'No orders match the current filters.' : 'No orders yet.'} />
         )}
       </DashboardSection>
 
-      <DashboardSection title="Top Selling Products" className="dashboard-section--span-12">
+      <DashboardSection title="Top Selling Products" className="dashboard-section--span-12" collapsible>
         {topProducts.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Product Name</th>
+                <th>#</th>
+                <th>Product</th>
                 <th>Units Sold</th>
+                <th>Revenue</th>
               </tr>
             </thead>
             <tbody>
               {topProducts.map((product, index) => (
                 <tr key={product.name}>
-                  <td>
-                    <strong>{index + 1}. {product.name}</strong>
-                  </td>
+                  <td><strong>{index + 1}</strong></td>
+                  <td><strong>{product.name}</strong></td>
                   <td>{product.quantity}</td>
+                  <td>{formatCurrency(product.revenue)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
           <EmptyState message="Sales data will appear when customers purchase items." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Top Sellers" className="dashboard-section--span-6" collapsible>
+        {topSellers.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Seller</th>
+                <th>Orders</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topSellers.map((s, i) => (
+                <tr key={s.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td>
+                    <strong>{s.name}</strong>
+                    <div><small>{s.email}</small></div>
+                  </td>
+                  <td>{s.orders}</td>
+                  <td>{formatCurrency(s.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No seller data available." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Top Buyers" className="dashboard-section--span-6" collapsible>
+        {topBuyers.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Buyer</th>
+                <th>Orders</th>
+                <th>Spent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topBuyers.map((b, i) => (
+                <tr key={b.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td>
+                    <strong>{b.name}</strong>
+                    <div><small>{b.email}</small></div>
+                  </td>
+                  <td>{b.orders}</td>
+                  <td>{formatCurrency(b.spent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No buyer data available." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Top Categories" className="dashboard-section--span-12" collapsible>
+        {topCategories.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Category</th>
+                <th>Items Sold</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topCategories.map((c, i) => (
+                <tr key={c.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td><strong>{formatStatus(c.name)}</strong></td>
+                  <td>{c.items}</td>
+                  <td>{formatCurrency(c.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No category data available." />
         )}
       </DashboardSection>
     </div>
