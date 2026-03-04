@@ -3779,3 +3779,86 @@
   .ud-actions { flex-direction: column; align-items: stretch; }
   .ud-actions button { width: 100%; }
 }
+
+/* ── Trainee Gym Upload ── */
+.trainee-gym-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.trainee-gym-upload__hint {
+  color: #999;
+  font-size: 0.85rem;
+  margin: 0;
+}
+.trainee-gym-upload__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.trainee-gym-upload__input {
+  font-size: 0.85rem;
+  color: #ccc;
+}
+.trainee-gym-upload__input::file-selector-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #ccc;
+  cursor: pointer;
+  padding: 0.45rem 0.9rem;
+  margin-right: 0.5rem;
+  transition: background 0.2s;
+}
+.trainee-gym-upload__input::file-selector-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.trainee-gym-upload__preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.trainee-gym-upload__gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.trainee-gym-upload__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 0.5rem;
+}
+.trainee-gym-upload__grid img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* ── Owner Gallery Manager ── */
+.owner-gallery-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.owner-gallery-manager__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.owner-gallery-manager__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+}
+.owner-gallery-manager__grid img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+}

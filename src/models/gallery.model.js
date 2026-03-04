@@ -22,7 +22,7 @@ const gallerySchema = new mongoose.Schema(
         },
         category: {
             type: String,
-            enum: ["gym", "event", "facility", "other"],
+            enum: ["gym", "event", "facility", "member", "other"],
             default: "gym"
         },
         gym: {

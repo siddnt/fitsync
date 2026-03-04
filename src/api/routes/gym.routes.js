@@ -7,9 +7,12 @@ import {
 	updateGym,
 	submitGymReview,
 	listGymReviews,
+	uploadGymGalleryPhoto,
+	getGymGallery,
 } from '../controllers/gym.controller.js';
 import { joinGym, leaveGym, getMyGymMembership, listGymTrainers } from '../controllers/gymMembership.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
+import { upload } from '../../middlewares/multer.middleware.js';
 
 const router = Router();
 
@@ -36,6 +39,14 @@ router.post(
 	submitGymReview,
 );
 router.get('/:gymId/reviews', listGymReviews);
+router.get('/:gymId/gallery', getGymGallery);
+router.post(
+	'/:gymId/gallery',
+	verifyJWT,
+	authorizeRoles('gym-owner', 'trainee', 'admin'),
+	upload.single('photo'),
+	uploadGymGalleryPhoto,
+);
 router.get('/:gymId', getGymById);
 router.post('/:gymId/impressions', recordImpression);
 router.put('/:gymId', verifyJWT, authorizeRoles('gym-owner', 'admin'), updateGym);

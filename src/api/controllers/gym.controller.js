@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
+import Gallery from '../../models/gallery.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
 import Revenue from '../../models/revenue.model.js';
 import Review from '../../models/review.model.js';
@@ -7,6 +8,7 @@ import GymMembership from '../../models/gymMembership.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
 
 const normalizeLocationInput = (location) => {
@@ -483,4 +485,140 @@ export const updateGym = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { gym: mapGym(populated) }, 'Gym updated successfully'));
+});
+
+/* ── Gallery ── */
+
+const mapGalleryPhoto = (photo) => ({
+  id: photo._id,
+  imageUrl: photo.imageUrl,
+  title: photo.title,
+  description: photo.description,
+  category: photo.category,
+  uploadedBy: photo.uploadedBy
+    ? {
+      id: photo.uploadedBy._id,
+      name: photo.uploadedBy.name,
+      role: photo.uploadedBy.role,
+    }
+    : null,
+  createdAt: photo.createdAt,
+});
+
+export const uploadGymGalleryPhoto = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(gymId)) {
+    throw new ApiError(400, 'Invalid gym id');
+  }
+
+  const gym = await Gym.findById(gymId);
+  if (!gym) {
+    throw new ApiError(404, 'Gym not found');
+  }
+
+  if (!req.file) {
+    throw new ApiError(400, 'Please select an image to upload');
+  }
+
+  const userRole = req.user.role;
+  const userId = req.user._id;
+
+  if (userRole === 'gym-owner') {
+    if (String(gym.owner) !== String(userId)) {
+      throw new ApiError(403, 'You can only upload photos to your own gym');
+    }
+  } else if (userRole === 'trainee') {
+    const membership = await GymMembership.findOne({
+      trainee: userId,
+      gym: gymId,
+      status: { $in: ['active', 'paused'] },
+    });
+    if (!membership) {
+      throw new ApiError(403, 'You must be a member of this gym to upload photos');
+    }
+  } else if (userRole !== 'admin') {
+    throw new ApiError(403, 'You do not have permission to upload photos');
+  }
+
+  const result = await uploadOnCloudinary(req.file.path, { folder: 'fitsync/gym-gallery' });
+  const imageUrl = result?.url;
+
+  if (!imageUrl) {
+    throw new ApiError(500, 'File upload failed');
+  }
+
+  const category = userRole === 'trainee' ? 'member' : 'gym';
+
+  const galleryEntry = await Gallery.create({
+    title: req.body.title || `${gym.name} photo`,
+    description: req.body.description || '',
+    imageUrl,
+    uploadedBy: userId,
+    category,
+    gym: gymId,
+    isPublic: true,
+  });
+
+  if (userRole === 'gym-owner' || userRole === 'admin') {
+    gym.gallery.push(imageUrl);
+    await gym.save();
+  }
+
+  const populated = await Gallery.findById(galleryEntry._id)
+    .populate('uploadedBy', 'name role profile');
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, { photo: mapGalleryPhoto(populated) }, 'Photo uploaded successfully'));
+});
+
+export const getGymGallery = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(gymId)) {
+    throw new ApiError(400, 'Invalid gym id');
+  }
+
+  const gym = await Gym.findById(gymId).select('name gallery');
+  if (!gym) {
+    throw new ApiError(404, 'Gym not found');
+  }
+
+  const galleryPhotos = await Gallery.find({ gym: gymId, isPublic: true })
+    .populate('uploadedBy', 'name role profile')
+    .sort({ createdAt: -1 });
+
+  const ownerPhotos = galleryPhotos
+    .filter((p) => ['gym', 'facility', 'event'].includes(p.category))
+    .map(mapGalleryPhoto);
+
+  const memberPhotos = galleryPhotos
+    .filter((p) => p.category === 'member')
+    .map(mapGalleryPhoto);
+
+  const galleryModelUrls = new Set(galleryPhotos.map((p) => p.imageUrl));
+  const legacyPhotos = (gym.gallery || [])
+    .filter((url) => !galleryModelUrls.has(url))
+    .map((url, idx) => ({
+      id: `legacy-${idx}`,
+      imageUrl: url,
+      title: `${gym.name} photo`,
+      category: 'gym',
+      uploadedBy: null,
+      createdAt: null,
+    }));
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          gymPhotos: [...legacyPhotos, ...ownerPhotos],
+          memberPhotos,
+        },
+        'Gallery fetched successfully',
+      ),
+    );
 });
