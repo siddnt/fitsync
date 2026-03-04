@@ -14,8 +14,27 @@
 
 .dashboard-shell__content {
   flex: 1;
-  padding: 2rem;
+  padding: 2rem 2.5rem;
   overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+.dashboard-shell__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dashboard-shell__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-shell__content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.dashboard-shell__content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 @media (max-width: 1024px) {

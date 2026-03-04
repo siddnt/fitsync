@@ -1,10 +1,16 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import DistributionPieChart from '../components/DistributionPieChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import EmptyState from '../components/EmptyState.jsx';
-import { useGetAdminRevenueQuery, useGetAdminOverviewQuery } from '../../../services/dashboardApi.js';
+import {
+  useGetAdminRevenueQuery,
+  useGetAdminOverviewQuery,
+  useGetAdminMarketplaceQuery,
+  useGetAdminSubscriptionsQuery,
+} from '../../../services/dashboardApi.js';
 import { formatCurrency, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
@@ -13,9 +19,11 @@ const STREAM_COLORS = {
   Sponsorship: '#4dabf7',
   Marketplace: '#51cf66',
 };
+const getUserId = (user) => user?._id ?? user?.id ?? null;
+const getGymId = (gym) => gym?._id ?? gym?.id ?? null;
 
 const AdminRevenuePage = () => {
-  const [granularity, setGranularity] = useState('monthly'); // 'weekly' or 'monthly'
+  const [granularity, setGranularity] = useState('monthly');
   const [visibleStreams, setVisibleStreams] = useState({
     listing: true,
     sponsorship: true,
@@ -24,9 +32,16 @@ const AdminRevenuePage = () => {
 
   const { data: revenueResponse, isLoading, isError, refetch } = useGetAdminRevenueQuery();
   const { data: overviewResponse } = useGetAdminOverviewQuery();
+  const { data: marketplaceResponse } = useGetAdminMarketplaceQuery();
+  const { data: subscriptionsResponse } = useGetAdminSubscriptionsQuery();
+
   const rawTrend = revenueResponse?.data?.trend;
   const rawMarketplaceDistribution = revenueResponse?.data?.marketplaceDistribution;
   const overview = overviewResponse?.data;
+  const allOrders = marketplaceResponse?.data?.orders ?? [];
+  const subscriptionData = subscriptionsResponse?.data ?? {};
+  const allListings = subscriptionData.listings ?? [];
+  const allSponsorships = subscriptionData.sponsorships ?? [];
 
   // Aggregate data based on granularity
   const trend = useMemo(() => {
@@ -106,6 +121,85 @@ const AdminRevenuePage = () => {
 
   const totalRevenueValue = totals.listing + totals.sponsorship + totals.marketplace;
 
+  /* -- Top Contributors (computed client-side) -- */
+
+  const topSellers = useMemo(() => {
+    const sellerMap = {};
+    allOrders.forEach((order) => {
+      const seller = order.seller;
+      if (!seller?.name) return;
+      const key = getUserId(seller) || seller.name;
+      if (!sellerMap[key]) {
+        sellerMap[key] = {
+          id: getUserId(seller),
+          name: seller.name,
+          email: seller.email,
+          orders: 0,
+          revenue: 0,
+        };
+      }
+      sellerMap[key].orders += 1;
+      const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
+      sellerMap[key].revenue += amount;
+    });
+    return Object.values(sellerMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [allOrders]);
+
+  const topBuyers = useMemo(() => {
+    const buyerMap = {};
+    allOrders.forEach((order) => {
+      const user = order.user;
+      if (!user?.name) return;
+      const key = getUserId(user) || user.name;
+      if (!buyerMap[key]) {
+        buyerMap[key] = {
+          id: getUserId(user),
+          name: user.name,
+          email: user.email,
+          orders: 0,
+          spent: 0,
+        };
+      }
+      buyerMap[key].orders += 1;
+      const amount = typeof order.total === 'object' ? (order.total?.amount ?? 0) : (Number(String(order.total).replace(/[^\d.]/g, '')) || 0);
+      buyerMap[key].spent += amount;
+    });
+    return Object.values(buyerMap).sort((a, b) => b.spent - a.spent).slice(0, 5);
+  }, [allOrders]);
+
+  const topGyms = useMemo(() => {
+    const gymMap = {};
+    const addToGym = ({ gym, owner, amount, stream }) => {
+      const gymId = getGymId(gym);
+      const gymName = gym?.name;
+      if (!gymName) return;
+      const key = gymId || gymName;
+      if (!gymMap[key]) {
+        gymMap[key] = {
+          id: gymId,
+          name: gymName,
+          ownerId: getUserId(owner),
+          ownerName: owner?.name ?? null,
+          ownerEmail: owner?.email ?? null,
+          listing: 0,
+          sponsorship: 0,
+          total: 0,
+        };
+      }
+      gymMap[key][stream] += amount;
+      gymMap[key].total += amount;
+    };
+    allListings.forEach((sub) => {
+      const amount = Number(sub.amount) || 0;
+      addToGym({ gym: sub.gym, owner: sub.owner, amount, stream: 'listing' });
+    });
+    allSponsorships.forEach((sub) => {
+      const amount = Number(sub.amount) || 0;
+      addToGym({ gym: sub.gym, owner: sub.owner, amount, stream: 'sponsorship' });
+    });
+    return Object.values(gymMap).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [allListings, allSponsorships]);
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--admin">
@@ -138,23 +232,28 @@ const AdminRevenuePage = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--admin">
+      <div className="admin-page-header">
+        <h1>Revenue Analytics</h1>
+        <p>Track revenue across listing plans, sponsorships, and marketplace commissions.</p>
+      </div>
+
       {/* Row 1: Overview */}
-      <DashboardSection 
-        title="Revenue Overview" 
+      <DashboardSection
+        title="Revenue Overview"
         className="dashboard-section--span-12"
       >
         <div className="stat-grid">
-          <div className="stat-card">
+          <div className="stat-card stat-card--green">
             <small>Total revenue</small>
             <strong>{formatCurrency({ amount: totals.listing + totals.sponsorship + totals.marketplace })}</strong>
             <small>Listing {formatCurrency({ amount: totals.listing })}</small>
           </div>
-          <div className="stat-card">
+          <div className="stat-card stat-card--purple">
             <small>Sponsorship</small>
             <strong>{formatCurrency({ amount: totals.sponsorship })}</strong>
             <small>{formatNumber(overview?.gyms?.sponsored ?? 0)} sponsored gyms</small>
           </div>
-          <div className="stat-card">
+          <div className="stat-card stat-card--cyan">
             <small>Marketplace</small>
             <strong>{formatCurrency({ amount: totals.marketplace })}</strong>
             <small>{formatNumber(overview?.marketplace?.totalOrders ?? 0)} total orders</small>
@@ -234,7 +333,7 @@ const AdminRevenuePage = () => {
             <div className="pie-card__meta">
               <div className="pie-card__stat">
                 <span>Top category</span>
-                <strong>{topMarketplaceCategory?.name ?? '—'}</strong>
+                <strong>{topMarketplaceCategory?.name ?? '-'}</strong>
                 <small>{formatCurrency(topMarketplaceCategory?.value ?? 0)}</small>
               </div>
               <div className="pie-card__stat">
@@ -292,8 +391,146 @@ const AdminRevenuePage = () => {
         )}
       </DashboardSection>
 
+      {/* Row 4: Top Contributors */}
+      <DashboardSection
+        title="Top Sellers"
+        className="dashboard-section--span-12"
+        collapsible
+      >
+        {topSellers.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Seller</th>
+                <th>Orders</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topSellers.map((s, i) => (
+                <tr key={s.id ?? s.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td>
+                    <strong>
+                      {s.id ? (
+                        <Link to={`/dashboard/admin/users/${s.id}`} className="dashboard-table__user--link">
+                          {s.name}
+                        </Link>
+                      ) : (
+                        s.name
+                      )}
+                    </strong>
+                    <div><small>{s.email}</small></div>
+                  </td>
+                  <td>{s.orders}</td>
+                  <td>{formatCurrency(s.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No seller data available." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Top Buyers"
+        className="dashboard-section--span-6"
+        collapsible
+      >
+        {topBuyers.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Buyer</th>
+                <th>Orders</th>
+                <th>Spent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topBuyers.map((b, i) => (
+                <tr key={b.id ?? b.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td>
+                    <strong>
+                      {b.id ? (
+                        <Link to={`/dashboard/admin/users/${b.id}`} className="dashboard-table__user--link">
+                          {b.name}
+                        </Link>
+                      ) : (
+                        b.name
+                      )}
+                    </strong>
+                    <div><small>{b.email}</small></div>
+                  </td>
+                  <td>{b.orders}</td>
+                  <td>{formatCurrency(b.spent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No buyer data available." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Top Gyms by Subscription Revenue"
+        className="dashboard-section--span-6"
+        collapsible
+      >
+        {topGyms.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Gym</th>
+                <th>Owner</th>
+                <th>Listing</th>
+                <th>Sponsorship</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topGyms.map((g, i) => (
+                <tr key={g.id ?? g.name}>
+                  <td><strong>{i + 1}</strong></td>
+                  <td>
+                    {g.id ? (
+                      <Link to={`/dashboard/admin/gyms/${g.id}`} className="dashboard-table__user--link">
+                        <strong>{g.name}</strong>
+                      </Link>
+                    ) : (
+                      <strong>{g.name}</strong>
+                    )}
+                  </td>
+                  <td>
+                    {g.ownerId ? (
+                      <Link to={`/dashboard/admin/users/${g.ownerId}`} className="dashboard-table__user--link">
+                        {g.ownerName}
+                      </Link>
+                    ) : (
+                      g.ownerName ?? '-'
+                    )}
+                    {g.ownerEmail ? <div><small>{g.ownerEmail}</small></div> : null}
+                  </td>
+                  <td>{formatCurrency(g.listing)}</td>
+                  <td>{formatCurrency(g.sponsorship)}</td>
+                  <td><strong>{formatCurrency(g.total)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No subscription data available." />
+        )}
+      </DashboardSection>
+
     </div>
   );
 };
 
 export default AdminRevenuePage;
+
