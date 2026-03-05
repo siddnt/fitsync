@@ -139,8 +139,8 @@
 
 .checkout-form select option,
 .checkout-form select optgroup {
-  background-color: #ffffff;
-  color: #111827;
+  background-color: #1a1a2e;
+  color: #e0e0e0;
 }
 
 /* Fieldset sections */
