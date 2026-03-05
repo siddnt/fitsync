@@ -20,7 +20,7 @@ const SellersPage = () => {
 
   const sellers = data?.data?.sellers ?? [];
 
-  const sellerSuggestions = useMemo(() => sellers.flatMap((s) => [s.name, s.email].filter(Boolean)), [sellers]);
+  const sellerSuggestions = useMemo(() => sellers.map((s) => s.name).filter(Boolean), [sellers]);
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -90,7 +90,7 @@ const SellersPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search name or email"
+              placeholder="Search seller"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={sellerSuggestions}

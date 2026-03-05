@@ -37,7 +37,7 @@ const TrainerTraineesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ gym: 'all', status: 'all' });
 
-  const traineeSuggestions = useMemo(() => trainees.flatMap((t) => [t.name, t.email, t.gym?.name].filter(Boolean)), [trainees]);
+  const traineeSuggestions = useMemo(() => trainees.map((t) => t.name).filter(Boolean), [trainees]);
 
   const gymOptions = useMemo(() => {
     const uniqueGyms = new Map();

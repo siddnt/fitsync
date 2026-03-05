@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -17,7 +17,7 @@ const AdminMembershipsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminMembershipsQuery();
   const memberships = data?.data?.memberships ?? [];
 
-  const membershipSuggestions = useMemo(() => memberships.flatMap((m) => [m.trainee?.name, m.trainee?.email, m.gym?.name, m.gym?.city, m.trainer?.name].filter(Boolean)), [memberships]);
+  const membershipSuggestions = useMemo(() => memberships.flatMap((m) => [m.trainee?.name, m.gym?.name, m.trainer?.name].filter(Boolean)), [memberships]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -64,6 +64,17 @@ const AdminMembershipsPage = () => {
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, planFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   if (isLoading) {
     return (

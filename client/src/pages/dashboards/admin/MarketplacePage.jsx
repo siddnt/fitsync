@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -26,7 +26,7 @@ const AdminMarketplacePage = () => {
     [rawOrders],
   );
 
-  const orderSuggestions = useMemo(() => orders.flatMap((o) => [o.orderNumber, o.user?.name, o.user?.email, o.seller?.name, ...(o.items || []).map((i) => i?.name)].filter(Boolean)), [orders]);
+  const orderSuggestions = useMemo(() => orders.map((o) => o.orderNumber).filter(Boolean), [orders]);
 
   const statusOptions = useMemo(() => {
     const unique = new Set();
@@ -104,6 +104,17 @@ const AdminMarketplacePage = () => {
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedOrders = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const summary = useMemo(() => {
     if (!orders.length) {
@@ -283,7 +294,7 @@ const AdminMarketplacePage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search order, buyer, seller"
+              placeholder="Search order"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={orderSuggestions}

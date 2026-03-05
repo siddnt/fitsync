@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -17,7 +17,7 @@ const AdminTrainerAssignmentsPage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminTrainerAssignmentsQuery();
   const assignments = data?.data?.assignments ?? [];
 
-  const assignmentSuggestions = useMemo(() => assignments.flatMap((a) => [a.trainer?.name, a.trainer?.email, a.gym?.name, a.gym?.city, ...(a.trainees || []).map((t) => t.trainee?.name)].filter(Boolean)), [assignments]);
+  const assignmentSuggestions = useMemo(() => assignments.flatMap((a) => [a.trainer?.name, a.gym?.name, ...(a.trainees || []).map((t) => t.trainee?.name)].filter(Boolean)), [assignments]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -57,6 +57,17 @@ const AdminTrainerAssignmentsPage = () => {
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   if (isLoading) {
     return (

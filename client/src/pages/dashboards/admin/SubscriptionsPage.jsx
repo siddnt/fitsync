@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -56,13 +56,24 @@ const AdminSubscriptionsPage = () => {
     });
   }, [currentItems, searchTerm, statusFilter]);
 
-  const subscriptionSuggestions = useMemo(() => currentItems.flatMap((i) => [i.owner?.name, i.owner?.email, i.gym?.name, i.planCode, i.package].filter(Boolean)), [currentItems]);
+  const subscriptionSuggestions = useMemo(() => currentItems.flatMap((i) => [i.owner?.name, i.gym?.name].filter(Boolean)), [currentItems]);
 
   const { sorted, sortKey, sortDir, onSort } = useTableSort(filtered, 'createdAt', 'desc');
   const PAGE_SIZE = 10;
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); };

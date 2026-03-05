@@ -17,7 +17,7 @@ const GymsPage = () => {
 
   const gyms = data?.data?.gyms ?? [];
 
-  const gymSuggestions = useMemo(() => gyms.flatMap((g) => [g.name, g.city, g.owner?.name, g.owner?.email].filter(Boolean)), [gyms]);
+  const gymSuggestions = useMemo(() => gyms.map((g) => g.name).filter(Boolean), [gyms]);
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +79,7 @@ const GymsPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search name, city, or owner"
+              placeholder="Search gym"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={gymSuggestions}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -10,7 +10,30 @@ import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
 const getUserId = (user) => user?._id ?? user?.id;
+
+const ROLE_BADGE_MAP = {
+  admin: 'role-badge--admin',
+  trainer: 'role-badge--trainer',
+  trainee: 'role-badge--trainee',
+  'gym-owner': 'role-badge--gym-owner',
+  seller: 'role-badge--seller',
+  manager: 'role-badge--manager',
+};
+
+const getRoleBadgeClass = (role) => ROLE_BADGE_MAP[role] || 'role-badge--default';
+const getAvatarRoleClass = (role) => {
+  const map = {
+    admin: 'dashboard-table__user-placeholder--admin',
+    trainer: 'dashboard-table__user-placeholder--trainer',
+    trainee: 'dashboard-table__user-placeholder--trainee',
+    'gym-owner': 'dashboard-table__user-placeholder--gym-owner',
+    seller: 'dashboard-table__user-placeholder--seller',
+    manager: 'dashboard-table__user-placeholder--manager',
+  };
+  return map[role] || '';
+};
 
 const AdminUsersPage = () => {
   const navigate = useNavigate();
@@ -26,7 +49,49 @@ const AdminUsersPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const userSuggestions = useMemo(() => recent.flatMap((u) => [u.name, u.email].filter(Boolean)), [recent]);
+  /* ── Stat computations ── */
+  const stats = useMemo(() => {
+    const total = recent.length;
+    const active = recent.filter((u) => u.status === 'active').length;
+    const pendingCount = pending.length;
+    const roleCounts = {};
+    recent.forEach((u) => {
+      if (u.role) roleCounts[u.role] = (roleCounts[u.role] || 0) + 1;
+    });
+    const topRole = Object.entries(roleCounts).sort(([, a], [, b]) => b - a)[0];
+    return { total, active, pendingCount, topRole };
+  }, [recent, pending]);
+
+  const constrainedUsers = useMemo(() => (
+    recent.filter((user) => {
+      if (roleFilter !== 'all' && user.role !== roleFilter) {
+        return false;
+      }
+      if (statusFilter !== 'all' && user.status !== statusFilter) {
+        return false;
+      }
+      return true;
+    })
+  ), [recent, roleFilter, statusFilter]);
+
+  const userSuggestions = useMemo(() => {
+    const seen = new Set();
+    const suggestions = [];
+
+    constrainedUsers.forEach((user) => {
+      [user.name].filter(Boolean).forEach((value) => {
+        const text = String(value).trim();
+        const key = text.toLowerCase();
+        if (!text || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push(text);
+      });
+    });
+
+    return suggestions;
+  }, [constrainedUsers]);
 
   const roleOptions = useMemo(() => {
     const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
@@ -43,20 +108,14 @@ const AdminUsersPage = () => {
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
-    return recent.filter((user) => {
-      if (roleFilter !== 'all' && user.role !== roleFilter) {
-        return false;
-      }
-      if (statusFilter !== 'all' && user.status !== statusFilter) {
-        return false;
-      }
+    return constrainedUsers.filter((user) => {
       if (!query) {
         return true;
       }
       const haystacks = [user.name, user.email].filter(Boolean).map((value) => value.toLowerCase());
       return haystacks.some((value) => value.includes(query));
     });
-  }, [recent, roleFilter, statusFilter, searchTerm]);
+  }, [constrainedUsers, searchTerm]);
 
   const { sorted, sortKey, sortDir, onSort } = useTableSort(filteredUsers, 'name');
   const PAGE_SIZE = 10;
@@ -64,6 +123,17 @@ const AdminUsersPage = () => {
   const paginatedUsers = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const filtersActive = useMemo(
     () => Boolean(searchTerm.trim() || roleFilter !== 'all' || statusFilter !== 'all'),
@@ -150,6 +220,29 @@ const AdminUsersPage = () => {
         <h1>User Management</h1>
         <p>Review pending approvals, search users, and manage accounts across all roles.</p>
       </div>
+
+      {/* ── Stat overview cards ── */}
+      <DashboardSection title="User Overview">
+        <div className="admin-stat-grid">
+          <div className="stat-card stat-card--purple">
+            <small>Total Users</small>
+            <strong>{stats.total}</strong>
+          </div>
+          <div className="stat-card stat-card--green">
+            <small>Active</small>
+            <strong>{stats.active}</strong>
+          </div>
+          <div className="stat-card stat-card--orange">
+            <small>Pending Approval</small>
+            <strong>{stats.pendingCount}</strong>
+          </div>
+          <div className="stat-card stat-card--blue">
+            <small>{stats.topRole ? formatStatus(stats.topRole[0]) : 'Top Role'}</small>
+            <strong>{stats.topRole ? stats.topRole[1] : '—'}</strong>
+          </div>
+        </div>
+      </DashboardSection>
+
       <DashboardSection
         title="Pending approvals"
         action={(
@@ -193,7 +286,11 @@ const AdminUsersPage = () => {
                     </div>
                   </td>
                   <td>{user.email}</td>
-                  <td>{formatStatus(user.role)}</td>
+                  <td>
+                    <span className={`role-badge ${getRoleBadgeClass(user.role)}`}>
+                      {formatStatus(user.role)}
+                    </span>
+                  </td>
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
                     <div className="button-row">
@@ -218,99 +315,103 @@ const AdminUsersPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection
-        title="Users"
-        action={(
-          <div className="users-toolbar">
-            <AutosuggestInput
-              className="inventory-toolbar__input"
-              placeholder="Search name or email"
-              value={searchTerm}
-              onChange={setSearchTerm}
-              suggestions={userSuggestions}
-              ariaLabel="Search users"
-            />
-            <select
-              className="inventory-toolbar__input inventory-toolbar__input--select"
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
-              aria-label="Filter by role"
-            >
-              {roleOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === 'all' ? 'All roles' : formatStatus(option)}
-                </option>
-              ))}
-            </select>
-            <select
-              className="inventory-toolbar__input inventory-toolbar__input--select"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              aria-label="Filter by status"
-            >
-              {statusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === 'all' ? 'All statuses' : formatStatus(option)}
-                </option>
-              ))}
-            </select>
-            {filtersActive ? (
-              <button type="button" className="users-toolbar__reset" onClick={resetFilters}>
-                Reset
-              </button>
-            ) : null}
-            <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>
-              Refresh
+      <DashboardSection title="Users">
+        {/* ── Standalone toolbar ── */}
+        <div className="admin-toolbar">
+          <AutosuggestInput
+            className="inventory-toolbar__input"
+            placeholder="Search name or email"
+            value={searchTerm}
+            onChange={setSearchTerm}
+            suggestions={userSuggestions}
+            ariaLabel="Search users"
+          />
+          <select
+            className="inventory-toolbar__input inventory-toolbar__input--select"
+            value={roleFilter}
+            onChange={(event) => setRoleFilter(event.target.value)}
+            aria-label="Filter by role"
+          >
+            {roleOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === 'all' ? 'All roles' : formatStatus(option)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="inventory-toolbar__input inventory-toolbar__input--select"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter by status"
+          >
+            {statusOptions.map((option) => (
+              <option key={option} value={option}>
+                {option === 'all' ? 'All statuses' : formatStatus(option)}
+              </option>
+            ))}
+          </select>
+          {filtersActive ? (
+            <button type="button" className="admin-toolbar__reset" onClick={resetFilters}>
+              Reset
             </button>
-          </div>
-        )}
-      >
+          ) : null}
+          <button type="button" className="admin-toolbar__refresh" onClick={() => refetch()}>
+            Refresh
+          </button>
+        </div>
+
         {filteredUsers.length ? (
           <>
-            <table className="dashboard-table">
-              <thead>
-                <tr>
-                  <th className={thCls('name')} onClick={() => onSort('name')}>Name</th>
-                  <th className={thCls('email')} onClick={() => onSort('email')}>Email</th>
-                  <th className={thCls('role')} onClick={() => onSort('role')}>Role</th>
-                  <th className={thCls('status')} onClick={() => onSort('status')}>Status</th>
-                  <th className={thCls('memberships')} onClick={() => onSort('memberships')}>Memberships</th>
-                  <th className={thCls('orders')} onClick={() => onSort('orders')}>Orders</th>
-                  <th className={thCls('gymsOwned')} onClick={() => onSort('gymsOwned')}>Gyms Owned</th>
-                  <th className={thCls('createdAt')} onClick={() => onSort('createdAt')}>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedUsers.map((user) => (
-                  <tr
-                    key={getUserId(user)}
-                    className="dashboard-table__row--clickable"
-                    onClick={() => navigate(`/dashboard/admin/users/${getUserId(user)}`)}
-                    title="Click to view details"
-                  >
-                    <td>
-                      <div className="dashboard-table__user">
-                        {user.profilePicture ? (
-                          <img src={user.profilePicture} alt={user.name} />
-                        ) : (
-                          <div className="dashboard-table__user-placeholder">
-                            {user.name?.charAt(0) ?? '?'}
-                          </div>
-                        )}
-                        <span>{user.name}</span>
-                      </div>
-                    </td>
-                    <td>{user.email}</td>
-                    <td>{formatStatus(user.role)}</td>
-                    <td>{formatStatus(user.status)}</td>
-                    <td>{user.memberships ?? 0}</td>
-                    <td>{user.orders ?? 0}</td>
-                    <td>{user.gymsOwned ?? 0}</td>
-                    <td>{formatDate(user.createdAt)}</td>
+            <div className="admin-table-wrapper">
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th className={thCls('name')} onClick={() => onSort('name')}>Name</th>
+                    <th className={thCls('email')} onClick={() => onSort('email')}>Email</th>
+                    <th className={thCls('role')} onClick={() => onSort('role')}>Role</th>
+                    <th className={thCls('status')} onClick={() => onSort('status')}>Status</th>
+                    <th className={thCls('memberships')} onClick={() => onSort('memberships')}>Memberships</th>
+                    <th className={thCls('orders')} onClick={() => onSort('orders')}>Orders</th>
+                    <th className={thCls('gymsOwned')} onClick={() => onSort('gymsOwned')}>Gyms Owned</th>
+                    <th className={thCls('createdAt')} onClick={() => onSort('createdAt')}>Created</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedUsers.map((user) => (
+                    <tr
+                      key={getUserId(user)}
+                      className="dashboard-table__row--clickable"
+                      onClick={() => navigate(`/dashboard/admin/users/${getUserId(user)}`)}
+                      title="Click to view details"
+                    >
+                      <td>
+                        <div className="dashboard-table__user">
+                          {user.profilePicture ? (
+                            <img src={user.profilePicture} alt={user.name} />
+                          ) : (
+                            <div className={`dashboard-table__user-placeholder ${getAvatarRoleClass(user.role)}`}>
+                              {user.name?.charAt(0) ?? '?'}
+                            </div>
+                          )}
+                          <span>{user.name}</span>
+                        </div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`role-badge ${getRoleBadgeClass(user.role)}`}>
+                          {formatStatus(user.role)}
+                        </span>
+                      </td>
+                      <td>{formatStatus(user.status)}</td>
+                      <td>{user.memberships ?? 0}</td>
+                      <td>{user.orders ?? 0}</td>
+                      <td>{user.gymsOwned ?? 0}</td>
+                      <td>{formatDate(user.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <Pagination page={currentPage} totalPages={totalPages} from={(currentPage - 1) * PAGE_SIZE + 1} to={Math.min(currentPage * PAGE_SIZE, sorted.length)} total={sorted.length} onPageChange={setCurrentPage} />
           </>
         ) : (

@@ -22,7 +22,7 @@ const ManagerProductBuyersPage = () => {
   const product = responseData?.product;
   const buyers = responseData?.buyers ?? [];
 
-  const buyerSuggestions = useMemo(() => buyers.flatMap((b) => [b.user?.name, b.user?.email, b.orderNumber, b.shippingAddress?.city].filter(Boolean)), [buyers]);
+  const buyerSuggestions = useMemo(() => buyers.flatMap((b) => [b.user?.name, b.orderNumber].filter(Boolean)), [buyers]);
 
   const filteredBuyers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -117,7 +117,7 @@ const ManagerProductBuyersPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search buyer, email, order #"
+              placeholder="Search buyer or order #"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={buyerSuggestions}

@@ -16,7 +16,7 @@ const MarketplacePage = () => {
 
   const orders = useMemo(() => (Array.isArray(rawOrders) ? rawOrders : []), [rawOrders]);
 
-  const orderSuggestions = useMemo(() => orders.flatMap((o) => [o.orderNumber, o.user?.name, o.user?.email, o.seller?.name].filter(Boolean)), [orders]);
+  const orderSuggestions = useMemo(() => orders.map((o) => o.orderNumber).filter(Boolean), [orders]);
 
   const statusOptions = useMemo(() => {
     const unique = new Set();
@@ -88,7 +88,7 @@ const MarketplacePage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search order, buyer, seller"
+              placeholder="Search order"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={orderSuggestions}

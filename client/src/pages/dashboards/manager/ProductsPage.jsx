@@ -16,7 +16,7 @@ const ManagerProductsPage = () => {
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteManagerProductMutation();
   const products = data?.data?.products ?? [];
 
-  const productSuggestions = useMemo(() => products.flatMap((p) => [p.name, p.seller?.name, p.seller?.email].filter(Boolean)), [products]);
+  const productSuggestions = useMemo(() => products.map((p) => p.name).filter(Boolean), [products]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -110,7 +110,7 @@ const ManagerProductsPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search product or seller"
+              placeholder="Search product"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={productSuggestions}

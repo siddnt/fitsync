@@ -29,7 +29,7 @@ const OrdersPage = () => {
 
   const orders = ordersResponse?.data?.orders ?? [];
 
-  const orderSuggestions = useMemo(() => orders.flatMap((o) => [o.orderNumber, o.buyer?.name, o.buyer?.email, ...(o.items || []).map((i) => i?.name)].filter(Boolean)), [orders]);
+  const orderSuggestions = useMemo(() => orders.map((o) => o.orderNumber).filter(Boolean), [orders]);
   const statusOptions = useMemo(() => {
     const allowed = new Set(ordersResponse?.data?.statusOptions ?? SELLER_ORDER_STATUSES.map((option) => option.value));
     return SELLER_ORDER_STATUSES.filter((option) => allowed.has(option.value));
@@ -194,7 +194,7 @@ const OrdersPage = () => {
         <div className="inventory-toolbar orders-toolbar">
           <AutosuggestInput
             className="inventory-toolbar__input"
-            placeholder="Search order number or buyer"
+            placeholder="Search order number"
             value={searchQuery}
             onChange={setSearchQuery}
             suggestions={orderSuggestions}

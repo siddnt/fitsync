@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -27,7 +27,7 @@ const AdminProductBuyersPage = () => {
   const product = responseData?.product;
   const buyers = responseData?.buyers ?? [];
 
-  const buyerSuggestions = useMemo(() => buyers.flatMap((b) => [b.user?.name, b.user?.email, b.orderNumber, b.shippingAddress?.city].filter(Boolean)), [buyers]);
+  const buyerSuggestions = useMemo(() => buyers.flatMap((b) => [b.user?.name, b.orderNumber].filter(Boolean)), [buyers]);
 
   const filteredBuyers = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -43,6 +43,17 @@ const AdminProductBuyersPage = () => {
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedBuyers = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleBack = () => navigate('/dashboard/admin/products');
 
@@ -150,7 +161,7 @@ const AdminProductBuyersPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search buyer, email, order #"
+              placeholder="Search buyer or order #"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={buyerSuggestions}

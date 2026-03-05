@@ -69,9 +69,6 @@ const GymExplorerPage = () => {
 
     gyms.forEach((gym) => {
       pushSuggestion(gym?.name);
-      pushSuggestion(gym?.city);
-      (gym?.tags || []).forEach(pushSuggestion);
-      (gym?.amenities || []).forEach(pushSuggestion);
     });
 
     return suggestions;

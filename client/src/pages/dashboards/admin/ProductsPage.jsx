@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -18,7 +18,7 @@ const AdminProductsPage = () => {
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
   const products = data?.data?.products ?? [];
 
-  const productSuggestions = useMemo(() => products.flatMap((p) => [p.name, p.seller?.name, p.seller?.email].filter(Boolean)), [products]);
+  const productSuggestions = useMemo(() => products.map((p) => p.name).filter(Boolean), [products]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -83,6 +83,17 @@ const AdminProductsPage = () => {
   const paginatedItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, statusFilter]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--stacked">
@@ -124,7 +135,7 @@ const AdminProductsPage = () => {
           <div className="users-toolbar">
             <AutosuggestInput
               className="inventory-toolbar__input"
-              placeholder="Search product or seller"
+              placeholder="Search product"
               value={searchTerm}
               onChange={setSearchTerm}
               suggestions={productSuggestions}

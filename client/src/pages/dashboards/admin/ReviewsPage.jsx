@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -26,7 +26,7 @@ const AdminReviewsPage = () => {
 
   const currentReviews = activeTab === 'gym' ? gymReviews : productReviews;
 
-  const reviewSuggestions = useMemo(() => currentReviews.flatMap((r) => [r.user?.name, r.user?.email, r.gym?.name, r.product?.name, r.title].filter(Boolean)), [currentReviews]);
+  const reviewSuggestions = useMemo(() => currentReviews.flatMap((r) => [r.user?.name, r.gym?.name, r.product?.name, r.title].filter(Boolean)), [currentReviews]);
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -47,6 +47,17 @@ const AdminReviewsPage = () => {
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const paginatedItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const thCls = (key) => `sortable${sortKey === key ? ` sort-${sortDir}` : ''}`;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, ratingFilter, activeTab]);
+
+  useEffect(() => {
+    const safeTotalPages = Math.max(totalPages, 1);
+    if (currentPage > safeTotalPages) {
+      setCurrentPage(safeTotalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const filtersActive = searchTerm.trim() || ratingFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setRatingFilter('all'); };
