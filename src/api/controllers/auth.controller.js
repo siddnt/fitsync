@@ -2,12 +2,34 @@ import User from '../../models/user.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import jwt from 'jsonwebtoken';
 
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   path: '/',
+};
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_REFRESH_COOKIE_MAX_AGE_MS = 7 * ONE_DAY_MS;
+const REMEMBER_ME_REFRESH_COOKIE_MAX_AGE_MS = 30 * ONE_DAY_MS;
+const REMEMBER_ME_REFRESH_TOKEN_EXPIRY = '30d';
+
+const parseBoolean = (value, fallback = false) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+  }
+  return fallback;
 };
 
 const serializeUser = (user) => ({
@@ -79,7 +101,7 @@ export const register = asyncHandler(async (req, res) => {
 
   res.cookie('refreshToken', refreshToken, {
     ...cookieOptions,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: DEFAULT_REFRESH_COOKIE_MAX_AGE_MS,
   });
 
   const payload = {
@@ -92,6 +114,7 @@ export const register = asyncHandler(async (req, res) => {
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const rememberMe = parseBoolean(req.body?.rememberMe, false);
 
   if (!email || !password) {
     throw new ApiError(400, 'Email and password are required');
@@ -115,14 +138,18 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
+  const refreshToken = user.generateRefreshToken(
+    rememberMe ? REMEMBER_ME_REFRESH_TOKEN_EXPIRY : undefined,
+  );
 
   user.refreshToken = refreshToken;
   await user.save({ validateBeforeSave: false });
 
   res.cookie('refreshToken', refreshToken, {
     ...cookieOptions,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: rememberMe
+      ? REMEMBER_ME_REFRESH_COOKIE_MAX_AGE_MS
+      : DEFAULT_REFRESH_COOKIE_MAX_AGE_MS,
   });
 
   const payload = {
@@ -140,7 +167,14 @@ export const refreshToken = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Refresh token missing');
   }
 
-  const user = await User.findOne({ refreshToken: token });
+  let decodedToken;
+  try {
+    decodedToken = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET || 'your-refresh-secret');
+  } catch (_error) {
+    throw new ApiError(401, 'Invalid or expired refresh token');
+  }
+
+  const user = await User.findOne({ _id: decodedToken?._id, refreshToken: token });
 
   if (!user) {
     throw new ApiError(401, 'Invalid refresh token');

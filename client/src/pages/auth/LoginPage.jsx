@@ -14,7 +14,11 @@ const LoginPage = () => {
   const { status, error, user } = useAppSelector((state) => state.auth);
   const [login, { isLoading }] = useLoginMutation();
 
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit } = useForm({
+    defaultValues: {
+      rememberMe: true,
+    },
+  });
 
   useEffect(() => {
     if (user) {
@@ -25,13 +29,29 @@ const LoginPage = () => {
   const onSubmit = async (values) => {
     try {
       dispatch(authActions.authPending());
-      const apiResponse = await login({ ...values, role }).unwrap();
+      const apiResponse = await login({
+        ...values,
+        role,
+        rememberMe: Boolean(values?.rememberMe),
+      }).unwrap();
       const authPayload = apiResponse?.data ?? apiResponse;
 
       dispatch(authActions.authSuccess(authPayload));
       navigate(`/dashboard/${authPayload?.user?.role ?? 'trainee'}`);
     } catch (err) {
-      dispatch(authActions.authFailure(err?.data?.message ?? 'Login failed'));
+      const resolvedMessage = (
+        err?.data?.message
+        || (typeof err?.data === 'string' ? err.data : '')
+        || err?.error
+        || ''
+      ).trim();
+
+      if (/failed to fetch|networkerror|network request failed/i.test(resolvedMessage)) {
+        dispatch(authActions.authFailure('Unable to reach server. Start backend and verify API/CORS config.'));
+        return;
+      }
+
+      dispatch(authActions.authFailure(resolvedMessage || 'Login failed'));
     }
   };
 
@@ -69,6 +89,11 @@ const LoginPage = () => {
             <label>
               <span>Password</span>
               <input type="password" {...register('password')} placeholder="********" autoComplete="current-password" />
+            </label>
+
+            <label className="auth-checkbox">
+              <input type="checkbox" {...register('rememberMe')} />
+              <span>Remember me for 30 days</span>
             </label>
           </div>
 

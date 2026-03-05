@@ -188,14 +188,14 @@ userSchema.methods.generateAccessToken = function () {
 };
 
 // Method to generate refresh token
-userSchema.methods.generateRefreshToken = function () {
+userSchema.methods.generateRefreshToken = function (expiresIn = process.env.REFRESH_TOKEN_EXPIRY || "7d") {
     return jwt.sign(
         {
             _id: this._id
         },
         process.env.REFRESH_TOKEN_SECRET || "your-refresh-secret",
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "7d"
+            expiresIn
         }
     );
 };
