@@ -45,12 +45,27 @@ const accessLogStream = fs.createWriteStream(path.join(logsDir, "access.log"), {
 app.use(morgan("combined", { stream: accessLogStream }));
 app.use(morgan("dev"));
 
-const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173,http://localhost:4173").split(",").map((origin) => origin.trim());
+const configuredOrigins = String(process.env.CORS_ORIGIN || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const defaultCorsOrigins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:4173"
+];
+
+const corsOrigins = configuredOrigins.length ? configuredOrigins : defaultCorsOrigins;
 
 app.use(
     cors({
         origin: (origin, callback) => {
-            if (!origin || corsOrigins.includes(origin)) {
+            const isLocalDevOrigin = Boolean(origin)
+                && process.env.NODE_ENV !== "production"
+                && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin);
+
+            if (!origin || corsOrigins.includes(origin) || isLocalDevOrigin) {
                 return callback(null, origin);
             }
             return callback(new Error("Not allowed by CORS"));

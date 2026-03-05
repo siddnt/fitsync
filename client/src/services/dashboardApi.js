@@ -74,9 +74,17 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/admin/users',
       providesTags: ['Dashboard', 'User'],
     }),
+    getAdminUserDetails: builder.query({
+      query: (userId) => `/dashboards/admin/users/${userId}`,
+      providesTags: (_result, _error, userId) => ['Dashboard', 'User', { type: 'User', id: userId }],
+    }),
     getAdminGyms: builder.query({
       query: () => '/dashboards/admin/gyms',
       providesTags: ['Dashboard', 'Gym'],
+    }),
+    getAdminGymDetails: builder.query({
+      query: (gymId) => `/dashboards/admin/gyms/${gymId}`,
+      providesTags: (_result, _error, gymId) => ['Dashboard', 'Gym', { type: 'Gym', id: gymId }],
     }),
     getAdminRevenue: builder.query({
       query: () => '/dashboards/admin/revenue',
@@ -143,7 +151,9 @@ export const {
   useGetTrainerFeedbackQuery,
   useGetAdminOverviewQuery,
   useGetAdminUsersQuery,
+  useGetAdminUserDetailsQuery,
   useGetAdminGymsQuery,
+  useGetAdminGymDetailsQuery,
   useGetAdminRevenueQuery,
   useGetAdminMarketplaceQuery,
   useGetAdminBookingsQuery,

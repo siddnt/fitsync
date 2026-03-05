@@ -536,23 +536,12 @@ export const listMarketplaceSuggestions = asyncHandler(async (req, res) => {
 
   const term = escapeRegex(query);
   const lowerQuery = query.toLowerCase();
-  const matchingSellerIds = await findMatchingSellerIds(term);
-  const searchClauses = [
-    { name: { $regex: term, $options: 'i' } },
-    { description: { $regex: term, $options: 'i' } },
-    { category: { $regex: term, $options: 'i' } },
-  ];
-
-  if (matchingSellerIds.length) {
-    searchClauses.push({ seller: { $in: matchingSellerIds } });
-  }
 
   const candidates = await Product.find({
     isPublished: true,
-    $or: searchClauses,
+    name: { $regex: term, $options: 'i' },
   })
-    .select('name category seller')
-    .populate({ path: 'seller', select: 'name firstName lastName email' })
+    .select('name')
     .sort({ updatedAt: -1 })
     .limit(Math.max(limit * 4, 20))
     .lean();
@@ -582,8 +571,6 @@ export const listMarketplaceSuggestions = asyncHandler(async (req, res) => {
 
   candidates.forEach((product) => {
     pushSuggestion(product?.name);
-    pushSuggestion(resolveSellerName(product?.seller));
-    pushSuggestion(product?.category);
   });
 
   const suggestions = [...prefixMatches, ...containsMatches].slice(0, limit);
