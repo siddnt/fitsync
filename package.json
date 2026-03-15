@@ -8,6 +8,9 @@
     "dev": "nodemon --ignore 'node_modules/' src/index.js",
     "start": "node src/index.js",
     "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "client:preview": "npm --prefix client run preview",
     "seed:analytics": "node src/scripts/seedAdminAnalytics.js"
   },
   "author": "Sid",
