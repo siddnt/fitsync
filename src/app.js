@@ -9,9 +9,11 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 import apiRouter from "./api/routes/index.js";
+import { buildOpenApiSpec } from "./docs/openapi.js";
 
 dotenv.config();
 
@@ -24,92 +26,128 @@ const __dirname = dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
-    standardHeaders: true,
-    legacyHeaders: false
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 app.use(limiter);
 
 // Security headers (CSP disabled for React SPA compatibility)
-app.use(helmet({
+app.use(
+  helmet({
     contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false
-}));
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 
 // HTTP request logging
 const logsDir = path.join(rootDir, "src", "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
-const accessLogStream = fs.createWriteStream(path.join(logsDir, "access.log"), { flags: "a" });
+const accessLogStream = fs.createWriteStream(path.join(logsDir, "access.log"), {
+  flags: "a",
+});
 app.use(morgan("combined", { stream: accessLogStream }));
 app.use(morgan("dev"));
 
 const configuredOrigins = String(process.env.CORS_ORIGIN || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const defaultCorsOrigins = [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:4173"
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:4173",
 ];
 
-const corsOrigins = configuredOrigins.length ? configuredOrigins : defaultCorsOrigins;
+const corsOrigins = configuredOrigins.length
+  ? configuredOrigins
+  : defaultCorsOrigins;
 
 app.use(
-    cors({
-        origin: (origin, callback) => {
-            const isLocalDevOrigin = Boolean(origin)
-                && process.env.NODE_ENV !== "production"
-                && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin);
+  cors({
+    origin: (origin, callback) => {
+      const isLocalDevOrigin =
+        Boolean(origin) &&
+        process.env.NODE_ENV !== "production" &&
+        /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin);
 
-            if (!origin || corsOrigins.includes(origin) || isLocalDevOrigin) {
-                return callback(null, origin);
-            }
-            return callback(new Error("Not allowed by CORS"));
-        },
-        credentials: true
-    })
+      if (!origin || corsOrigins.includes(origin) || isLocalDevOrigin) {
+        return callback(null, origin);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
 );
 
-app.use(express.json({
+app.use(
+  express.json({
     limit: "1mb",
     verify: (req, _res, buf) => {
-        if (
-            req.originalUrl.startsWith("/api/payments/webhook")
-        ) {
-            req.rawBody = buf;
-        }
-    }
-}));
+      if (req.originalUrl.startsWith("/api/payments/webhook")) {
+        req.rawBody = buf;
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 
 app.use(express.static(path.join(rootDir, "public")));
 app.use("/uploads", express.static(path.join(rootDir, "src/storage/uploads")));
 
+app.get("/api/docs.json", (req, res) => {
+  const serverUrl = `${req.protocol}://${req.get("host")}`;
+  return res.status(200).json(buildOpenApiSpec(serverUrl));
+});
+
+app.use(
+  "/api/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(null, {
+    customSiteTitle: "FitSync API Docs",
+    explorer: true,
+    swaggerOptions: {
+      url: "/api/docs.json",
+    },
+  }),
+);
+
 app.use("/api", apiRouter);
 
 app.get("/", (_req, res) => {
-    return res.status(200).json(new ApiResponse(200, { service: "FitSync API" }, "Service is running"));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, { service: "FitSync API" }, "Service is running"),
+    );
 });
 
 app.get("/payments/cancelled", (_req, res) => {
-    return res.status(200).json(new ApiResponse(200, null, "Payment cancelled"));
+  return res.status(200).json(new ApiResponse(200, null, "Payment cancelled"));
 });
 
 app.get("/payments/success", (req, res) => {
-    return res.status(200).json(
-        new ApiResponse(200, { sessionId: req.query.session_id || null }, "Payment success")
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { sessionId: req.query.session_id || null },
+        "Payment success",
+      ),
     );
 });
 
 app.use((req, res) => {
-    return res.status(404).json(new ApiResponse(404, null, `Route ${req.originalUrl} not found`));
+  return res
+    .status(404)
+    .json(new ApiResponse(404, null, `Route ${req.originalUrl} not found`));
 });
 
 app.use(errorHandler);
 
-export default app; 
+export default app;
