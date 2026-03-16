@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
 import { useGetMarketplaceProductQuery } from '../../services/marketplaceApi.js';
+import SkeletonBlock from '../../ui/SkeletonBlock.jsx';
+import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { formatCurrency, formatDate, formatNumber } from '../../utils/format.js';
 import { deriveProductPricing, formatRatingLabel, formatSoldCopy } from './utils.js';
 import './MarketplaceProductPage.css';
@@ -75,9 +77,53 @@ const MarketplaceProductPage = () => {
   if (isLoading || (isFetching && !product)) {
     return (
       <div className="product-detail-page">
-        <div className="product-detail__state" role="status">
-          Loading product details…
-        </div>
+        <SkeletonBlock className="product-detail__back-skeleton" />
+
+        <section className="product-detail__grid product-detail__grid--loading" aria-hidden="true">
+          <div className="product-detail__media product-detail__media--skeleton">
+            <SkeletonBlock className="product-detail__media-skeleton" />
+          </div>
+
+          <div className="product-detail__content product-detail__content--skeleton">
+            <SkeletonBlock className="product-detail__eyebrow-skeleton" />
+            <SkeletonBlock className="product-detail__title-skeleton" />
+            <SkeletonPanel lines={4} />
+            <SkeletonBlock className="product-detail__row-skeleton" />
+            <SkeletonBlock className="product-detail__row-skeleton product-detail__row-skeleton--short" />
+            <div className="product-detail__actions">
+              <SkeletonBlock className="product-detail__action-skeleton" />
+              <SkeletonBlock className="product-detail__action-skeleton" />
+            </div>
+          </div>
+
+          <aside className="product-detail__meta product-detail__meta--skeleton">
+            <SkeletonBlock className="product-detail__sidebar-title-skeleton" />
+            <SkeletonPanel lines={4} />
+          </aside>
+        </section>
+
+        <section className="product-detail__section" aria-hidden="true">
+          <SkeletonBlock className="product-detail__section-title-skeleton" />
+          <div className="product-detail__facts product-detail__facts--skeleton">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={`fact-skeleton-${index}`}>
+                <SkeletonBlock className="product-detail__fact-label-skeleton" />
+                <SkeletonBlock className="product-detail__fact-value-skeleton" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="product-detail__section" aria-hidden="true">
+          <SkeletonBlock className="product-detail__section-title-skeleton" />
+          <div className="product-detail__reviews">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <article key={`product-review-skeleton-${index}`} className="product-review">
+                <SkeletonPanel lines={3} />
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }

@@ -29,6 +29,11 @@
   transform: translateX(-3px);
 }
 
+.product-detail__back-skeleton {
+  width: 10rem;
+  height: 1rem;
+}
+
 /* ── Feedback Toast ── */
 .product-detail__feedback {
   background: rgba(91, 214, 133, 0.1);
@@ -120,6 +125,16 @@
   transform: scale(1.04);
 }
 
+.product-detail__media--skeleton {
+  overflow: hidden;
+}
+
+.product-detail__media-skeleton {
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
+}
+
 .product-detail__placeholder {
   font-size: 4rem;
   font-weight: 800;
@@ -156,6 +171,21 @@
   letter-spacing: -0.02em;
   line-height: 1.2;
   color: #fff;
+}
+
+.product-detail__content--skeleton {
+  align-items: flex-start;
+}
+
+.product-detail__eyebrow-skeleton {
+  width: 9rem;
+  height: 0.8rem;
+}
+
+.product-detail__title-skeleton {
+  width: min(100%, 20rem);
+  height: 2.5rem;
+  border-radius: 1rem;
 }
 
 .product-detail__description {
@@ -195,6 +225,15 @@
   padding: 0.75rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.product-detail__row-skeleton {
+  width: min(100%, 24rem);
+  height: 1.1rem;
+}
+
+.product-detail__row-skeleton--short {
+  width: min(100%, 16rem);
 }
 
 .product-detail__price {
@@ -291,6 +330,13 @@
   cursor: not-allowed;
 }
 
+.product-detail__action-skeleton {
+  flex: 1;
+  min-width: 140px;
+  height: 3rem;
+  border-radius: 14px;
+}
+
 /* ═══════════════════════════════════════════════
    Seller Sidebar
    ═══════════════════════════════════════════════ */
@@ -314,6 +360,11 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #c4b5fd;
+}
+
+.product-detail__sidebar-title-skeleton {
+  width: 6rem;
+  height: 1rem;
 }
 
 .product-detail__seller-name {
@@ -402,6 +453,11 @@
   letter-spacing: -0.01em;
 }
 
+.product-detail__section-title-skeleton {
+  width: 10rem;
+  height: 1.25rem;
+}
+
 /* ── Product Facts Grid ── */
 .product-detail__facts {
   display: grid;
@@ -443,6 +499,17 @@
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--light-text-color);
+}
+
+.product-detail__fact-label-skeleton {
+  width: 4rem;
+  height: 0.75rem;
+}
+
+.product-detail__fact-value-skeleton {
+  width: 6.5rem;
+  height: 1.2rem;
+  margin-top: 0.5rem;
 }
 
 /* ── Reviews Header ── */

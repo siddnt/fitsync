@@ -18,6 +18,8 @@ import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './components/GymMembershipActions.jsx';
 import './GymDetailsPage.css';
 
+const reviewSkeletons = Array.from({ length: 3 }, (_, index) => `review-skeleton-${index}`);
+
 const GymDetailsPage = () => {
   const { gymId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -399,7 +401,6 @@ const GymDetailsPage = () => {
         </div>
 
         <div className="gym-details__reviews-list">
-          {isReviewsFetching && !reviews.length ? <p>Loading reviews…</p> : null}
           {reviews.length ? (
             reviews.map((review) => {
               const starCount = Math.round(Number(review.rating) || 0);
@@ -416,6 +417,12 @@ const GymDetailsPage = () => {
                 </article>
               );
             })
+          ) : isReviewsFetching ? (
+            reviewSkeletons.map((key) => (
+              <article key={key} className="gym-details__review-skeleton">
+                <SkeletonPanel lines={3} />
+              </article>
+            ))
           ) : (
             <p className="gym-details__reviews-empty">No reviews yet.</p>
           )}

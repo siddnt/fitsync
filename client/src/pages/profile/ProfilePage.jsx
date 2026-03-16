@@ -5,6 +5,8 @@ import { authActions } from '../../features/auth/authSlice.js';
 import { createSubmissionHandler } from '../../lib/redux-form.js';
 import { INDIAN_CITIES } from '../../constants/indianLocations.js';
 import AutosuggestInput from '../../ui/AutosuggestInput.jsx';
+import SkeletonBlock from '../../ui/SkeletonBlock.jsx';
+import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import './ProfilePage.css';
 
 /* ── role helpers ── */
@@ -170,7 +172,42 @@ const ProfilePage = () => {
   if (isFetching) {
     return (
       <div className="profile-page">
-        <div className="profile-page__loading">Loading profile...</div>
+        <div className="profile-page__container profile-page__container--loading">
+          <header className="profile-page__header profile-page__header--loading">
+            <div className="profile-page__header-copy">
+              <SkeletonBlock className="profile-page__title-skeleton" />
+              <SkeletonBlock className="profile-page__subtitle-skeleton" />
+            </div>
+            <div className="profile-page__badges profile-page__badges--loading">
+              <SkeletonBlock className="profile-page__badge-skeleton" />
+              <SkeletonBlock className="profile-page__badge-skeleton" />
+            </div>
+          </header>
+
+          <section className="profile-form__section profile-form__picture-section profile-form__section--loading">
+            <div className="profile-picture-upload">
+              <SkeletonBlock className="profile-page__avatar-skeleton" />
+              <div className="profile-page__picture-copy">
+                <SkeletonBlock className="profile-page__button-skeleton" />
+                <SkeletonBlock className="profile-page__help-skeleton" />
+              </div>
+            </div>
+          </section>
+
+          {Array.from({ length: 4 }).map((_, index) => (
+            <section key={`profile-skeleton-${index}`} className="profile-form__section profile-form__section--loading">
+              <SkeletonBlock className="profile-page__section-title-skeleton" />
+              <div className="profile-form__grid">
+                <SkeletonPanel lines={3} />
+                <SkeletonPanel lines={3} />
+              </div>
+            </section>
+          ))}
+
+          <div className="profile-form__actions">
+            <SkeletonBlock className="profile-page__button-skeleton profile-page__button-skeleton--submit" />
+          </div>
+        </div>
       </div>
     );
   }

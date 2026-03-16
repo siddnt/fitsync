@@ -82,6 +82,10 @@
   margin-bottom: 1rem;
 }
 
+.gym-details__review-skeleton {
+  margin-bottom: 0;
+}
+
 .gym-details__reviews article header {
   align-items: baseline;
   display: flex;

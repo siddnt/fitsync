@@ -5,6 +5,8 @@ import GymMembershipActions from './GymMembershipActions.jsx';
 import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
 import { formatDate } from '../../../utils/format.js';
 
+const reviewSkeletons = Array.from({ length: 3 }, (_, index) => `gym-highlight-review-skeleton-${index}`);
+
 const GymHighlight = ({
   gym,
   isLoading,
@@ -217,7 +219,6 @@ const GymHighlight = ({
         </div>
 
         <div className="gym-highlight__reviews-list">
-          {isReviewsFetching && !reviews.length ? <p>Loading reviews…</p> : null}
           {reviews.length ? (
             reviews.slice(0, 3).map((review) => {
               const starCount = Math.round(Number(review.rating) || 0);
@@ -238,6 +239,12 @@ const GymHighlight = ({
                 </article>
               );
             })
+          ) : isReviewsFetching ? (
+            reviewSkeletons.map((key) => (
+              <article key={key}>
+                <SkeletonPanel lines={3} />
+              </article>
+            ))
           ) : (
             <p className="gym-highlight__reviews-empty">No reviews yet.</p>
           )}

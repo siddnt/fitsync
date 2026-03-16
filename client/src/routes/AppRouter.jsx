@@ -47,9 +47,11 @@ import AboutPage from '../pages/about/AboutPage.jsx';
 import ContactPage from '../pages/contact/ContactPage.jsx';
 import PrivacyPage from '../pages/privacy/PrivacyPage.jsx';
 import TermsPage from '../pages/terms/TermsPage.jsx';
+import GlobalLoaderOverlay from '../ui/GlobalLoaderOverlay.jsx';
 
 const AppRouter = () => (
   <BrowserRouter>
+    <GlobalLoaderOverlay />
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<LandingPage />} />

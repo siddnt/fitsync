@@ -611,7 +611,9 @@ const AdminUserDetailsPage = () => {
                 </table>
               </div>
             ) : isFetching && hasOrderCount && !traineeExplorerQuery ? (
-              <EmptyState message="Loading order history..." />
+              <div className="admin-table-wrapper">
+                <SkeletonPanel lines={6} />
+              </div>
             ) : hasOrderCount && !traineeExplorerQuery ? (
               <EmptyState message="Orders exist, but order history details are not available from the API yet. Refresh once, or restart backend API." />
             ) : (

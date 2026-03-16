@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import './GymMembershipActions.css';
 
 const statusCopy = {
@@ -95,8 +96,8 @@ const GymMembershipActions = ({
 
   if (isLoading) {
     return (
-      <div className="gym-membership-actions">
-        <p className="gym-membership-actions__hint">Checking membership status…</p>
+      <div className="gym-membership-actions gym-membership-actions--loading">
+        <SkeletonPanel lines={4} />
       </div>
     );
   }
