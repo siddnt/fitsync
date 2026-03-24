@@ -169,15 +169,6 @@ const gymSchema = new mongoose.Schema(
             type: Boolean,
             default: true
         },
-        sponsor: {
-            type: Boolean,
-            default: false
-        },
-        sponsorExpiresAt: Date,
-        isActive: {
-            type: Boolean,
-            default: true
-        },
         approvalStatus: {
             type: String,
             enum: ["approved", "pending", "rejected"],
@@ -194,15 +185,9 @@ const gymSchema = new mongoose.Schema(
     }
 );
 
-gymSchema.index({ "location.city": 1, sponsor: -1, createdAt: -1 });
+gymSchema.index({ "location.city": 1, createdAt: -1 });
 gymSchema.index({ status: 1, isPublished: 1 });
 gymSchema.index({ owner: 1 });
-
-gymSchema.virtual("isSponsored").get(function () {
-    if (!this.sponsor) return false;
-    if (!this.sponsorExpiresAt) return this.sponsor;
-    return this.sponsorExpiresAt > new Date();
-});
 
 gymSchema.set("toJSON", { virtuals: true });
 

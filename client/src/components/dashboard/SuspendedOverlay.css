@@ -1,0 +1,107 @@
+.suspended-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 2rem;
+  min-height: 60vh;
+}
+
+.suspended-overlay__card {
+  background: var(--surface-elevated-color, #1f1f1f);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: var(--radius-lg, 16px);
+  padding: 3rem 2.5rem;
+  max-width: 540px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.suspended-overlay__icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.suspended-overlay__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--danger-color, #ff6b6b);
+  margin: 0 0 1rem;
+}
+
+.suspended-overlay__message {
+  color: var(--light-text-color, #f5f5f5);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0 0 0.75rem;
+}
+
+.suspended-overlay__detail {
+  color: var(--muted-text-color, rgba(255, 255, 255, 0.68));
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 2rem;
+}
+
+.suspended-overlay__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.suspended-overlay__btn {
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.suspended-overlay__btn:hover {
+  transform: translateY(-1px);
+}
+
+.suspended-overlay__btn--home {
+  background: var(--primary-color, #e50914);
+  color: #fff;
+  border-color: var(--primary-color, #e50914);
+}
+
+.suspended-overlay__btn--home:hover {
+  background: var(--accent-color, #ff3d47);
+}
+
+.suspended-overlay__btn--contact {
+  background: transparent;
+  color: var(--light-text-color, #f5f5f5);
+  border-color: var(--border-color, rgba(255, 255, 255, 0.1));
+}
+
+.suspended-overlay__btn--contact:hover {
+  background: var(--surface-color, #181818);
+}
+
+.suspended-overlay__btn--logout {
+  background: transparent;
+  color: var(--muted-text-color, rgba(255, 255, 255, 0.68));
+  border-color: transparent;
+}
+
+.suspended-overlay__btn--logout:hover {
+  color: var(--light-text-color, #f5f5f5);
+  background: var(--surface-color, #181818);
+}
+
+@media (max-width: 600px) {
+  .suspended-overlay__card {
+    padding: 2rem 1.25rem;
+  }
+
+  .suspended-overlay__actions {
+    flex-direction: column;
+  }
+}

@@ -78,6 +78,10 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/dashboards/admin/gyms',
       providesTags: ['Dashboard', 'Gym'],
     }),
+    getAdminGymDetail: builder.query({
+      query: (gymId) => `/dashboards/admin/gyms/${gymId}`,
+      providesTags: (_result, _error, gymId) => [{ type: 'Gym', id: gymId }],
+    }),
     getAdminRevenue: builder.query({
       query: () => '/dashboards/admin/revenue',
       providesTags: ['Dashboard', 'Analytics'],
@@ -89,6 +93,44 @@ export const dashboardApi = apiSlice.injectEndpoints({
     getAdminInsights: builder.query({
       query: () => '/dashboards/admin/insights',
       providesTags: ['Dashboard', 'Analytics', 'Notification'],
+    }),
+    getAdminMemberships: builder.query({
+      query: () => '/dashboards/admin/memberships',
+      providesTags: ['Dashboard', 'Gym'],
+    }),
+    getAdminUserDetail: builder.query({
+      query: (userId) => `/dashboards/admin/users/${userId}`,
+      providesTags: (_result, _error, userId) => [{ type: 'User', id: userId }],
+    }),
+    getAdminProducts: builder.query({
+      query: () => '/dashboards/admin/products',
+      providesTags: ['Dashboard', 'Marketplace'],
+    }),
+    getAdminProductBuyers: builder.query({
+      query: (productId) => `/dashboards/admin/products/${productId}`,
+      providesTags: (_result, _error, productId) => [{ type: 'Marketplace', id: productId }],
+    }),
+    getAdminReviews: builder.query({
+      query: () => '/dashboards/admin/reviews',
+      providesTags: ['Dashboard'],
+    }),
+    getAdminSubscriptions: builder.query({
+      query: () => '/dashboards/admin/subscriptions',
+      providesTags: ['Dashboard', 'Subscription'],
+    }),
+
+    /* ── Manager Dashboard ── */
+    getManagerOverview: builder.query({
+      query: () => '/dashboards/manager/overview',
+      providesTags: ['Dashboard'],
+    }),
+    getManagerDashboardSellers: builder.query({
+      query: () => '/dashboards/manager/sellers',
+      providesTags: ['Dashboard', 'User'],
+    }),
+    getManagerDashboardGymOwners: builder.query({
+      query: () => '/dashboards/manager/gym-owners',
+      providesTags: ['Dashboard', 'User'],
     }),
   }),
 });
@@ -112,7 +154,18 @@ export const {
   useGetAdminOverviewQuery,
   useGetAdminUsersQuery,
   useGetAdminGymsQuery,
+  useGetAdminGymDetailQuery,
   useGetAdminRevenueQuery,
   useGetAdminMarketplaceQuery,
   useGetAdminInsightsQuery,
+  useGetAdminMembershipsQuery,
+  useGetAdminUserDetailQuery,
+  useLazyGetAdminUserDetailQuery,
+  useGetAdminProductsQuery,
+  useGetAdminProductBuyersQuery,
+  useGetAdminReviewsQuery,
+  useGetAdminSubscriptionsQuery,
+  useGetManagerOverviewQuery,
+  useGetManagerDashboardSellersQuery,
+  useGetManagerDashboardGymOwnersQuery,
 } = dashboardApi;

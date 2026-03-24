@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { SubmissionError, reset as resetForm } from 'redux-form';
 import { useDispatch } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetGymOwnerGymsQuery } from '../../../services/dashboardApi.js';
-import { useGetGymByIdQuery, useUpdateGymMutation, useCreateGymMutation } from '../../../services/gymsApi.js';
+import { useGetGymByIdQuery, useUpdateGymMutation, useCreateGymMutation, useUploadGymPhotoMutation, useGetGymGalleryQuery } from '../../../services/gymsApi.js';
 import {
   useGetMonetisationOptionsQuery,
   useGetTrainerRequestsQuery,
@@ -93,6 +93,52 @@ const GymOwnerGymsPage = () => {
 
   const [updateGym] = useUpdateGymMutation();
   const [createGym] = useCreateGymMutation();
+
+  /* ── Gallery Upload ── */
+  const ownerFileRef = useRef(null);
+  const [ownerPhotoFile, setOwnerPhotoFile] = useState(null);
+  const [ownerPhotoPreview, setOwnerPhotoPreview] = useState(null);
+  const [ownerPhotoStatus, setOwnerPhotoStatus] = useState({ error: null, success: null });
+  const [uploadGymPhoto, { isLoading: isUploadingPhoto }] = useUploadGymPhotoMutation();
+
+  const {
+    data: ownerGalleryResponse,
+    refetch: refetchOwnerGallery,
+  } = useGetGymGalleryQuery(activeGymId, { skip: !activeGymId });
+
+  const ownerGalleryPhotos = useMemo(() => {
+    const gp = ownerGalleryResponse?.data?.gymPhotos;
+    return Array.isArray(gp) ? gp : [];
+  }, [ownerGalleryResponse?.data?.gymPhotos]);
+
+  const handleOwnerFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setOwnerPhotoStatus({ error: 'File must be under 5 MB.', success: null });
+      return;
+    }
+    setOwnerPhotoFile(file);
+    setOwnerPhotoPreview(URL.createObjectURL(file));
+    setOwnerPhotoStatus({ error: null, success: null });
+  };
+
+  const handleOwnerPhotoUpload = useCallback(async () => {
+    if (!activeGymId || !ownerPhotoFile) return;
+    setOwnerPhotoStatus({ error: null, success: null });
+    const formData = new FormData();
+    formData.append('photo', ownerPhotoFile);
+    try {
+      await uploadGymPhoto({ gymId: activeGymId, formData }).unwrap();
+      setOwnerPhotoStatus({ error: null, success: 'Photo added to gallery!' });
+      setOwnerPhotoFile(null);
+      setOwnerPhotoPreview(null);
+      if (ownerFileRef.current) ownerFileRef.current.value = '';
+      if (refetchOwnerGallery) refetchOwnerGallery();
+    } catch (err) {
+      setOwnerPhotoStatus({ error: err?.data?.message ?? 'Upload failed.', success: null });
+    }
+  }, [activeGymId, ownerPhotoFile, uploadGymPhoto, refetchOwnerGallery]);
 
   const formInitialValues = useMemo(() => {
     const details = gymDetailsResponse?.data?.gym;
@@ -618,12 +664,17 @@ const GymOwnerGymsPage = () => {
                 isPlansFetching && !plans.length ? (
                   <SkeletonPanel lines={8} />
                 ) : plans.length ? (
-                  <GymCreateForm
-                    onSubmit={handleCreateGym}
-                    onCancel={handleCancelCreate}
-                    plans={plans}
-                    isPlansLoading={isPlansFetching}
-                  />
+                  <>
+                    <GymCreateForm
+                      onSubmit={handleCreateGym}
+                      onCancel={handleCancelCreate}
+                      plans={plans}
+                      isPlansLoading={isPlansFetching}
+                    />
+                    <p style={{ color: '#999', fontSize: '0.85rem', marginTop: '1rem' }}>
+                      You can upload gym photos after creating the gym using the Edit option.
+                    </p>
+                  </>
                 ) : (
                   <EmptyState message="Activate a listing plan from the subscriptions tab before adding a gym." />
                 )
@@ -631,11 +682,50 @@ const GymOwnerGymsPage = () => {
                 isGymDetailsFetching && !formInitialValues ? (
                   <SkeletonPanel lines={6} />
                 ) : (
-                  <GymEditForm
-                    onSubmit={handleUpdateGym}
-                    onCancel={handleCancelEdit}
-                    initialValues={formInitialValues}
-                  />
+                  <>
+                    <GymEditForm
+                      onSubmit={handleUpdateGym}
+                      onCancel={handleCancelEdit}
+                      initialValues={formInitialValues}
+                    />
+
+                    {/* Gallery Upload Section */}
+                    <div className="owner-gallery-manager" style={{ marginTop: '1.5rem' }}>
+                      <h3 style={{ margin: 0 }}>Gym Photos</h3>
+                      <p style={{ color: '#999', fontSize: '0.85rem', margin: 0 }}>
+                        Upload photos of your gym. Members and visitors will see these on the gym page. Accepted: JPEG, PNG, GIF (max 5 MB).
+                      </p>
+                      <div className="owner-gallery-manager__controls">
+                        <input
+                          ref={ownerFileRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif"
+                          onChange={handleOwnerFileChange}
+                          className="trainee-gym-upload__input"
+                        />
+                        {ownerPhotoPreview && (
+                          <img src={ownerPhotoPreview} alt="Preview" className="trainee-gym-upload__preview" />
+                        )}
+                        <button
+                          type="button"
+                          className="cta-button"
+                          onClick={handleOwnerPhotoUpload}
+                          disabled={!ownerPhotoFile || isUploadingPhoto}
+                        >
+                          {isUploadingPhoto ? 'Uploading…' : 'Upload photo'}
+                        </button>
+                      </div>
+                      {ownerPhotoStatus.error && <p className="gym-review-form__error">{ownerPhotoStatus.error}</p>}
+                      {ownerPhotoStatus.success && <p className="gym-review-form__success">{ownerPhotoStatus.success}</p>}
+                      {ownerGalleryPhotos.length > 0 && (
+                        <div className="owner-gallery-manager__grid">
+                          {ownerGalleryPhotos.map((p) => (
+                            <img key={p.id} src={p.imageUrl} alt={p.title} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )
               ) : null}
             </DashboardSection>

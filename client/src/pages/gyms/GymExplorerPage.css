@@ -256,6 +256,67 @@
   letter-spacing: 0.03em;
 }
 
+/* Gallery */
+.gym-highlight__gallery h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.gym-highlight__gallery-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.gym-highlight__gallery-tag {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  padding-bottom: 0.3rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+  display: inline-block;
+}
+
+.gym-highlight__gallery-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.gym-highlight__gallery-grid img {
+  border-radius: 12px;
+  height: 140px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.gym-highlight__gallery-empty {
+  color: var(--muted-text-color);
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.gym-highlight__gallery-toggle {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.gym-highlight__gallery-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .gym-highlight__reviews article {
   background: rgba(0, 0, 0, 0.18);
   border-radius: 20px;

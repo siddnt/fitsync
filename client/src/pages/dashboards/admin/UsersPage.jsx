@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -7,11 +8,14 @@ import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../ser
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
+
+
 const AdminUsersPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
-  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'seller');
+  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
@@ -20,7 +24,7 @@ const AdminUsersPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'admin'];
+    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
     const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
     const merged = [...new Set([...knownRoles, ...dynamicRoles])];
     return ['all', ...merged];
@@ -186,7 +190,7 @@ const AdminUsersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No pending approvals. All caught up!" />
+          <EmptyState message="No pending manager approvals. All caught up!" />
         )}
       </DashboardSection>
 
@@ -245,12 +249,20 @@ const AdminUsersPage = () => {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
+                <th>Memberships</th>
+                <th>Orders</th>
+                <th>Gyms Owned</th>
                 <th>Created</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.map((user) => (
-                <tr key={user._id}>
+                <tr
+                  key={user._id}
+                  className="dashboard-table__row--clickable"
+                  onClick={() => navigate(`/dashboard/admin/users/${user._id}`)}
+                  title="Click to view details"
+                >
                   <td>
                     <div className="dashboard-table__user">
                       {user.profilePicture ? (
@@ -266,6 +278,9 @@ const AdminUsersPage = () => {
                   <td>{user.email}</td>
                   <td>{formatStatus(user.role)}</td>
                   <td>{formatStatus(user.status)}</td>
+                  <td>{user.memberships ?? 0}</td>
+                  <td>{user.orders ?? 0}</td>
+                  <td>{user.gymsOwned ?? 0}</td>
                   <td>{formatDate(user.createdAt)}</td>
                 </tr>
               ))}

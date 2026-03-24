@@ -49,26 +49,35 @@ const AppHeader = () => {
           ) : null}
         </NavLink>
         {user?.role === 'gym-owner' && (
-          <NavLink to="/dashboard/gym-owner">Owner Console</NavLink>
+          <NavLink to="/dashboard/gym-owner">Dashboard</NavLink>
         )}
         {user?.role === 'trainee' && (
-          <NavLink to="/dashboard/trainee">My Dashboard</NavLink>
+          <NavLink to="/dashboard/trainee">Dashboard</NavLink>
         )}
         {user?.role === 'seller' && (
-          <NavLink to="/dashboard/seller">Seller Console</NavLink>
+          <NavLink to="/dashboard/seller">Dashboard</NavLink>
         )}
         {user?.role === 'trainer' && (
-          <NavLink to="/dashboard/trainer">Trainer Console</NavLink>
+          <NavLink to="/dashboard/trainer">Dashboard</NavLink>
+        )}
+        {user?.role === 'manager' && (
+          <NavLink to="/dashboard/manager">Dashboard</NavLink>
         )}
         {user?.role === 'admin' && (
-          <NavLink to="/dashboard/admin">Admin</NavLink>
+          <NavLink to="/dashboard/admin">Dashboard</NavLink>
         )}
       </nav>
       <div className="app-header__cta">
         {user ? (
           <>
-            <NavLink to="/profile" className="app-header__link">
-              {user.firstName ?? user.email}
+            <NavLink to="/profile" className="app-header__avatar-link" aria-label="Edit profile">
+              {user.profilePicture ? (
+                <img src={user.profilePicture} alt={user.name ?? user.firstName} className="app-header__avatar" />
+              ) : (
+                <span className="app-header__avatar app-header__avatar--placeholder">
+                  {(user.name ?? user.firstName ?? user.email)?.charAt(0)?.toUpperCase() ?? '?'}
+                </span>
+              )}
             </NavLink>
             <button
               type="button"

@@ -54,7 +54,7 @@ export const register = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'User with this email already exists');
   }
 
-  const pendingRoles = new Set(['trainer', 'seller']);
+  const pendingRoles = new Set(['trainer', 'seller', 'gym-owner', 'manager']);
   const defaultStatus = pendingRoles.has(role) ? 'pending' : 'active';
 
   const user = await User.create({
@@ -164,20 +164,4 @@ export const logout = asyncHandler(async (req, res) => {
 
   res.clearCookie('refreshToken', cookieOptions);
   return res.status(204).send();
-});
-
-export const me = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
-
-  if (!userId) {
-    throw new ApiError(401, 'Unauthorized');
-  }
-
-  const user = await User.findById(userId).select('-password -refreshToken');
-
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  return res.status(200).json(new ApiResponse(200, serializeUser(user), 'Fetched profile'));
 });

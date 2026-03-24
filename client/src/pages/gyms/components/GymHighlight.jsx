@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './GymMembershipActions.jsx';
-import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
+import { useGetGymReviewsQuery, useSubmitGymReviewMutation, useGetGymGalleryQuery } from '../../../services/gymsApi.js';
 import { formatDate } from '../../../utils/format.js';
 
 const GymHighlight = ({
@@ -25,6 +25,18 @@ const GymHighlight = ({
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState({ error: null, success: null });
+
+  const { data: galleryData } = useGetGymGalleryQuery(gymId, { skip: !gymId });
+
+  const gymPhotos = useMemo(
+    () => (Array.isArray(galleryData?.data?.gymPhotos) ? galleryData.data.gymPhotos : []),
+    [galleryData?.data?.gymPhotos],
+  );
+
+  const memberPhotos = useMemo(
+    () => (Array.isArray(galleryData?.data?.memberPhotos) ? galleryData.data.memberPhotos : []),
+    [galleryData?.data?.memberPhotos],
+  );
 
   const {
     data: reviewsResponse,
@@ -284,8 +296,106 @@ const GymHighlight = ({
           )}
         </div>
       </section>
+
+      <GymGallerySection
+        gymPhotos={gymPhotos}
+        memberPhotos={memberPhotos}
+        fallbackGallery={gym.gallery}
+        gymName={gym.name}
+        initialCount={4}
+        prefix="gym-highlight"
+      />
     </article>
   );
+};
+
+const GALLERY_INITIAL = 4;
+
+function GymGallerySection({ gymPhotos, memberPhotos, fallbackGallery, gymName, initialCount, prefix }) {
+  const [expanded, setExpanded] = useState(false);
+  const allPhotos = useMemo(() => {
+    if (gymPhotos.length || memberPhotos.length) return null;
+    return Array.isArray(fallbackGallery) ? fallbackGallery : [];
+  }, [gymPhotos, memberPhotos, fallbackGallery]);
+
+  const hasAnyPhotos = gymPhotos.length > 0 || memberPhotos.length > 0 || (allPhotos && allPhotos.length > 0);
+  const limit = expanded ? Infinity : (initialCount ?? GALLERY_INITIAL);
+
+  const needsToggle =
+    gymPhotos.length > limit ||
+    memberPhotos.length > limit ||
+    (allPhotos && allPhotos.length > limit);
+
+  return (
+    <section className={`${prefix}__gallery`}>
+      <h2>Gallery</h2>
+
+      {gymPhotos.length > 0 && (
+        <div className={`${prefix}__gallery-group`}>
+          <span className={`${prefix}__gallery-tag`}>Photos</span>
+          <div className={`${prefix}__gallery-grid`}>
+            {gymPhotos.slice(0, limit).map((p) => (
+              <img key={p.id} src={p.imageUrl} alt={p.title} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {memberPhotos.length > 0 && (
+        <div className={`${prefix}__gallery-group`}>
+          <span className={`${prefix}__gallery-tag`}>Photos uploaded by our members</span>
+          <div className={`${prefix}__gallery-grid`}>
+            {memberPhotos.slice(0, limit).map((p) => (
+              <img key={p.id} src={p.imageUrl} alt={p.title} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allPhotos && allPhotos.length > 0 && (
+        <div className={`${prefix}__gallery-group`}>
+          <span className={`${prefix}__gallery-tag`}>Photos</span>
+          <div className={`${prefix}__gallery-grid`}>
+            {allPhotos.slice(0, limit).map((image) => (
+              <img key={image} src={image} alt={gymName} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasAnyPhotos && (
+        <p className={`${prefix}__gallery-empty`}>No photos have been uploaded yet.</p>
+      )}
+
+      {hasAnyPhotos && (needsToggle || expanded) && (
+        <button
+          type="button"
+          className={`${prefix}__gallery-toggle`}
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? 'Show less' : 'View all photos'}
+        </button>
+      )}
+    </section>
+  );
+}
+
+GymGallerySection.propTypes = {
+  gymPhotos: PropTypes.array,
+  memberPhotos: PropTypes.array,
+  fallbackGallery: PropTypes.array,
+  gymName: PropTypes.string,
+  initialCount: PropTypes.number,
+  prefix: PropTypes.string,
+};
+
+GymGallerySection.defaultProps = {
+  gymPhotos: [],
+  memberPhotos: [],
+  fallbackGallery: [],
+  gymName: '',
+  initialCount: GALLERY_INITIAL,
+  prefix: 'gym-highlight',
 };
 
 GymHighlight.propTypes = {

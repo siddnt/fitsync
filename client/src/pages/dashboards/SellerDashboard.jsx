@@ -34,7 +34,7 @@ const SellerDashboard = () => {
   const hasError = isProductsError || isOrdersError;
   const approvalError = [productsError, ordersError].find((err) => err?.status === 403);
   const approvalMessage = approvalError?.data?.message
-    ?? 'Your seller account is awaiting admin approval. Hang tight—we\'ll unlock the seller console as soon as you are activated.';
+    ?? 'Your seller account is awaiting approval. Hang tight—we\'ll unlock the seller console as soon as you are activated.';
 
   const rawProducts = productsResponse?.data?.products;
   const rawOrders = ordersResponse?.data?.orders;

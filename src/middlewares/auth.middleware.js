@@ -22,10 +22,19 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
             throw new ApiError(401, "Invalid access token");
         }
         
+        // Block suspended/deactivated users from all authenticated endpoints
+        if (user.status === 'suspended') {
+            throw new ApiError(403, 'Your account has been deactivated by an administrator. Please contact support.');
+        }
+
         // Add user to request
         req.user = user;
         next();
     } catch (error) {
+        // Re-throw ApiErrors as-is (preserves status codes like 403 for suspension)
+        if (error instanceof ApiError) {
+            throw error;
+        }
         throw new ApiError(401, error?.message || "Invalid access token");
     }
 });

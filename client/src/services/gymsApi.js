@@ -110,6 +110,21 @@ export const gymsApi = apiSlice.injectEndpoints({
         'Analytics',
       ],
     }),
+    getGymGallery: builder.query({
+      query: (gymId) => `/gyms/${gymId}/gallery`,
+      providesTags: (_result, _error, gymId) => [{ type: 'GymGallery', id: gymId }],
+    }),
+    uploadGymPhoto: builder.mutation({
+      query: ({ gymId, formData }) => ({
+        url: `/gyms/${gymId}/gallery`,
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: (_result, _error, { gymId }) => [
+        { type: 'Gym', id: gymId },
+        { type: 'GymGallery', id: gymId },
+      ],
+    }),
   }),
 });
 
@@ -125,4 +140,6 @@ export const {
   useSubmitGymReviewMutation,
   useRecordImpressionMutation,
   useUpdateGymMutation,
+  useGetGymGalleryQuery,
+  useUploadGymPhotoMutation,
 } = gymsApi;

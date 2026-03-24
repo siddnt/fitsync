@@ -16,6 +16,14 @@
   margin-bottom: 2.5rem;
 }
 
+.profile-page__header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .profile-page__header h1 {
   font-size: 2rem;
   margin-bottom: 0.5rem;
@@ -25,6 +33,74 @@
 .profile-page__header p {
   color: var(--muted-text-color);
   font-size: 0.95rem;
+}
+
+/* Role & Status Badges */
+.profile-page__badges {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+.profile-badge--role {
+  background: rgba(229, 9, 20, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(229, 9, 20, 0.3);
+}
+
+.profile-badge--status {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.profile-badge--active {
+  background: rgba(81, 207, 102, 0.15);
+  color: #8ce99a;
+  border-color: rgba(81, 207, 102, 0.35);
+}
+
+.profile-badge--pending {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffd43b;
+  border-color: rgba(255, 193, 7, 0.35);
+}
+
+.profile-badge--inactive {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff8787;
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+/* Toast Messages */
+.profile-toast {
+  padding: 0.85rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.profile-toast--success {
+  background: rgba(81, 207, 102, 0.12);
+  color: #8ce99a;
+  border: 1px solid rgba(81, 207, 102, 0.3);
+}
+
+.profile-toast--error {
+  background: rgba(255, 107, 107, 0.12);
+  color: #ff8787;
+  border: 1px solid rgba(255, 107, 107, 0.3);
 }
 
 .profile-page__loading {

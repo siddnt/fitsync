@@ -10,6 +10,7 @@ import {
   useGetGymTrainersQuery,
   useGetGymReviewsQuery,
   useSubmitGymReviewMutation,
+  useGetGymGalleryQuery,
 } from '../../services/gymsApi.js';
 import { formatDate } from '../../utils/format.js';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
@@ -57,6 +58,18 @@ const GymDetailsPage = () => {
     refetch: refetchReviews,
     isFetching: isReviewsFetching,
   } = useGetGymReviewsQuery(gymId, { skip: !gymId });
+
+  const { data: galleryData } = useGetGymGalleryQuery(gymId, { skip: !gymId });
+
+  const gymPhotos = useMemo(
+    () => (Array.isArray(galleryData?.data?.gymPhotos) ? galleryData.data.gymPhotos : []),
+    [galleryData?.data?.gymPhotos],
+  );
+
+  const memberPhotos = useMemo(
+    () => (Array.isArray(galleryData?.data?.memberPhotos) ? galleryData.data.memberPhotos : []),
+    [galleryData?.data?.memberPhotos],
+  );
 
   const trainers = useMemo(
     () => (Array.isArray(trainersResponse?.data?.trainers) ? trainersResponse.data.trainers : []),
@@ -244,14 +257,6 @@ const GymDetailsPage = () => {
         currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}
       />
 
-      <section className="gym-details__gallery">
-        {gym.gallery?.length ? (
-          gym.gallery.map((image) => <img key={image} src={image} alt={gym.name} />)
-        ) : (
-          <div className="gym-details__placeholder">Gallery coming soon</div>
-        )}
-      </section>
-
       <section className="gym-details__grid">
         <article>
           <h2>Contact</h2>
@@ -357,8 +362,86 @@ const GymDetailsPage = () => {
           )}
         </div>
       </section>
+
+      <GymDetailsGallery
+        gymPhotos={gymPhotos}
+        memberPhotos={memberPhotos}
+        fallbackGallery={gym.gallery}
+        gymName={gym.name}
+      />
     </div>
   );
 };
+
+const DETAILS_GALLERY_INITIAL = 6;
+
+function GymDetailsGallery({ gymPhotos, memberPhotos, fallbackGallery, gymName }) {
+  const [expanded, setExpanded] = useState(false);
+  const allPhotos = useMemo(() => {
+    if (gymPhotos.length || memberPhotos.length) return null;
+    return Array.isArray(fallbackGallery) ? fallbackGallery : [];
+  }, [gymPhotos, memberPhotos, fallbackGallery]);
+
+  const hasAnyPhotos = gymPhotos.length > 0 || memberPhotos.length > 0 || (allPhotos && allPhotos.length > 0);
+  const limit = expanded ? Infinity : DETAILS_GALLERY_INITIAL;
+
+  const needsToggle =
+    gymPhotos.length > limit ||
+    memberPhotos.length > limit ||
+    (allPhotos && allPhotos.length > limit);
+
+  return (
+    <section className="gym-details__gallery-section">
+      <h2>Gallery</h2>
+
+      {gymPhotos.length > 0 && (
+        <div className="gym-details__gallery-group">
+          <span className="gym-details__gallery-tag">Photos</span>
+          <div className="gym-details__gallery">
+            {gymPhotos.slice(0, limit).map((p) => (
+              <img key={p.id} src={p.imageUrl} alt={p.title} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {memberPhotos.length > 0 && (
+        <div className="gym-details__gallery-group">
+          <span className="gym-details__gallery-tag">Photos uploaded by our members</span>
+          <div className="gym-details__gallery">
+            {memberPhotos.slice(0, limit).map((p) => (
+              <img key={p.id} src={p.imageUrl} alt={p.title} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allPhotos && allPhotos.length > 0 && (
+        <div className="gym-details__gallery-group">
+          <span className="gym-details__gallery-tag">Photos</span>
+          <div className="gym-details__gallery">
+            {allPhotos.slice(0, limit).map((image) => (
+              <img key={image} src={image} alt={gymName} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasAnyPhotos && (
+        <p className="gym-details__gallery-empty">No photos have been uploaded yet.</p>
+      )}
+
+      {hasAnyPhotos && (needsToggle || expanded) && (
+        <button
+          type="button"
+          className="gym-details__gallery-toggle"
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? 'Show less' : 'View all photos'}
+        </button>
+      )}
+    </section>
+  );
+}
 
 export default GymDetailsPage;

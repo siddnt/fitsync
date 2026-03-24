@@ -142,7 +142,7 @@ const OrdersPage = () => {
 
   const approvalError = error?.status === 403 ? error : null;
   const approvalMessage = approvalError?.data?.message
-    ?? 'Your seller account is awaiting admin approval. Hang tight—order management will unlock once you are activated.';
+    ?? 'Your seller account is awaiting approval. Hang tight—order management will unlock once you are activated.';
 
   if (approvalError) {
     return (

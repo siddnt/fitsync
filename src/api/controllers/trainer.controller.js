@@ -1,21 +1,10 @@
-import mongoose from 'mongoose';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
-
-const toObjectId = (value, name) => {
-  if (!value) {
-    throw new ApiError(400, `${name} is required.`);
-  }
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    throw new ApiError(400, `${name} is invalid.`);
-  }
-};
+import toObjectId from '../../utils/toObjectId.js';
 
 const DIET_MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
 

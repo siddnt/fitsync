@@ -10,7 +10,7 @@ const router = Router();
 
 router.route('/').post(submitContactForm);
 
-router.route('/').get(verifyJWT, authorizeRoles('admin'), getContactMessages);
-router.route('/:id/status').patch(verifyJWT, authorizeRoles('admin'), updateMessageStatus);
+router.route('/').get(verifyJWT, authorizeRoles('admin', 'manager'), getContactMessages);
+router.route('/:id/status').patch(verifyJWT, authorizeRoles('admin', 'manager'), updateMessageStatus);
 
 export default router;

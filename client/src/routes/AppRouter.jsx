@@ -24,12 +24,31 @@ import GymOwnerRosterPage from '../pages/dashboards/gymOwner/RosterPage.jsx';
 import TrainerTraineesPage from '../pages/dashboards/trainer/TraineesPage.jsx';
 import TrainerUpdatesPage from '../pages/dashboards/trainer/UpdatesPage.jsx';
 import AdminUsersPage from '../pages/dashboards/admin/UsersPage.jsx';
+import AdminUserDetailPage from '../pages/dashboards/admin/UserDetailPage.jsx';
 import AdminGymsPage from '../pages/dashboards/admin/GymsPage.jsx';
+import AdminGymDetailPage from '../pages/dashboards/admin/GymDetailPage.jsx';
 import AdminRevenuePage from '../pages/dashboards/admin/RevenuePage.jsx';
 import AdminMarketplacePage from '../pages/dashboards/admin/MarketplacePage.jsx';
 import AdminMessagesPage from '../pages/dashboards/admin/MessagesPage.jsx';
+import AdminMembershipsPage from '../pages/dashboards/admin/MembershipsPage.jsx';
+import AdminProductsPage from '../pages/dashboards/admin/ProductsPage.jsx';
+import AdminProductBuyersPage from '../pages/dashboards/admin/ProductBuyersPage.jsx';
+import AdminReviewsPage from '../pages/dashboards/admin/ReviewsPage.jsx';
+import AdminSubscriptionsPage from '../pages/dashboards/admin/SubscriptionsPage.jsx';
+import AdminSettingsPage from '../pages/dashboards/admin/SettingsPage.jsx';
 import SellerInventoryPage from '../pages/dashboards/seller/InventoryPage.jsx';
 import SellerOrdersPage from '../pages/dashboards/seller/OrdersPage.jsx';
+import ManagerDashboard from '../pages/dashboards/ManagerDashboard.jsx';
+import ManagerApprovalsPage from '../pages/dashboards/manager/ApprovalsPage.jsx';
+import ManagerSellersPage from '../pages/dashboards/manager/SellersPage.jsx';
+import ManagerGymOwnersPage from '../pages/dashboards/manager/GymOwnersPage.jsx';
+import ManagerGymsPage from '../pages/dashboards/manager/GymsPage.jsx';
+import ManagerMarketplacePage from '../pages/dashboards/manager/MarketplacePage.jsx';
+import ManagerProductsPage from '../pages/dashboards/manager/ProductsPage.jsx';
+import ManagerGymDetailPage from '../pages/dashboards/manager/GymDetailPage.jsx';
+import ManagerProductBuyersPage from '../pages/dashboards/manager/ProductBuyersPage.jsx';
+import ManagerMessagesPage from '../pages/dashboards/manager/MessagesPage.jsx';
+import ManagerUserDetailPage from '../pages/dashboards/manager/UserDetailPage.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
@@ -85,13 +104,34 @@ const AppRouter = () => (
           <Route path="trainees" element={<TrainerTraineesPage />} />
           <Route path="updates" element={<TrainerUpdatesPage />} />
         </Route>
+        <Route path="manager">
+          <Route index element={<ManagerDashboard />} />
+          <Route path="approvals" element={<ManagerApprovalsPage />} />
+          <Route path="sellers" element={<ManagerSellersPage />} />
+          <Route path="gym-owners" element={<ManagerGymOwnersPage />} />
+          <Route path="gyms" element={<ManagerGymsPage />} />
+          <Route path="gyms/:gymId" element={<ManagerGymDetailPage />} />
+          <Route path="products" element={<ManagerProductsPage />} />
+          <Route path="products/:productId" element={<ManagerProductBuyersPage />} />
+          <Route path="marketplace" element={<ManagerMarketplacePage />} />
+          <Route path="messages" element={<ManagerMessagesPage />} />
+          <Route path="users/:userId" element={<ManagerUserDetailPage />} />
+        </Route>
         <Route path="admin">
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="users/:userId" element={<AdminUserDetailPage />} />
           <Route path="gyms" element={<AdminGymsPage />} />
+          <Route path="gyms/:gymId" element={<AdminGymDetailPage />} />
+          <Route path="memberships" element={<AdminMembershipsPage />} />
+          <Route path="products" element={<AdminProductsPage />} />
+          <Route path="products/:productId" element={<AdminProductBuyersPage />} />
           <Route path="revenue" element={<AdminRevenuePage />} />
           <Route path="marketplace" element={<AdminMarketplacePage />} />
+          <Route path="reviews" element={<AdminReviewsPage />} />
+          <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
           <Route path="messages" element={<AdminMessagesPage />} />
+          <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

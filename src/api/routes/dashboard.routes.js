@@ -1,11 +1,18 @@
 import { Router } from 'express';
 import {
   getAdminGyms,
+  getAdminGymDetail,
   getAdminMarketplace,
   getAdminOverview,
   getAdminRevenue,
   getAdminUsers,
   getAdminInsights,
+  getAdminMemberships,
+  getAdminUserDetail,
+  getAdminProducts,
+  getAdminProductBuyers,
+  getAdminReviews,
+  getAdminSubscriptions,
   getGymOwnerAnalytics,
   getGymOwnerGyms,
   getGymOwnerOverview,
@@ -21,6 +28,9 @@ import {
   getTraineeOverview,
   getTraineeProgress,
   submitTrainerFeedback,
+  getManagerOverview,
+  getManagerSellers,
+  getManagerGymOwners,
 } from '../controllers/dashboard.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 
@@ -49,8 +59,19 @@ router.get('/trainer/feedback', authorizeRoles('trainer'), getTrainerFeedbackInb
 router.get('/admin/overview', authorizeRoles('admin'), getAdminOverview);
 router.get('/admin/users', authorizeRoles('admin'), getAdminUsers);
 router.get('/admin/gyms', authorizeRoles('admin'), getAdminGyms);
+router.get('/admin/gyms/:gymId', authorizeRoles('admin'), getAdminGymDetail);
 router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
+router.get('/admin/memberships', authorizeRoles('admin'), getAdminMemberships);
+router.get('/admin/users/:userId', authorizeRoles('admin'), getAdminUserDetail);
+router.get('/admin/products', authorizeRoles('admin'), getAdminProducts);
+router.get('/admin/products/:productId', authorizeRoles('admin'), getAdminProductBuyers);
+router.get('/admin/reviews', authorizeRoles('admin'), getAdminReviews);
+router.get('/admin/subscriptions', authorizeRoles('admin'), getAdminSubscriptions);
+
+router.get('/manager/overview', authorizeRoles('manager'), getManagerOverview);
+router.get('/manager/sellers', authorizeRoles('manager'), getManagerSellers);
+router.get('/manager/gym-owners', authorizeRoles('manager'), getManagerGymOwners);
 
 export default router;

@@ -37,6 +37,13 @@ export const adminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'Analytics', 'AdminSettings'],
     }),
+    deleteProduct: builder.mutation({
+      query: (productId) => ({
+        url: `/admin/products/${productId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Dashboard', 'Marketplace'],
+    }),
   }),
 });
 
@@ -46,4 +53,5 @@ export const {
   useDeleteGymMutation,
   useUpdateAdminTogglesMutation,
   useUpdateUserStatusMutation,
+  useDeleteProductMutation,
 } = adminApi;

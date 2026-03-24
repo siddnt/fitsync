@@ -1,66 +1,24 @@
-import mongoose from 'mongoose';
 import User from '../../models/user.model.js';
 import Gym from '../../models/gym.model.js';
+import Product from '../../models/product.model.js';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
-import GymMembership from '../../models/gymMembership.model.js';
-import GymListingSubscription from '../../models/gymListingSubscription.model.js';
-import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import {
   applyAdminToggleUpdates,
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
+import {
+  cancelMembershipsForUser,
+  cleanOrdersForUser,
+  deactivateGymsForOwner,
+  cascadeDeleteGym,
+  cascadeDeleteProduct,
+} from '../../services/cascade.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
-
-const toObjectId = (value, label) => {
-  if (!value) {
-    throw new ApiError(400, `${label} is required.`);
-  }
-  try {
-    return new mongoose.Types.ObjectId(value);
-  } catch (_error) {
-    throw new ApiError(400, `${label} is invalid.`);
-  }
-};
-
-const cancelMembershipsForUser = async (userId) => {
-  await GymMembership.updateMany(
-    { trainee: userId, status: { $in: ['active', 'paused'] } },
-    { $set: { status: 'cancelled' } },
-  );
-};
-
-const cleanOrdersForUser = async (userId) => {
-  await Order.updateMany(
-    { user: userId, status: { $ne: 'delivered' } },
-    { $set: { status: 'delivered', 'orderItems.$[].status': 'delivered' } },
-  );
-};
-
-const deactivateGymsForOwner = async (ownerId) => {
-  const gyms = await Gym.find({ owner: ownerId }).select('_id').lean();
-  if (!gyms.length) {
-    return [];
-  }
-
-  const gymIds = gyms.map((gym) => gym._id);
-
-  await Promise.all([
-    Gym.updateMany({ _id: { $in: gymIds } }, { $set: { status: 'suspended', isPublished: false } }),
-    GymListingSubscription.updateMany(
-      { gym: { $in: gymIds }, status: { $in: ['active', 'grace'] } },
-      { $set: { status: 'cancelled', autoRenew: false } },
-    ),
-    TrainerAssignment.deleteMany({ gym: { $in: gymIds } }),
-    TrainerProgress.deleteMany({ gym: { $in: gymIds } }),
-    GymMembership.updateMany({ gym: { $in: gymIds } }, { $set: { status: 'cancelled' } }),
-  ]);
-
-  return gymIds;
-};
+import toObjectId from '../../utils/toObjectId.js';
 
 export const deleteUserAccount = asyncHandler(async (req, res) => {
   if (!req.user || req.user.role !== 'admin') {
@@ -105,6 +63,8 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
     }
   }
 
+  // Manager deletion has no special cascade since they don't own content
+
   await Promise.all(cleanupTasks);
   await User.findByIdAndDelete(targetUserId);
 
@@ -121,9 +81,9 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
   const targetUserId = toObjectId(req.params.userId, 'User id');
   const { status } = req.body ?? {};
 
-  const allowedStatuses = new Set(['active', 'inactive', 'pending']);
+  const allowedStatuses = new Set(['active', 'inactive', 'pending', 'suspended']);
   if (!status || !allowedStatuses.has(status)) {
-    throw new ApiError(400, 'Provide a valid status (active, inactive, or pending).');
+    throw new ApiError(400, 'Provide a valid status (active, inactive, pending, or suspended).');
   }
 
   const user = await User.findById(targetUserId);
@@ -155,20 +115,30 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Gym not found.');
   }
 
-  const cleanupTasks = [
-    TrainerAssignment.deleteMany({ gym: gymId }),
-    TrainerProgress.deleteMany({ gym: gymId }),
-    GymMembership.updateMany({ gym: gymId }, { $set: { status: 'cancelled' } }),
-    GymListingSubscription.deleteMany({ gym: gymId }),
-    Revenue.deleteMany({ 'metadata.gym': gymId.toString() }),
-  ];
-
-  await Promise.all(cleanupTasks);
-  await Gym.findByIdAndDelete(gymId);
+  await cascadeDeleteGym(gymId);
 
   return res
     .status(200)
     .json(new ApiResponse(200, { gymId }, 'Gym listing removed successfully.'));
+});
+
+export const deleteProduct = asyncHandler(async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    throw new ApiError(403, 'Only administrators can delete products.');
+  }
+
+  const productId = toObjectId(req.params.productId, 'Product id');
+
+  const product = await Product.findById(productId).lean();
+  if (!product) {
+    throw new ApiError(404, 'Product not found.');
+  }
+
+  await cascadeDeleteProduct(productId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { productId }, 'Product deleted successfully.'));
 });
 
 export const getAdminToggles = asyncHandler(async (_req, res) => {

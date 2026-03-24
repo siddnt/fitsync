@@ -11,7 +11,6 @@ import {
   deleteSellerProduct,
   listSellerOrders,
   updateSellerOrderStatus,
-  settleSellerOrder,
 } from '../controllers/marketplace.controller.js';
 import { upload } from '../../middlewares/multer.middleware.js';
 
@@ -31,6 +30,5 @@ router.delete('/seller/products/:productId', deleteSellerProduct);
 
 router.get('/seller/orders', listSellerOrders);
 router.patch('/seller/orders/:orderId/items/:itemId/status', updateSellerOrderStatus);
-router.patch('/seller/orders/:orderId/settle', settleSellerOrder);
 
 export default router;
