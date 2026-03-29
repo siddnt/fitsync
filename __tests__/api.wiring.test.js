@@ -1,16 +1,19 @@
-import request from 'supertest';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import app from '../src/app.js';
-import connectDB from '../src/db/index.js';
-import User from '../src/models/user.model.js';
-import Gym from '../src/models/gym.model.js';
+import request from "supertest";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import app from "../src/app.js";
+import connectDB from "../src/db/index.js";
+import User from "../src/models/user.model.js";
+import Gym from "../src/models/gym.model.js";
+import GymListingSubscription from "../src/models/gymListingSubscription.model.js";
+import Revenue from "../src/models/revenue.model.js";
 
-dotenv.config({ path: '.env' });
+dotenv.config({ path: ".env" });
 
-const randomEmail = () => `qa+${Date.now()}_${Math.random().toString(16).slice(2)}@fitsync.dev`;
+const randomEmail = () =>
+  `qa+${Date.now()}_${Math.random().toString(16).slice(2)}@fitsync.dev`;
 
-describe('API wiring smoke tests', () => {
+describe("API wiring smoke tests", () => {
   let connection;
   const createdUserIds = [];
 
@@ -26,23 +29,21 @@ describe('API wiring smoke tests', () => {
     await mongoose.connection.close();
   });
 
-  it('GET /api/system/health responds with ok', async () => {
-    const res = await request(app).get('/api/system/health');
+  it("GET /api/system/health responds with ok", async () => {
+    const res = await request(app).get("/api/system/health");
     expect(res.status).toBe(200);
-    expect(res.body?.status).toBe('ok');
+    expect(res.body?.status).toBe("ok");
   });
 
-  it('POST /api/auth/register creates a user', async () => {
+  it("POST /api/auth/register creates a user", async () => {
     const email = randomEmail();
-    const res = await request(app)
-      .post('/api/auth/register')
-      .send({
-        firstName: 'QA',
-        lastName: 'User',
-        email,
-        password: 'Test1234!',
-        role: 'trainee',
-      });
+    const res = await request(app).post("/api/auth/register").send({
+      firstName: "QA",
+      lastName: "User",
+      email,
+      password: "Test1234!",
+      role: "trainee",
+    });
 
     expect(res.status).toBe(201);
     expect(res.body?.data?.user?.email).toBe(email.toLowerCase());
@@ -54,18 +55,18 @@ describe('API wiring smoke tests', () => {
     }
   });
 
-  it('POST /api/auth/login authenticates existing user', async () => {
+  it("POST /api/auth/login authenticates existing user", async () => {
     const email = randomEmail();
-    const password = 'Test1234!';
+    const password = "Test1234!";
 
     const registerRes = await request(app)
-      .post('/api/auth/register')
-      .send({ firstName: 'Login', lastName: 'User', email, password });
+      .post("/api/auth/register")
+      .send({ firstName: "Login", lastName: "User", email, password });
 
     expect(registerRes.status).toBe(201);
 
     const loginRes = await request(app)
-      .post('/api/auth/login')
+      .post("/api/auth/login")
       .send({ email, password });
 
     expect(loginRes.status).toBe(200);
@@ -77,8 +78,8 @@ describe('API wiring smoke tests', () => {
     }
   });
 
-  it('GET /api/gyms returns a payload even without data', async () => {
-    const res = await request(app).get('/api/gyms?page=1&limit=5');
+  it("GET /api/gyms returns a payload even without data", async () => {
+    const res = await request(app).get("/api/gyms?page=1&limit=5");
 
     expect(res.status).toBe(200);
     expect(res.body?.data).toBeDefined();
@@ -86,27 +87,28 @@ describe('API wiring smoke tests', () => {
     expect(res.body?.data?.pagination).toBeDefined();
   });
 
-  it('POST /api/gyms requires authentication', async () => {
+  it("POST /api/gyms requires authentication", async () => {
     const res = await request(app)
-      .post('/api/gyms')
-      .send({ name: 'Unauth Gym', location: { city: 'Mumbai' } });
+      .post("/api/gyms")
+      .send({ name: "Unauth Gym", location: { city: "Mumbai" } });
 
     expect(res.status).toBe(401);
   });
 
-  it('POST /api/gyms allows gym owner to create a gym', async () => {
+  it("POST /api/gyms allows gym owner to create a gym", async () => {
     const ownerEmail = randomEmail();
-    const password = 'Test1234!';
+    const password = "Test1234!";
+    const paymentReference = `qa-listing-${Date.now()}`;
 
     const registerRes = await request(app)
-      .post('/api/auth/register')
+      .post("/api/auth/register")
       .send({
-        firstName: 'Owner',
-        lastName: 'Gym',
+        firstName: "Owner",
+        lastName: "Gym",
         email: ownerEmail,
         password,
-        role: 'gym-owner',
-        profile: { headline: 'Owner QA' },
+        role: "gym-owner",
+        profile: { headline: "Owner QA" },
       });
 
     expect(registerRes.status).toBe(201);
@@ -120,22 +122,31 @@ describe('API wiring smoke tests', () => {
     }
 
     const gymRes = await request(app)
-      .post('/api/gyms')
-      .set('Authorization', `Bearer ${accessToken}`)
+      .post("/api/gyms")
+      .set("Authorization", `Bearer ${accessToken}`)
       .send({
-        name: 'QA Fitness Center',
-        description: 'Automated test gym',
-        location: { city: 'Pune', addressLine1: '123 Test Lane' },
-        amenities: ['Weights', 'Cardio'],
-        pricing: { mrp: 1500, discounted: 1200 },
+        name: "QA Fitness Center",
+        description: "Automated test gym",
+        location: { city: "Pune", address: "123 Test Lane" },
+        amenities: ["Weights", "Cardio"],
+        pricing: { monthlyMrp: 1500, monthlyPrice: 1200 },
+        subscription: {
+          planCode: "listing-1m",
+          paymentReference,
+          autoRenew: false,
+        },
       });
 
     expect(gymRes.status).toBe(201);
-    expect(gymRes.body?.data?.gym?.name).toBe('QA Fitness Center');
+    expect(gymRes.body?.data?.gym?.name).toBe("QA Fitness Center");
 
     const gymId = gymRes.body?.data?.gym?.id;
     if (gymId) {
-      await Gym.findByIdAndDelete(gymId);
+      await Promise.all([
+        GymListingSubscription.deleteMany({ gym: gymId }),
+        Revenue.deleteMany({ "metadata.gymId": String(gymId) }),
+        Gym.findByIdAndDelete(gymId),
+      ]);
     }
   });
 });
