@@ -58,6 +58,10 @@ npm run client:dev
 ```
 Serves at `http://localhost:5173` and proxies `/api` to the server.
 
+## API documentation
+- Swagger UI: `http://localhost:4000/api/docs`
+- Raw OpenAPI JSON: `http://localhost:4000/api/docs.json`
+
 ## Admin quick start
 - Create an admin user:
 ```

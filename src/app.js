@@ -9,9 +9,11 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 import apiRouter from "./api/routes/index.js";
+import { createOpenApiSpec, swaggerUiOptions } from "./docs/openapi.js";
 
 dotenv.config();
 
@@ -72,6 +74,13 @@ app.use(cookieParser());
 
 app.use(express.static(path.join(rootDir, "public")));
 app.use("/uploads", express.static(path.join(rootDir, "src/storage/uploads")));
+
+app.get("/api/docs.json", (req, res) => {
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    return res.status(200).json(createOpenApiSpec(baseUrl));
+});
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(null, swaggerUiOptions));
 
 app.use("/api", apiRouter);
 
