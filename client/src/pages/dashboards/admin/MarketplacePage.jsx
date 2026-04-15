@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
+import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
 import '../Dashboard.css';
+
+const getUserId = (user) => String(user?.id ?? user?._id ?? '');
 
 const AdminMarketplacePage = () => {
   const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
@@ -86,9 +91,61 @@ const AdminMarketplacePage = () => {
         .filter(Boolean)
         .map((value) => value.toString().toLowerCase());
 
-      return searchableFields.some((value) => value.includes(query));
+      return matchesAcrossFields(searchableFields, query);
     });
   }, [orders, searchTerm, statusFilter, categoryFilter]);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const suggestions = [];
+    const seen = new Set();
+
+    orders.forEach((order) => {
+      [
+        {
+          value: order.orderNumber ?? order.id,
+          meta: `Order • ${order.user?.name ?? 'Unknown buyer'}`,
+        },
+        {
+          value: order.user?.name,
+          meta: `Buyer • ${order.user?.email ?? 'No email'}`,
+        },
+        {
+          value: order.seller?.name,
+          meta: `Seller • ${order.seller?.email ?? 'No email'}`,
+        },
+        ...((order.items || []).map((item) => ({
+          value: item?.name,
+          meta: `Item • ${item?.category ? formatStatus(item.category) : 'Uncategorised'}`,
+        }))),
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+        const lower = normalized.toLowerCase();
+        if (!matchesPrefix(lower, query)) {
+          return;
+        }
+        const key = `${index}:${lower}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [orders, searchTerm]);
 
   const summary = useMemo(() => {
     if (!orders.length) {
@@ -121,13 +178,56 @@ const AdminMarketplacePage = () => {
     orders.forEach((order) => {
       (order.items || []).forEach((item) => {
         if (!item?.name) return;
-        counters.set(item.name, (counters.get(item.name) || 0) + (item.quantity || 0));
+        const prev = counters.get(item.name) || { quantity: 0, revenue: 0 };
+        counters.set(item.name, {
+          quantity: prev.quantity + (item.quantity || 0),
+          revenue: prev.revenue + (Number(item.price) || 0) * (item.quantity || 0),
+        });
       });
     });
     return [...counters.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1].revenue - a[1].revenue)
       .slice(0, 5)
-      .map(([name, quantity]) => ({ name, quantity }));
+      .map(([name, data]) => ({ name, quantity: data.quantity, revenue: data.revenue }));
+  }, [orders]);
+
+  const topSellers = useMemo(() => {
+    const map = new Map();
+    orders.forEach((order) => {
+      const id = getUserId(order.seller);
+      if (!id) return;
+      const prev = map.get(id) || { id, name: order.seller?.name, email: order.seller?.email, revenue: 0 };
+      prev.revenue += Number(order.total?.amount ?? order.total ?? 0);
+      map.set(id, prev);
+    });
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [orders]);
+
+  const topBuyers = useMemo(() => {
+    const map = new Map();
+    orders.forEach((order) => {
+      const id = getUserId(order.user);
+      if (!id) return;
+      const prev = map.get(id) || { id, name: order.user?.name, email: order.user?.email, spent: 0 };
+      prev.spent += Number(order.total?.amount ?? order.total ?? 0);
+      map.set(id, prev);
+    });
+    return [...map.values()].sort((a, b) => b.spent - a.spent).slice(0, 5);
+  }, [orders]);
+
+  const topCategories = useMemo(() => {
+    const map = new Map();
+    orders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        const cat = item?.category;
+        if (!cat) return;
+        const prev = map.get(cat) || { name: cat, items: 0, revenue: 0 };
+        prev.items += (item.quantity || 0);
+        prev.revenue += (Number(item.price) || 0) * (item.quantity || 0);
+        map.set(cat, prev);
+      });
+    });
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [orders]);
 
   if (isLoading) {
@@ -200,13 +300,15 @@ const AdminMarketplacePage = () => {
         className="dashboard-section--span-12"
         action={(
           <div className="users-toolbar">
-            <input
-              type="search"
-              className="inventory-toolbar__input"
-              placeholder="Search order, buyer, seller"
+            <SearchSuggestInput
+              id="admin-marketplace-search"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label="Search orders"
+              onChange={setSearchTerm}
+              onSelect={(suggestion) => setSearchTerm(suggestion.label)}
+              suggestions={searchSuggestions}
+              placeholder="Search by order ID, buyer, seller, or item name"
+              ariaLabel="Search orders"
+              noResultsText="No orders match those search attributes."
             />
             <select
               className="inventory-toolbar__input inventory-toolbar__input--select"
@@ -271,11 +373,15 @@ const AdminMarketplacePage = () => {
                       </div>
                     </td>
                     <td>
-                      {order.user?.name ?? '—'}
+                      {getUserId(order.user) ? (
+                        <Link to={`/dashboard/admin/users/${getUserId(order.user)}`}>{order.user?.name ?? '—'}</Link>
+                      ) : (order.user?.name ?? '—')}
                       <div><small>{order.user?.email}</small></div>
                     </td>
                     <td>
-                      {order.seller?.name ?? '—'}
+                      {getUserId(order.seller) ? (
+                        <Link to={`/dashboard/admin/users/${getUserId(order.seller)}`}>{order.seller?.name ?? '—'}</Link>
+                      ) : (order.seller?.name ?? '—')}
                       <div><small>{order.seller?.email}</small></div>
                     </td>
                     <td>
@@ -302,15 +408,15 @@ const AdminMarketplacePage = () => {
               <tr>
                 <th>Product Name</th>
                 <th>Units Sold</th>
+                <th>Revenue</th>
               </tr>
             </thead>
             <tbody>
               {topProducts.map((product, index) => (
                 <tr key={product.name}>
-                  <td>
-                    <strong>{index + 1}. {product.name}</strong>
-                  </td>
+                  <td><strong>{index + 1}. {product.name}</strong></td>
                   <td>{product.quantity}</td>
+                  <td>{formatCurrency({ amount: product.revenue })}</td>
                 </tr>
               ))}
             </tbody>
@@ -318,6 +424,57 @@ const AdminMarketplacePage = () => {
         ) : (
           <EmptyState message="Sales data will appear when customers purchase items." />
         )}
+      </DashboardSection>
+
+      <DashboardSection title="Top Sellers" className="dashboard-section--span-12">
+        {topSellers.length ? (
+          <table className="dashboard-table">
+            <thead><tr><th>Seller</th><th>Email</th><th>Revenue</th></tr></thead>
+            <tbody>
+              {topSellers.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.id ? <Link to={`/dashboard/admin/users/${s.id}`}>{s.name ?? '—'}</Link> : (s.name ?? '—')}</td>
+                  <td>{s.email ?? '—'}</td>
+                  <td>{formatCurrency({ amount: s.revenue })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <EmptyState message="No seller data available." />}
+      </DashboardSection>
+
+      <DashboardSection title="Top Buyers" className="dashboard-section--span-12">
+        {topBuyers.length ? (
+          <table className="dashboard-table">
+            <thead><tr><th>Buyer</th><th>Email</th><th>Total Spent</th></tr></thead>
+            <tbody>
+              {topBuyers.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.id ? <Link to={`/dashboard/admin/users/${b.id}`}>{b.name ?? '—'}</Link> : (b.name ?? '—')}</td>
+                  <td>{b.email ?? '—'}</td>
+                  <td>{formatCurrency({ amount: b.spent })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <EmptyState message="No buyer data available." />}
+      </DashboardSection>
+
+      <DashboardSection title="Top Categories" className="dashboard-section--span-12">
+        {topCategories.length ? (
+          <table className="dashboard-table">
+            <thead><tr><th>Category</th><th>Items Sold</th><th>Revenue</th></tr></thead>
+            <tbody>
+              {topCategories.map((c) => (
+                <tr key={c.name}>
+                  <td>{formatStatus(c.name)}</td>
+                  <td>{c.items}</td>
+                  <td>{formatCurrency({ amount: c.revenue })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <EmptyState message="No category data available." />}
       </DashboardSection>
     </div>
   );

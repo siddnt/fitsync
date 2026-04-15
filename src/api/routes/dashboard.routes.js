@@ -5,6 +5,8 @@ import {
   getAdminOverview,
   getAdminRevenue,
   getAdminUsers,
+  getAdminUserDetails,
+  getAdminGymDetails,
   getAdminInsights,
   getGymOwnerAnalytics,
   getGymOwnerGyms,
@@ -21,6 +23,7 @@ import {
   getTraineeOverview,
   getTraineeProgress,
   submitTrainerFeedback,
+  getManagerOverview,
 } from '../controllers/dashboard.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 
@@ -48,9 +51,13 @@ router.get('/trainer/feedback', authorizeRoles('trainer'), getTrainerFeedbackInb
 
 router.get('/admin/overview', authorizeRoles('admin'), getAdminOverview);
 router.get('/admin/users', authorizeRoles('admin'), getAdminUsers);
+router.get('/admin/users/:userId', authorizeRoles('admin'), getAdminUserDetails);
 router.get('/admin/gyms', authorizeRoles('admin'), getAdminGyms);
+router.get('/admin/gyms/:gymId', authorizeRoles('admin'), getAdminGymDetails);
 router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
+
+router.get('/manager/overview', authorizeRoles('manager'), getManagerOverview);
 
 export default router;

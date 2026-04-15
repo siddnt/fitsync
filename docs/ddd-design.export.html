@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>FitSync DDD Design</title>
+    <style>
+    @page { size: A4; margin: 10mm 10mm; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #0f172a;
+      line-height: 1.45;
+      font-size: 11.5px;
+      margin: 0;
+      padding: 0;
+    }
+    main {
+      max-width: none;
+      margin: 0;
+    }
+    h1, h2, h3 {
+      color: #0f172a;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      page-break-after: auto;
+      break-after: auto;
+    }
+    h1 { font-size: 22px; border-bottom: 2px solid #cbd5e1; padding-bottom: 5px; }
+    h2 { font-size: 17px; }
+    h3 { font-size: 13px; }
+    p { margin: 6px 0; text-align: justify; }
+    hr { border: none; border-top: 1px solid #cbd5e1; margin: 14px 0; }
+    strong { color: #111827; }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 11px;
+    }
+    pre {
+      background: #0f172a;
+      color: white;
+      padding: 10px 12px;
+      border-radius: 8px;
+      overflow: hidden;
+      white-space: pre-wrap;
+      page-break-inside: avoid;
+    }
+    pre code {
+      background: transparent;
+      border: 0;
+      color: white;
+      padding: 0;
+    }
+    ul, ol { margin: 6px 0 8px 18px; padding: 0; }
+    li { margin: 3px 0; }
+    .list-detail { margin-top: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 10.5px;
+      page-break-inside: auto;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 7px;
+      vertical-align: top;
+    }
+    th {
+      background: #e2e8f0;
+      text-align: left;
+    }
+    tr { page-break-inside: avoid; }
+    figure.diagram {
+      margin: 6px 0 10px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid-page;
+    }
+    figure.diagram img {
+      max-width: 100%;
+      max-height: 205mm;
+      width: auto;
+      height: auto;
+      display: inline-block;
+    }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FitSync: Domain-Driven Design Model</h1><h2>1. Project title and brief description</h2><p><strong>Title:</strong> FitSync: A Multi-Role Fitness, Gym Membership, and Marketplace Platform</p><p><strong>Brief description:</strong> FitSync is a full-stack platform that combines gym discovery, membership management, trainer engagement, and a fitness marketplace into one system. The application supports multiple user roles including trainee, trainer, gym owner, seller, admin, and general user. Trainees can discover gyms, join memberships, review gyms, follow trainer guidance, track progress, and place product orders. Trainers can manage assigned trainees, record attendance, update diet plans, and maintain progress logs. Gym owners can create and manage gym listings, approve trainer requests, monitor memberships, purchase sponsorships, and track business analytics. Sellers can publish products, manage inventory, process customer orders, and monitor fulfillment statuses. Admins supervise the entire platform through moderation, user management, platform settings, and revenue dashboards.</p><p>From a domain perspective, FitSync is not a single model; it is a set of related subdomains that interact through shared references such as <code>User</code>, <code>Gym</code>, <code>Order</code>, and <code>Revenue</code>. A Domain-Driven Design approach helps separate concerns into bounded contexts, define aggregate boundaries, and control how models interact. This improves maintainability, aligns the codebase with business capabilities, and makes the system easier to evolve as both B2C and B2B use cases grow.</p><hr /><h2>2. Bounded contexts</h2><h3>Bounded contexts identified</h3><ol><li><strong>Identity and Access Context</strong><div class='list-detail'>Handles user identity, role assignment, authentication, profile data, and access control.</div></li><li><strong>Gym Discovery and Membership Context</strong><div class='list-detail'>Handles gym listings, public gym search, memberships, gallery items, and gym reviews.</div></li><li><strong>Trainer Engagement Context</strong><div class='list-detail'>Handles trainer-to-gym assignment, trainee coaching, attendance, progress tracking, diet plans, feedback, and session booking.</div></li><li><strong>Marketplace and Fulfillment Context</strong><div class='list-detail'>Handles products, cart state, order placement, seller inventory, order item fulfillment, and product reviews.</div></li><li><strong>Monetization and Revenue Context</strong><div class='list-detail'>Handles listing subscriptions, sponsorship payments, payment sessions, and revenue recording.</div></li><li><strong>Administration and Support Context</strong><div class='list-detail'>Handles platform settings, moderation toggles, support/contact messages, and supervisory controls.</div></li></ol><h3>2.a Bounded context diagram</h3><figure class="diagram"><img src="file:///C:/Users/LENOVO/OneDrive/Desktop/wbd/fitsync/docs/uml/bounded-contexts.svg" alt="Bounded Context Diagram" /></figure><hr /><h2>3. Context mappings</h2><h3>3.b Context map diagram</h3><figure class="diagram"><img src="file:///C:/Users/LENOVO/OneDrive/Desktop/wbd/fitsync/docs/uml/context-map.svg" alt="Context Map Diagram" /></figure><h3>Mapping interpretation</h3><table><thead><tr><th>Upstream Context</th><th>Downstream Context</th><th>Mapping Type</th><th>Reason</th></tr></thead><tbody><tr><td>Identity and Access</td><td>All other contexts</td><td>Shared Kernel</td><td>All major contexts rely on <code>User</code> identity, role, and status.</td></tr><tr><td>Gym Discovery and Membership</td><td>Trainer Engagement</td><td>Customer/Supplier</td><td>Trainer workflows only make sense if a trainer is approved for a gym and trainees are members of that gym.</td></tr><tr><td>Gym Discovery and Membership</td><td>Monetization and Revenue</td><td>Customer/Supplier</td><td>Listing subscriptions and sponsorships target gyms and owners.</td></tr><tr><td>Marketplace and Fulfillment</td><td>Monetization and Revenue</td><td>Published Language</td><td>Revenue is derived from order settlement and marketplace events.</td></tr><tr><td>Administration and Support</td><td>All operational contexts</td><td>Partnership / Governance</td><td>Admin toggles and moderation policies influence platform behavior globally.</td></tr></tbody></table><hr /><h2>4. Submodels: entities, value objects, and services</h2><h3>4.c Submodel inventory</h3><table><thead><tr><th>Submodel / Bounded Context</th><th>Entities</th><th>Value Objects</th><th>Services</th></tr></thead><tbody><tr><td>Identity and Access</td><td><code>User</code></td><td><code>Profile</code>, <code>SocialLinks</code>, <code>OwnerMetrics</code>, <code>TraineeMetrics</code>, <code>TrainerMetrics</code>, <code>PersonalName</code></td><td><code>AuthenticationService</code>, <code>ProfileService</code>, <code>AccessControlService</code></td></tr><tr><td>Gym Discovery and Membership</td><td><code>Gym</code>, <code>GymMembership</code>, <code>Review</code>, <code>Gallery</code></td><td><code>Location</code>, <code>Pricing</code>, <code>ContactInfo</code>, <code>Schedule</code>, <code>GymAnalytics</code>, <code>Sponsorship</code>, <code>MembershipBilling</code></td><td><code>GymCatalogueService</code>, <code>MembershipService</code>, <code>GymReviewService</code>, <code>GalleryService</code></td></tr><tr><td>Trainer Engagement</td><td><code>TrainerAssignment</code>, <code>TrainerProgress</code>, <code>Booking</code></td><td><code>TraineeRecord</code>, <code>Attendance</code>, <code>ProgressMetric</code>, <code>BodyMetric</code>, <code>DietPlan</code>, <code>DietMeal</code>, <code>Feedback</code>, <code>TraineeFeedback</code>, <code>SessionFeedback</code>, <code>TimeSlot</code></td><td><code>TrainerAssignmentService</code>, <code>AttendanceService</code>, <code>ProgressTrackingService</code>, <code>DietPlanningService</code>, <code>BookingService</code></td></tr><tr><td>Marketplace and Fulfillment</td><td><code>Product</code>, <code>Order</code>, <code>Cart</code>, <code>ProductReview</code></td><td><code>OrderItem</code>, <code>ShippingAddress</code>, <code>StatusHistoryEntry</code>, <code>CartItem</code>, <code>Money</code>, <code>ProductMetadata</code></td><td><code>CatalogueSearchService</code>, <code>OrderPlacementService</code>, <code>SellerFulfillmentService</code>, <code>ProductReviewService</code>, <code>DiscountPricingService</code></td></tr><tr><td>Monetization and Revenue</td><td><code>GymListingSubscription</code>, <code>PaymentSession</code>, <code>Revenue</code></td><td><code>Invoice</code>, <code>PaymentPeriod</code>, <code>OrderSnapshot</code>, <code>StripeSessionInfo</code>, <code>RevenueMetadata</code></td><td><code>SubscriptionCheckoutService</code>, <code>SponsorshipPurchaseService</code>, <code>RevenueService</code>, <code>PaymentSessionService</code></td></tr><tr><td>Administration and Support</td><td><code>SystemSetting</code>, <code>ContactMessage</code></td><td><code>FeatureToggleSet</code>, <code>ContactStatus</code></td><td><code>SystemSettingsService</code>, <code>ModerationService</code>, <code>SupportInboxService</code></td></tr></tbody></table><h3>Notes on classification</h3><ul><li><strong>Entities</strong> have identity and lifecycle over time.</li><li><strong>Value objects</strong> are immutable conceptual parts inside aggregates or entities.</li><li><strong>Services</strong> represent business operations that do not fit naturally inside a single entity.</li></ul><hr /><h2>5. Cardinality ratios</h2><h3>4.d Cardinality table</h3><table><thead><tr><th>Relationship</th><th>Cardinality Ratio</th><th>Explanation</th></tr></thead><tbody><tr><td><code>User (gym-owner)</code> to <code>Gym</code></td><td><code>1 : N</code></td><td>One owner can own many gyms; each gym has exactly one owner.</td></tr><tr><td><code>Gym</code> to <code>GymMembership</code></td><td><code>1 : N</code></td><td>One gym can have many memberships over time; each membership belongs to one gym.</td></tr><tr><td><code>User (trainee)</code> to <code>GymMembership</code></td><td><code>1 : N</code></td><td>One trainee can have many memberships over time; each membership belongs to one trainee.</td></tr><tr><td><code>User (trainer)</code> to <code>GymMembership</code></td><td><code>1 : N</code></td><td>One trainer can supervise many memberships; a membership references zero or one trainer.</td></tr><tr><td><code>User (trainer)</code> to <code>TrainerAssignment</code></td><td><code>1 : N</code></td><td>One trainer can be assigned to many gyms; one assignment belongs to one trainer.</td></tr><tr><td><code>Gym</code> to <code>TrainerAssignment</code></td><td><code>1 : N</code></td><td>One gym can approve many trainer assignments; one assignment belongs to one gym.</td></tr><tr><td><code>TrainerAssignment</code> to <code>TraineeRecord</code></td><td><code>1 : N</code></td><td>One assignment contains many trainee records; each trainee record belongs to one assignment.</td></tr><tr><td><code>User (trainer)</code> to <code>TrainerProgress</code></td><td><code>1 : N</code></td><td>One trainer tracks many trainee progress records; each progress record belongs to one trainer.</td></tr><tr><td><code>User (trainee)</code> to <code>TrainerProgress</code></td><td><code>1 : N</code></td><td>One trainee can have progress records with one or more trainers; each progress record belongs to one trainee.</td></tr><tr><td><code>Gym</code> to <code>TrainerProgress</code></td><td><code>1 : N</code></td><td>One gym can host many progress records; each progress record belongs to one gym.</td></tr><tr><td><code>User</code> to <code>Review</code></td><td><code>1 : N</code></td><td>One user can review many gyms; each gym review belongs to one user.</td></tr><tr><td><code>Gym</code> to <code>Review</code></td><td><code>1 : N</code></td><td>One gym can receive many reviews; each review belongs to one gym.</td></tr><tr><td><code>User (seller)</code> to <code>Product</code></td><td><code>1 : N</code></td><td>One seller can create many products; each product belongs to one seller.</td></tr><tr><td><code>User</code> to <code>Order</code></td><td><code>1 : N</code></td><td>One customer can place many orders; each order belongs to one customer.</td></tr><tr><td><code>Order</code> to <code>OrderItem</code></td><td><code>1 : N</code></td><td>One order contains one or more order items.</td></tr><tr><td><code>Product</code> to <code>OrderItem</code></td><td><code>1 : N</code></td><td>One product can appear in many order items over time.</td></tr><tr><td><code>Product</code> to <code>ProductReview</code></td><td><code>1 : N</code></td><td>One product can have many reviews; each product review belongs to one product.</td></tr><tr><td><code>User</code> to <code>ProductReview</code></td><td><code>1 : N</code></td><td>One user can review many products; each product review belongs to one user.</td></tr><tr><td><code>Gym</code> to <code>GymListingSubscription</code></td><td><code>1 : N</code></td><td>One gym can have multiple listing subscriptions over time; each subscription belongs to one gym.</td></tr><tr><td><code>User (owner)</code> to <code>GymListingSubscription</code></td><td><code>1 : N</code></td><td>One owner can purchase many subscriptions; each subscription belongs to one owner.</td></tr><tr><td><code>Order</code> to <code>Revenue</code></td><td><code>1 : N</code></td><td>One order can generate multiple revenue records such as seller payout and platform commission.</td></tr><tr><td><code>User</code> to <code>Revenue</code></td><td><code>1 : N</code></td><td>One user can accumulate many revenue entries; each revenue entry belongs to zero or one user.</td></tr><tr><td><code>User</code> to <code>ContactMessage</code></td><td><code>0 : N</code> (conceptual)</td><td>A visitor or user can submit many contact messages; current model stores message identity by email, not FK.</td></tr></tbody></table><h3>High-level ER diagram</h3><figure class="diagram"><img src="file:///C:/Users/LENOVO/OneDrive/Desktop/wbd/fitsync/docs/uml/cardinality-model.svg" alt="Cardinality Model Diagram" /></figure><hr /><h2>6. Aggregates</h2><h3>4.e Aggregate definitions</h3><table><thead><tr><th>Bounded Context</th><th>Aggregate Root</th><th>Members inside the Aggregate</th><th>Main Invariants</th></tr></thead><tbody><tr><td>Identity and Access</td><td><code>User</code></td><td><code>Profile</code>, <code>SocialLinks</code>, role-specific metrics, profile picture, refresh token</td><td>A user has one identity, one role, one status, and unique email.</td></tr><tr><td>Gym Discovery and Membership</td><td><code>Gym</code></td><td><code>Location</code>, <code>Pricing</code>, <code>ContactInfo</code>, <code>Schedule</code>, <code>GymAnalytics</code>, <code>Sponsorship</code></td><td>A gym must have one owner, one primary identity, and valid publication/status state.</td></tr><tr><td>Gym Discovery and Membership</td><td><code>GymMembership</code></td><td><code>MembershipBilling</code>, benefits, notes</td><td>A membership links one trainee to one gym for a bounded period and valid status.</td></tr><tr><td>Gym Discovery and Membership</td><td><code>Review</code></td><td>rating, comment</td><td>A user can review the same gym at most once.</td></tr><tr><td>Gym Discovery and Membership</td><td><code>Gallery</code></td><td>title, description, image metadata</td><td>A gallery item belongs to one uploader and optionally one gym.</td></tr><tr><td>Trainer Engagement</td><td><code>TrainerAssignment</code></td><td><code>TraineeRecord[]</code>, request dates, status</td><td>A trainer can have only one assignment record per gym.</td></tr><tr><td>Trainer Engagement</td><td><code>TrainerProgress</code></td><td><code>Attendance[]</code>, <code>ProgressMetric[]</code>, <code>BodyMetric[]</code>, <code>DietPlan[]</code>, <code>Feedback[]</code>, <code>TraineeFeedback[]</code></td><td>One progress aggregate tracks one trainer-trainee coaching relationship.</td></tr><tr><td>Trainer Engagement</td><td><code>Booking</code></td><td>session feedback, payment status, time slot</td><td>A booking belongs to one user, one trainer, and one gym.</td></tr><tr><td>Marketplace and Fulfillment</td><td><code>Product</code></td><td>core product data, metadata</td><td>A product belongs to one seller and has one current price/stock state.</td></tr><tr><td>Marketplace and Fulfillment</td><td><code>Order</code></td><td><code>OrderItem[]</code>, <code>ShippingAddress</code>, order total, status</td><td>An order owns its item snapshot and fulfillment history.</td></tr><tr><td>Marketplace and Fulfillment</td><td><code>Cart</code></td><td><code>CartItem[]</code>, total</td><td>A cart belongs to one user and contains selected items before checkout.</td></tr><tr><td>Marketplace and Fulfillment</td><td><code>ProductReview</code></td><td>rating, title, comment, verified purchase flag</td><td>A user can review the same product at most once.</td></tr><tr><td>Monetization and Revenue</td><td><code>GymListingSubscription</code></td><td><code>Invoice[]</code>, period, metadata</td><td>A listing subscription has one target gym, one owner, and one active lifecycle state.</td></tr><tr><td>Monetization and Revenue</td><td><code>PaymentSession</code></td><td><code>OrderSnapshot</code>, <code>PaymentPeriod</code>, stripe info, metadata</td><td>A payment session tracks one monetization transaction from initiation to completion.</td></tr><tr><td>Monetization and Revenue</td><td><code>Revenue</code></td><td>amount, type, metadata</td><td>Revenue entries are immutable business facts once recorded.</td></tr><tr><td>Administration and Support</td><td><code>SystemSetting</code></td><td>key, value, description</td><td>One setting key maps to one current platform value.</td></tr><tr><td>Administration and Support</td><td><code>ContactMessage</code></td><td>sender details, message body, status</td><td>A support message moves through <code>new -&gt; read -&gt; responded</code>.</td></tr></tbody></table><h3>Aggregate diagram</h3><figure class="diagram"><img src="file:///C:/Users/LENOVO/OneDrive/Desktop/wbd/fitsync/docs/uml/aggregates.svg" alt="Aggregate Diagram" /></figure><hr /><h2>7. Summary</h2><p>FitSync is best modeled as a modular monolith with six bounded contexts. The strongest aggregate roots are <code>User</code>, <code>Gym</code>, <code>GymMembership</code>, <code>TrainerAssignment</code>, <code>TrainerProgress</code>, <code>Product</code>, <code>Order</code>, <code>GymListingSubscription</code>, <code>Revenue</code>, <code>SystemSetting</code>, and <code>ContactMessage</code>. The most important integration paths are:</p><ul><li><strong>Identity -&gt; all other contexts</strong></li><li><strong>Gym Discovery and Membership -&gt; Trainer Engagement</strong></li><li><strong>Gym Discovery and Membership -&gt; Monetization</strong></li><li><strong>Marketplace -&gt; Monetization</strong></li><li><strong>Administration -&gt; platform-wide governance</strong></li></ul><p>This DDD structure matches the current codebase and also provides a clean path for future separation into services if the platform grows.</p>
+    </main>
+  </body>
+</html>

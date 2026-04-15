@@ -7,6 +7,8 @@ import {
   useGetTraineeOverviewQuery,
   useGetTraineeProgressQuery,
 } from '../../services/dashboardApi.js';
+import NotificationsPanel from './components/NotificationsPanel.jsx';
+import { useGetMyNotificationsQuery, useGetMyRecommendationsQuery } from '../../services/userApi.js';
 import {
   formatCurrency,
   formatDate,
@@ -40,6 +42,8 @@ const TraineeDashboard = () => {
 
   const overview = overviewData?.data;
   const progress = progressData?.data;
+  const { data: notificationsResponse } = useGetMyNotificationsQuery({ limit: 6 });
+  const { data: recommendationsResponse } = useGetMyRecommendationsQuery();
 
   const membership = overview?.membership ?? null;
   const attendanceRecords = progress?.rawAttendance ?? progress?.attendance?.records ?? EMPTY_ATTENDANCE;
@@ -78,6 +82,8 @@ const TraineeDashboard = () => {
   const currentStreak = overview?.progress?.streak ?? 0;
   const lastCheckInLabel = overview?.progress?.lastCheckIn ? formatDate(overview.progress.lastCheckIn) : 'No check-ins yet';
   const hasProgressSummary = Boolean(overview?.progress) || attendanceTotals.totalDays > 0;
+  const notifications = notificationsResponse?.data?.notifications ?? [];
+  const recommendations = recommendationsResponse?.data ?? {};
 
   const isLoading = isOverviewLoading || isProgressLoading;
   const isError = isOverviewError || isProgressError;
@@ -208,6 +214,32 @@ const TraineeDashboard = () => {
           enrollmentStart={enrollmentStart}
           attendanceMap={attendanceMap}
         />
+      </div>
+
+      <div className="dashboard-row row-overview">
+        <DashboardSection title="Recommended gyms">
+          {recommendations.gyms?.length ? (
+            <div className="stat-grid">
+              {recommendations.gyms.map((gym) => (
+                <div key={gym.id} className="stat-card">
+                  <small>{gym.city ?? 'Gym'}</small>
+                  <strong>{gym.name}</strong>
+                  <small>Rating {gym.rating ?? 0} · Members {gym.membershipCount ?? 0}</small>
+                  <small>{gym.monthlyPrice ? formatCurrency(gym.monthlyPrice) : 'Pricing on request'}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="Recommendations will appear after we learn more from your memberships and orders." />
+          )}
+        </DashboardSection>
+
+        <DashboardSection title="Notifications">
+          <NotificationsPanel
+            notifications={notifications}
+            emptyMessage="Membership reminders and order updates will appear here."
+          />
+        </DashboardSection>
       </div>
     </div>
   );

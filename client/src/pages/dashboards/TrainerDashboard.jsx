@@ -1,7 +1,9 @@
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
+import NotificationsPanel from './components/NotificationsPanel.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetTrainerFeedbackQuery, useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
+import { useGetMyNotificationsQuery } from '../../services/userApi.js';
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import './Dashboard.css';
 
@@ -17,6 +19,8 @@ const TrainerDashboard = () => {
   const assignments = overview?.activeAssignments ?? [];
   const upcoming = overview?.upcomingCheckIns ?? [];
   const feedbackEntries = Array.isArray(feedbackData?.data?.feedback) ? feedbackData.data.feedback : [];
+  const { data: notificationsResponse } = useGetMyNotificationsQuery({ limit: 6 });
+  const notifications = notificationsResponse?.data?.notifications ?? [];
 
   if (isLoading) {
     return (
@@ -148,6 +152,13 @@ const TrainerDashboard = () => {
         ) : (
           <EmptyState message="No trainee feedback yet. Encourage members to share their thoughts." />
         )}
+      </DashboardSection>
+
+      <DashboardSection title="Notifications" className="dashboard-section--span-12">
+        <NotificationsPanel
+          notifications={notifications}
+          emptyMessage="Assignment approvals and trainee activity updates will appear here."
+        />
       </DashboardSection>
     </div>
   );

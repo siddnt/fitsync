@@ -30,3 +30,4 @@ src/storage/uploads/**
 temp/
 .cache/
 client/dist/
+tools/plantuml.jar

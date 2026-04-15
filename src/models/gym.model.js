@@ -69,6 +69,16 @@ const analyticsSchema = new mongoose.Schema(
             type: Number,
             default: 0
         },
+        memberships: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        trainers: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         rating: {
             type: Number,
             default: 0
@@ -150,6 +160,12 @@ const gymSchema = new mongoose.Schema(
                 ref: "User"
             }
         ],
+        managers: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ],
         contact: contactSchema,
         schedule: scheduleSchema,
         analytics: {
@@ -194,9 +210,52 @@ const gymSchema = new mongoose.Schema(
     }
 );
 
-gymSchema.index({ "location.city": 1, sponsor: -1, createdAt: -1 });
-gymSchema.index({ status: 1, isPublished: 1 });
+const PUBLIC_GYM_FILTER = { status: 'active', isPublished: true };
+
+gymSchema.index(
+    { status: 1, isPublished: 1, 'location.city': 1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
+gymSchema.index(
+    { status: 1, isPublished: 1, 'analytics.impressions': -1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
+gymSchema.index(
+    { status: 1, isPublished: 1, 'analytics.rating': -1, 'analytics.ratingCount': -1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
+gymSchema.index(
+    { status: 1, isPublished: 1, 'analytics.memberships': -1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
+gymSchema.index(
+    { 'sponsorship.status': 1, 'analytics.impressions': -1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
+gymSchema.index(
+    { "location.city": 1, sponsor: -1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_GYM_FILTER }
+);
 gymSchema.index({ owner: 1 });
+gymSchema.index(
+    {
+        name: "text",
+        description: "text",
+        tags: "text",
+        amenities: "text",
+        "location.city": "text"
+    },
+    {
+        weights: {
+            name: 10,
+            "location.city": 6,
+            tags: 5,
+            amenities: 3,
+            description: 2
+        },
+        name: "gym_search_text_idx"
+    }
+);
 
 gymSchema.virtual("isSponsored").get(function () {
     if (!this.sponsor) return false;

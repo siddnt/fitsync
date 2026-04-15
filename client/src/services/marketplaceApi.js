@@ -51,6 +51,14 @@ export const marketplaceApi = apiSlice.injectEndpoints({
         'Dashboard',
       ],
     }),
+    requestOrderItemReturn: builder.mutation({
+      query: ({ orderId, itemId, reason }) => ({
+        url: `/marketplace/orders/${orderId}/items/${itemId}/return`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['Marketplace', 'Dashboard', 'Notification'],
+    }),
   }),
 });
 
@@ -59,4 +67,5 @@ export const {
   useGetMarketplaceProductQuery,
   useCreateMarketplaceOrderMutation,
   useSubmitProductReviewMutation,
+  useRequestOrderItemReturnMutation,
 } = marketplaceApi;

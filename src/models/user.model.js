@@ -39,7 +39,8 @@ const userSchema = new mongoose.Schema(
                 "trainer",
                 "gym-owner",
                 "seller",
-                "admin"
+                "admin",
+                "manager"
             ],
             default: "trainee"
         },

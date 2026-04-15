@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import DashboardSection from './components/DashboardSection.jsx';
 import SellerCharts from './components/SellerCharts.jsx';
 import EmptyState from './components/EmptyState.jsx';
+import NotificationsPanel from './components/NotificationsPanel.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetSellerProductsQuery, useGetSellerOrdersQuery } from '../../services/sellerApi.js';
+import { useGetMyNotificationsQuery } from '../../services/userApi.js';
 import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../utils/format.js';
 import './Dashboard.css';
 
@@ -29,6 +31,7 @@ const SellerDashboard = () => {
     refetch: refetchOrders,
     error: ordersError,
   } = useGetSellerOrdersQuery();
+  const { data: notificationsResponse } = useGetMyNotificationsQuery({ limit: 6 });
 
   const isLoading = isProductsLoading || isOrdersLoading;
   const hasError = isProductsError || isOrdersError;
@@ -94,6 +97,7 @@ const SellerDashboard = () => {
       ),
     [orders],
   );
+  const notifications = notificationsResponse?.data?.notifications ?? [];
 
   if (isLoading) {
     return (
@@ -304,6 +308,13 @@ const SellerDashboard = () => {
         ) : (
           <EmptyState message="Inventory levels look healthy across published listings." />
         )}
+      </DashboardSection>
+
+      <DashboardSection title="Seller notifications" className="seller-overview__orders">
+        <NotificationsPanel
+          notifications={notifications}
+          emptyMessage="Return requests, low-stock alerts, and fulfilment updates will appear here."
+        />
       </DashboardSection>
     </div>
   );

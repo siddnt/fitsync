@@ -11,7 +11,44 @@ import {
 import GymList from './components/GymList.jsx';
 import GymFilters from './components/GymFilters.jsx';
 import GymHighlight from './components/GymHighlight.jsx';
+import { matchesPrefix } from '../../utils/search.js';
 import './GymExplorerPage.css';
+
+const buildSuggestionList = (items, query, noResults = []) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const seen = new Set();
+  const suggestions = [];
+
+  items.forEach((item) => {
+    const normalizedLabel = item.label?.toString().trim();
+    if (!normalizedLabel) {
+      return;
+    }
+
+    const lower = normalizedLabel.toLowerCase();
+    if (!matchesPrefix(lower, normalizedQuery)) {
+      return;
+    }
+
+    const key = `${item.id}:${lower}`;
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    suggestions.push({
+      id: key,
+      label: normalizedLabel,
+      meta: item.meta,
+    });
+  });
+
+  return suggestions.concat(noResults).slice(0, 8);
+};
 
 const GymExplorerPage = () => {
   const [selectedGymId, setSelectedGymId] = useState(null);
@@ -62,6 +99,28 @@ const GymExplorerPage = () => {
     [trainersResponse?.data?.trainers],
   );
 
+  const searchSuggestions = useMemo(() => buildSuggestionList(
+    gyms.flatMap((gym) => [
+      { id: `name-${gym.id}`, label: gym.name, meta: `${gym.city ?? 'Unknown city'} gym` },
+      { id: `city-${gym.id}`, label: gym.city, meta: `City • ${gym.name ?? 'Unnamed gym'}` },
+      ...((gym.amenities || []).map((amenity, index) => ({
+        id: `amenity-${gym.id}-${index}`,
+        label: amenity,
+        meta: `Amenity • ${gym.name ?? 'Unnamed gym'}`,
+      }))),
+    ]),
+    filters.search,
+  ), [gyms, filters.search]);
+
+  const citySuggestions = useMemo(() => buildSuggestionList(
+    gyms.map((gym) => ({
+      id: `city-${gym.id}`,
+      label: gym.city,
+      meta: gym.name ?? 'Listed gym',
+    })),
+    filters.city,
+  ), [gyms, filters.city]);
+
   // Track impressions when a gym is viewed
   useEffect(() => {
     if (selectedGym?.id) {
@@ -108,7 +167,12 @@ const GymExplorerPage = () => {
   return (
     <div className="gym-explorer">
       <aside className="gym-explorer__sidebar">
-        <GymFilters filters={filters} onChange={setFilters} />
+        <GymFilters
+          filters={filters}
+          onChange={setFilters}
+          searchSuggestions={searchSuggestions}
+          citySuggestions={citySuggestions}
+        />
         <GymList
           gyms={gyms}
           isLoading={isFetching}

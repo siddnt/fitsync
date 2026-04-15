@@ -11,9 +11,11 @@ import {
   applyAdminToggleUpdates,
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
+import { listAuditLogs, recordAuditLog } from '../../services/audit.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import { invalidateCacheByTags } from '../../services/cache.service.js';
 
 const toObjectId = (value, label) => {
   if (!value) {
@@ -25,6 +27,12 @@ const toObjectId = (value, label) => {
     throw new ApiError(400, `${label} is invalid.`);
   }
 };
+
+const invalidateGymReadCaches = async (gymIds = []) =>
+  invalidateCacheByTags([
+    'gyms:list',
+    ...gymIds.map((gymId) => `gym:${gymId}`),
+  ]);
 
 const cancelMembershipsForUser = async (userId) => {
   await GymMembership.updateMany(
@@ -102,11 +110,21 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
       cleanupTasks.push(
         Revenue.deleteMany({ 'metadata.gym': { $in: affectedGymIds.map((id) => id.toString()) } }),
       );
+      cleanupTasks.push(invalidateGymReadCaches(affectedGymIds));
     }
   }
 
   await Promise.all(cleanupTasks);
   await User.findByIdAndDelete(targetUserId);
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'admin.user.deleted',
+    entityType: 'user',
+    entityId: targetUserId,
+    summary: `Deleted ${user.role} account`,
+    metadata: { email: user.email },
+  });
 
   return res
     .status(200)
@@ -137,6 +155,15 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
 
   user.status = status;
   await user.save({ validateBeforeSave: false });
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'admin.user.status.updated',
+    entityType: 'user',
+    entityId: user._id,
+    summary: `User status updated to ${status}`,
+    metadata: { email: user.email, role: user.role },
+  });
 
   return res
     .status(200)
@@ -165,6 +192,16 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
 
   await Promise.all(cleanupTasks);
   await Gym.findByIdAndDelete(gymId);
+  await invalidateGymReadCaches([gymId]);
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'admin.gym.deleted',
+    entityType: 'gym',
+    entityId: gymId,
+    summary: `Gym listing deleted: ${gym.name}`,
+    metadata: { owner: gym.owner },
+  });
 
   return res
     .status(200)
@@ -183,8 +220,32 @@ export const updateAdminToggles = asyncHandler(async (req, res) => {
   const { toggles = {} } = req.body ?? {};
 
   const adminToggles = await applyAdminToggleUpdates(toggles, req.user);
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'admin.settings.updated',
+    entityType: 'systemSettings',
+    entityId: 'admin-toggles',
+    summary: 'Admin toggles updated',
+    metadata: toggles,
+  });
 
   return res
     .status(200)
     .json(new ApiResponse(200, { adminToggles }, 'Admin toggles updated successfully.'));
+});
+
+export const getAuditHistory = asyncHandler(async (req, res) => {
+  const { entityType, entityId, actor, action, limit } = req.query ?? {};
+  const logs = await listAuditLogs({
+    entityType,
+    entityId,
+    actor,
+    action,
+    limit: Math.min(Math.max(Number(limit) || 50, 1), 200),
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { logs }, 'Audit history fetched successfully.'));
 });

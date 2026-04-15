@@ -7,7 +7,7 @@ import { authActions } from '../../features/auth/authSlice.js';
 import { useRegisterMutation } from '../../services/authApi.js';
 import './AuthPage.css';
 
-const roles = ['trainee', 'trainer', 'gym-owner', 'seller'];
+const roles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager'];
 const genderOptions = ['male', 'female', 'others'];
 
 const baseSchema = {

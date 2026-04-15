@@ -4,11 +4,27 @@ import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import {
   useGetSellerOrdersQuery,
+  useReviewReturnRequestMutation,
   useUpdateSellerOrderStatusMutation,
+  useUpdateSellerOrderTrackingMutation,
 } from '../../../services/sellerApi.js';
 import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import { SELLER_ORDER_STATUSES } from '../../../constants/orderStatuses.js';
+import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
 import '../Dashboard.css';
+
+const resolveTrackingShape = (tracking = {}) => ({
+  carrier: tracking?.carrier ?? '',
+  trackingNumber: tracking?.trackingNumber ?? '',
+  trackingUrl: tracking?.trackingUrl ?? '',
+  status: tracking?.status ?? 'preparing',
+});
+
+const resolveReturnShape = (draft = {}) => ({
+  decision: draft?.decision ?? 'approved',
+  note: draft?.note ?? '',
+});
 
 const OrdersPage = () => {
   const {
@@ -20,9 +36,13 @@ const OrdersPage = () => {
   } = useGetSellerOrdersQuery();
 
   const [updateOrderStatus, { isLoading: isUpdating }] = useUpdateSellerOrderStatusMutation();
+  const [updateTracking, { isLoading: isUpdatingTracking }] = useUpdateSellerOrderTrackingMutation();
+  const [reviewReturnRequest, { isLoading: isReviewingReturn }] = useReviewReturnRequestMutation();
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [draftStatuses, setDraftStatuses] = useState({});
+  const [trackingDrafts, setTrackingDrafts] = useState({});
+  const [returnDrafts, setReturnDrafts] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -53,7 +73,6 @@ const OrdersPage = () => {
     return counts;
   }, [orders]);
 
-  // Apply status and search filters without mutating the fetched dataset.
   const filteredOrders = useMemo(() => {
     const next = orders.filter((order) => {
       const normalisedStatus = (order.status ?? '').toString().toLowerCase();
@@ -64,20 +83,70 @@ const OrdersPage = () => {
         return statusMatch;
       }
 
-      const searchable = [
-        order.orderNumber,
-        order.id,
-        order.buyer?.name,
-        order.buyer?.email,
-      ]
-        .map((value) => (value ?? '').toString().toLowerCase())
-        .some((value) => value.includes(query));
+      const searchable = matchesAcrossFields(
+        [
+          order.orderNumber,
+          order.id,
+          order.buyer?.name,
+          order.buyer?.email,
+          ...((order.items || []).map((item) => item?.name)),
+        ],
+        query,
+      );
 
       return statusMatch && searchable;
     });
 
     return next;
   }, [orders, statusFilter, searchQuery]);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const suggestions = [];
+    const seen = new Set();
+
+    orders.forEach((order) => {
+      [
+        {
+          value: order.orderNumber ?? order.id,
+          meta: `Order • ${order.buyer?.name ?? order.buyer?.email ?? 'Unknown buyer'}`,
+        },
+        {
+          value: order.buyer?.name,
+          meta: `Buyer • ${order.buyer?.email ?? 'No email'}`,
+        },
+        ...((order.items || []).map((item) => ({
+          value: item?.name,
+          meta: `Item • ${formatStatus(item?.status ?? order.status)}`,
+        }))),
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+        const lower = normalized.toLowerCase();
+        if (!matchesPrefix(lower, query)) {
+          return;
+        }
+        const key = `${index}:${lower}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [orders, searchQuery]);
 
   const filteredStats = useMemo(() => ({
     shown: filteredOrders.length,
@@ -101,10 +170,38 @@ const OrdersPage = () => {
   const resolveDraftStatus = (orderId, itemId, currentStatus) =>
     draftStatuses[`${orderId}:${itemId}`] ?? currentStatus;
 
+  const resolveTrackingDraft = (orderId, itemId, currentTracking) =>
+    trackingDrafts[`${orderId}:${itemId}`] ?? resolveTrackingShape(currentTracking);
+
+  const resolveReturnDraft = (orderId, itemId) =>
+    returnDrafts[`${orderId}:${itemId}`] ?? resolveReturnShape();
+
   const handleDraftChange = (orderId, itemId, value) => {
     setDraftStatuses((prev) => ({
       ...prev,
       [`${orderId}:${itemId}`]: value,
+    }));
+  };
+
+  const handleTrackingDraftChange = (orderId, itemId, field, value, currentTracking) => {
+    const key = `${orderId}:${itemId}`;
+    setTrackingDrafts((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] ?? resolveTrackingShape(currentTracking)),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleReturnDraftChange = (orderId, itemId, field, value) => {
+    const key = `${orderId}:${itemId}`;
+    setReturnDrafts((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] ?? resolveReturnShape()),
+        [field]: value,
+      },
     }));
   };
 
@@ -130,6 +227,55 @@ const OrdersPage = () => {
     }
   };
 
+  const handleUpdateTracking = async (orderId, itemId, currentTracking) => {
+    const nextTracking = resolveTrackingDraft(orderId, itemId, currentTracking);
+    if (!nextTracking.carrier.trim() || !nextTracking.trackingNumber.trim()) {
+      setErrorNotice('Carrier and tracking number are required before saving tracking.');
+      return;
+    }
+
+    setNotice(null);
+    setErrorNotice(null);
+
+    try {
+      await updateTracking({
+        orderId,
+        itemId,
+        carrier: nextTracking.carrier.trim(),
+        trackingNumber: nextTracking.trackingNumber.trim(),
+        trackingUrl: nextTracking.trackingUrl.trim(),
+        status: nextTracking.status,
+      }).unwrap();
+      setNotice('Tracking details updated.');
+      refetch();
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to update tracking for this item.');
+    }
+  };
+
+  const handleReturnReview = async (orderId, itemId) => {
+    const nextReturn = resolveReturnDraft(orderId, itemId);
+    setNotice(null);
+    setErrorNotice(null);
+
+    try {
+      await reviewReturnRequest({
+        orderId,
+        itemId,
+        decision: nextReturn.decision,
+        note: nextReturn.note,
+      }).unwrap();
+      setNotice(`Return request ${formatStatus(nextReturn.decision)}.`);
+      setReturnDrafts((prev) => ({
+        ...prev,
+        [`${orderId}:${itemId}`]: undefined,
+      }));
+      refetch();
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to review this return request.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid">
@@ -142,7 +288,7 @@ const OrdersPage = () => {
 
   const approvalError = error?.status === 403 ? error : null;
   const approvalMessage = approvalError?.data?.message
-    ?? 'Your seller account is awaiting admin approval. Hang tight—order management will unlock once you are activated.';
+    ?? 'Your seller account is awaiting admin approval. Hang tight, order management will unlock once you are activated.';
 
   if (approvalError) {
     return (
@@ -189,12 +335,15 @@ const OrdersPage = () => {
         )}
       >
         <div className="inventory-toolbar orders-toolbar">
-          <input
-            type="text"
-            className="inventory-toolbar__input"
-            placeholder="Search order number or buyer"
+          <SearchSuggestInput
+            id="seller-orders-search"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={setSearchQuery}
+            onSelect={(suggestion) => setSearchQuery(suggestion.label)}
+            suggestions={searchSuggestions}
+            placeholder="Search by order number, buyer name, buyer email, or item name"
+            ariaLabel="Search seller orders"
+            noResultsText="No seller orders match those search attributes."
           />
           <select
             className="inventory-toolbar__input inventory-toolbar__input--select"
@@ -255,7 +404,7 @@ const OrdersPage = () => {
                   <td>
                     <strong>{order.orderNumber ?? order.id}</strong>
                     <div>
-                      <small>{order.buyer?.name ?? order.buyer?.email ?? '—'}</small>
+                      <small>{order.buyer?.name ?? order.buyer?.email ?? '-'}</small>
                     </div>
                   </td>
                   <td>{formatDate(order.createdAt)}</td>
@@ -267,35 +416,146 @@ const OrdersPage = () => {
                   <td>
                     <div className="order-items-list">
                       {(order.items || []).map((item) => {
-                        const draft = resolveDraftStatus(order.id, item.itemId ?? item.id, item.status);
-                        const selectId = `${order.id}-${item.itemId ?? item.id}`;
+                        const itemId = item.itemId ?? item.id;
+                        const draft = resolveDraftStatus(order.id, itemId, item.status);
+                        const trackingDraft = resolveTrackingDraft(order.id, itemId, item.tracking);
+                        const returnDraft = resolveReturnDraft(order.id, itemId);
+                        const selectId = `${order.id}-${itemId}`;
+
                         return (
                           <div key={selectId} className="order-item-row">
                             <div className="order-item-row__details">
                               <strong>{item.name}</strong>
-                              <span>× {item.quantity}</span>
+                              <span>x {item.quantity}</span>
                               <span className="order-item-row__status">Current: {formatStatus(item.status)}</span>
+                              <span className="order-item-row__substatus">
+                                Tracking: {item.tracking?.status ? formatStatus(item.tracking.status) : 'Not added'}
+                              </span>
+                              <span className="order-item-row__substatus">
+                                Return: {item.returnRequest?.status ? formatStatus(item.returnRequest.status) : 'None'}
+                              </span>
                             </div>
-                            <div className="order-item-row__actions">
-                              <select
-                                id={selectId}
-                                value={draft}
-                                onChange={(event) => handleDraftChange(order.id, item.itemId ?? item.id, event.target.value)}
-                                disabled={isUpdating}
-                              >
-                                {statusOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                            <div className="order-item-row__actions order-item-row__actions--stacked">
+                              <div className="order-item-row__inline">
+                                <select
+                                  id={selectId}
+                                  value={draft}
+                                  onChange={(event) => handleDraftChange(order.id, itemId, event.target.value)}
+                                  disabled={isUpdating}
+                                >
+                                  {statusOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatus(order.id, itemId, item.status)}
+                                  disabled={isUpdating || draft === item.status}
+                                >
+                                  {isUpdating ? 'Saving...' : 'Update'}
+                                </button>
+                              </div>
+
+                              <div className="order-item-row__nested-grid">
+                                <input
+                                  type="text"
+                                  className="inventory-toolbar__input"
+                                  placeholder="Carrier"
+                                  value={trackingDraft.carrier}
+                                  onChange={(event) =>
+                                    handleTrackingDraftChange(order.id, itemId, 'carrier', event.target.value, item.tracking)
+                                  }
+                                  disabled={isUpdatingTracking}
+                                />
+                                <input
+                                  type="text"
+                                  className="inventory-toolbar__input"
+                                  placeholder="Tracking number"
+                                  value={trackingDraft.trackingNumber}
+                                  onChange={(event) =>
+                                    handleTrackingDraftChange(order.id, itemId, 'trackingNumber', event.target.value, item.tracking)
+                                  }
+                                  disabled={isUpdatingTracking}
+                                />
+                                <input
+                                  type="url"
+                                  className="inventory-toolbar__input"
+                                  placeholder="Tracking URL"
+                                  value={trackingDraft.trackingUrl}
+                                  onChange={(event) =>
+                                    handleTrackingDraftChange(order.id, itemId, 'trackingUrl', event.target.value, item.tracking)
+                                  }
+                                  disabled={isUpdatingTracking}
+                                />
+                                <select
+                                  value={trackingDraft.status}
+                                  onChange={(event) =>
+                                    handleTrackingDraftChange(order.id, itemId, 'status', event.target.value, item.tracking)
+                                  }
+                                  disabled={isUpdatingTracking}
+                                >
+                                  <option value="preparing">Preparing</option>
+                                  <option value="label-created">Label created</option>
+                                  <option value="in-transit">In transit</option>
+                                  <option value="out-for-delivery">Out for delivery</option>
+                                  <option value="delivered">Delivered</option>
+                                </select>
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateStatus(order.id, item.itemId ?? item.id, item.status)}
-                                disabled={isUpdating || draft === item.status}
+                                onClick={() => handleUpdateTracking(order.id, itemId, item.tracking)}
+                                disabled={isUpdatingTracking}
                               >
-                                {isUpdating ? 'Saving…' : 'Update'}
+                                {isUpdatingTracking ? 'Saving...' : 'Save tracking'}
                               </button>
+
+                              {item.returnRequest?.status === 'requested' ? (
+                                <div className="order-item-row__return-box">
+                                  <small>Requested on {formatDate(item.returnRequest.requestedAt)}</small>
+                                  {item.returnRequest.reason ? (
+                                    <small>Reason: {item.returnRequest.reason}</small>
+                                  ) : null}
+                                  <select
+                                    value={returnDraft.decision}
+                                    onChange={(event) =>
+                                      handleReturnDraftChange(order.id, itemId, 'decision', event.target.value)
+                                    }
+                                    disabled={isReviewingReturn}
+                                  >
+                                    <option value="approved">Approve return</option>
+                                    <option value="rejected">Reject return</option>
+                                    <option value="refunded">Mark refunded</option>
+                                  </select>
+                                  <textarea
+                                    className="inventory-toolbar__input order-item-row__textarea"
+                                    placeholder="Optional seller note"
+                                    value={returnDraft.note}
+                                    onChange={(event) =>
+                                      handleReturnDraftChange(order.id, itemId, 'note', event.target.value)
+                                    }
+                                    disabled={isReviewingReturn}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReturnReview(order.id, itemId)}
+                                    disabled={isReviewingReturn}
+                                  >
+                                    {isReviewingReturn ? 'Saving...' : 'Review return'}
+                                  </button>
+                                </div>
+                              ) : item.returnRequest?.status && item.returnRequest.status !== 'none' ? (
+                                <div className="order-item-row__return-box">
+                                  <small>
+                                    Return {formatStatus(item.returnRequest.status)}
+                                    {item.returnRequest.reviewedAt ? ` on ${formatDate(item.returnRequest.reviewedAt)}` : ''}
+                                  </small>
+                                  {item.returnRequest.note ? (
+                                    <small>Note: {item.returnRequest.note}</small>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         );

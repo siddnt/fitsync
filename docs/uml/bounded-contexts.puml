@@ -1,0 +1,72 @@
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName Segoe UI
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+  RoundCorner 10
+}
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
+  FontColor #0F172A
+}
+hide empty members
+
+package "Administration and Support\nContext" as ASC {
+  class SystemSetting <<Entity>>
+  class ContactMessage <<Entity>>
+}
+
+package "Identity and Access\nContext" as IAC {
+  class User <<Entity>>
+}
+
+package "Gym Discovery and Membership\nContext" as GMC {
+  class Gym <<Entity>>
+  class GymMembership <<Entity>>
+  class GymReview <<Entity>>
+  class Gallery <<Entity>>
+  Gym --> GymMembership
+  Gym --> GymReview
+  Gym --> Gallery
+}
+
+package "Trainer Engagement\nContext" as TEC {
+  class TrainerAssignment <<Entity>>
+  class TrainerProgress <<Entity>>
+  class Booking <<Entity>>
+  TrainerAssignment --> TrainerProgress
+  TrainerAssignment --> Booking
+}
+
+package "Marketplace and Fulfillment\nContext" as MPC {
+  class Product <<Entity>>
+  class Order <<Entity>>
+  class Cart <<Entity>>
+  class ProductReview <<Entity>>
+  Product --> ProductReview
+  Product --> Cart
+  Product --> Order
+}
+
+package "Monetization and Revenue\nContext" as MRC {
+  class GymListingSubscription <<Entity>>
+  class PaymentSession <<Entity>>
+  class Revenue <<Entity>>
+  GymListingSubscription --> PaymentSession
+  PaymentSession --> Revenue
+}
+
+ASC -[hidden]right-> IAC
+IAC -[hidden]right-> GMC
+ASC -[hidden]down-> TEC
+IAC -[hidden]down-> MPC
+GMC -[hidden]down-> MRC
+TEC -[hidden]right-> MPC
+MPC -[hidden]right-> MRC
+@enduml

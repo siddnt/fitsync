@@ -5,12 +5,15 @@ import {
   getMarketplaceProduct,
   createMarketplaceOrder,
   createMarketplaceProductReview,
+  requestMarketplaceReturn,
   listSellerProducts,
   createSellerProduct,
   updateSellerProduct,
   deleteSellerProduct,
   listSellerOrders,
   updateSellerOrderStatus,
+  updateSellerOrderTracking,
+  reviewMarketplaceReturn,
   settleSellerOrder,
 } from '../controllers/marketplace.controller.js';
 import { upload } from '../../middlewares/multer.middleware.js';
@@ -21,6 +24,7 @@ router.get('/products', listMarketplaceCatalogue);
 router.get('/products/:productId', getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
 router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
+router.post('/orders/:orderId/items/:itemId/return', verifyJWT, authorizeRoles('user', 'trainee'), requestMarketplaceReturn);
 
 router.use(verifyJWT, authorizeRoles('seller', 'admin'));
 
@@ -31,6 +35,8 @@ router.delete('/seller/products/:productId', deleteSellerProduct);
 
 router.get('/seller/orders', listSellerOrders);
 router.patch('/seller/orders/:orderId/items/:itemId/status', updateSellerOrderStatus);
+router.patch('/seller/orders/:orderId/items/:itemId/tracking', updateSellerOrderTracking);
+router.patch('/seller/orders/:orderId/items/:itemId/return', reviewMarketplaceReturn);
 router.patch('/seller/orders/:orderId/settle', settleSellerOrder);
 
 export default router;

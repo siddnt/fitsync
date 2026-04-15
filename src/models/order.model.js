@@ -68,6 +68,54 @@ const orderItemSchema = new mongoose.Schema({
     payoutRecorded: {
         type: Boolean,
         default: false
+    },
+    tracking: {
+        carrier: {
+            type: String,
+            trim: true
+        },
+        trackingNumber: {
+            type: String,
+            trim: true
+        },
+        trackingUrl: {
+            type: String,
+            trim: true
+        },
+        updatedAt: {
+            type: Date
+        }
+    },
+    returnRequest: {
+        status: {
+            type: String,
+            enum: ["none", "requested", "approved", "rejected", "refunded"],
+            default: "none"
+        },
+        reason: {
+            type: String,
+            trim: true,
+            maxlength: 500
+        },
+        requestedAt: Date,
+        reviewedAt: Date,
+        requestedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        },
+        refundAmount: {
+            type: Number,
+            min: 0
+        },
+        note: {
+            type: String,
+            trim: true,
+            maxlength: 500
+        }
     }
 });
 
@@ -154,7 +202,8 @@ const orderSchema = new mongoose.Schema(
         orderNumber: {
             type: String,
             required: false,
-            unique: true
+            unique: true,
+            sparse: true
         }
     },
     {
@@ -162,6 +211,10 @@ const orderSchema = new mongoose.Schema(
     }
 );
 
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ seller: 1, createdAt: -1 });
+orderSchema.index({ 'orderItems.seller': 1, createdAt: -1 });
+orderSchema.index({ 'orderItems.product': 1, createdAt: -1 });
 // Comment out the pre-save hook since we're now manually generating orderNumber in the controller
 /*
 orderSchema.pre("save", async function(next) {

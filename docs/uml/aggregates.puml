@@ -1,0 +1,88 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName Segoe UI
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+  RoundCorner 10
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #64748B
+  FontColor #0F172A
+  RoundCorner 10
+}
+
+package "Gym Aggregate" as GymAggregate {
+  rectangle "Gym\n<<Aggregate Root>>" as Gym
+  rectangle "Location\n<<Value Object>>" as Location
+  rectangle "Pricing\n<<Value Object>>" as Pricing
+  rectangle "ContactInfo\n<<Value Object>>" as ContactInfo
+  rectangle "Schedule\n<<Value Object>>" as Schedule
+  rectangle "GymAnalytics\n<<Value Object>>" as GymAnalytics
+  rectangle "Sponsorship\n<<Value Object>>" as Sponsorship
+  Gym *-- Location
+  Gym *-- Pricing
+  Gym *-- ContactInfo
+  Gym *-- Schedule
+  Gym *-- GymAnalytics
+  Gym *-- Sponsorship
+}
+
+package "Membership Aggregate" as MembershipAggregate {
+  rectangle "GymMembership\n<<Aggregate Root>>" as Membership
+  rectangle "MembershipBilling\n<<Value Object>>" as MembershipBilling
+  Membership *-- MembershipBilling
+}
+
+package "Trainer Progress Aggregate" as TrainerProgressAggregate {
+  rectangle "TrainerProgress\n<<Aggregate Root>>" as Progress
+  rectangle "Attendance\n<<Value Object>>" as Attendance
+  rectangle "ProgressMetric\n<<Value Object>>" as ProgressMetric
+  rectangle "BodyMetric\n<<Value Object>>" as BodyMetric
+  rectangle "DietPlan\n<<Value Object>>" as DietPlan
+  rectangle "Feedback\n<<Entity>>" as Feedback
+  rectangle "TraineeFeedback\n<<Entity>>" as TraineeFeedback
+  Progress *-- Attendance
+  Progress *-- ProgressMetric
+  Progress *-- BodyMetric
+  Progress *-- DietPlan
+  Progress *-- Feedback
+  Progress *-- TraineeFeedback
+}
+
+package "Order Aggregate" as OrderAggregate {
+  rectangle "Order\n<<Aggregate Root>>" as Order
+  rectangle "OrderItem\n<<Entity>>" as OrderItem
+  rectangle "ShippingAddress\n<<Value Object>>" as ShippingAddress
+  rectangle "StatusHistoryEntry\n<<Value Object>>" as StatusHistory
+  Order *-- OrderItem
+  Order *-- ShippingAddress
+  OrderItem *-- StatusHistory
+}
+
+package "Subscription Aggregate" as SubscriptionAggregate {
+  rectangle "GymListingSubscription\n<<Aggregate Root>>" as Subscription
+  rectangle "Invoice\n<<Value Object>>" as Invoice
+  rectangle "PaymentPeriod\n<<Value Object>>" as PaymentPeriod
+  Subscription *-- Invoice
+  Subscription *-- PaymentPeriod
+}
+
+GymAggregate -[hidden]right-> MembershipAggregate
+MembershipAggregate -[hidden]down-> OrderAggregate
+TrainerProgressAggregate -[hidden]down-> SubscriptionAggregate
+
+legend right
+  = Aggregate View =
+  Each package is a consistency boundary.
+  Nested elements are modified through the aggregate root only.
+endlegend
+@enduml

@@ -56,7 +56,7 @@ const RoleHighlights = () => {
             onMouseLeave={handleMouseLeave}
           >
             <div className="role-image-container">
-              <img src={card.image} alt={card.title} className="role-image" />
+              <img src={card.image} alt={card.title} className="role-image" loading="lazy" decoding="async" />
             </div>
             <div className="landing-roles__content">
               <h3>{card.title}</h3>

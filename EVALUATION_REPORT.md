@@ -1,505 +1,194 @@
-# FitSync Project - Evaluation Criteria Assessment
+# FitSync End Review Report
 
-## 📋 Executive Summary
-**Overall Assessment: EXCELLENT** - Your FitSync project demonstrates professional-grade implementation across all evaluation criteria with comprehensive features, proper architecture, and production-ready code quality.
+## Scope
+This report summarizes the backend and delivery work added for the end review requirements:
 
----
+- database optimization and indexed search
+- Redis-backed caching and performance reporting
+- transactional write hardening with outbox processing
+- observability dashboards and broader cursor pagination
+- REST API exposure and Swagger/OpenAPI documentation
+- automated testing with reports
+- containerization and CI evidence
 
-## 1. UX Completion (3 marks) ✅ **FULL MARKS EXPECTED**
+## 1. Database optimization
 
-### Navigation Flow
-✅ **Multi-level navigation architecture:**
-- AppHeader with role-based menu items
-- DashboardSidebar with context-aware links
-- Protected routes with authentication gates
-- Breadcrumb navigation where applicable
+### Indexes added
+- `Gym`
+  - compound indexes for `status`, `isPublished`, `location.city`, `createdAt`
+  - compound indexes for `status`, `isPublished`, `analytics.impressions`, `createdAt`
+  - compound indexes for `status`, `isPublished`, `analytics.rating`, `analytics.ratingCount`, `createdAt`
+  - compound indexes for `status`, `isPublished`, `analytics.memberships`, `createdAt`
+  - compound indexes for `sponsorship.status`, `analytics.impressions`, `createdAt`
+  - weighted text index `gym_search_text_idx` across `name`, `description`, `tags`, `amenities`, and `location.city`
+- `Product`
+  - compound index for `isPublished`, `category`, `status`, `stock`, `updatedAt`
+  - compound index for `isPublished`, `price`, `updatedAt`
+  - compound index for `isPublished`, `createdAt`
+  - weighted text index `product_search_text_idx` across `name`, `description`, and `category`
+- `Order`
+  - compound indexes for `user`, `createdAt`
+  - compound indexes for `seller`, `createdAt`
+  - compound indexes for `orderItems.seller`, `createdAt`
+  - sparse unique index for `orderNumber`
 
-### Wireframes & Layouts
-✅ **Professional layout system:**
-- `AppLayout.jsx` - Main application wrapper
-- `DashboardLayout.jsx` - Dashboard-specific layout with sidebar
-- Consistent spacing, padding, and visual hierarchy
-- Clear content sections with semantic HTML
+### Search optimization
+- `/api/gyms` now prefers MongoDB text search and falls back to Meilisearch when the text index returns no matches.
+- `/api/marketplace/products` follows the same strategy for catalogue search.
+- Search document sync runs asynchronously through BullMQ with a Mongo-backed outbox for post-commit consistency.
 
-### Responsive UI Implementation
-✅ **Comprehensive responsive design:**
-```css
-Evidence found across multiple files:
-- @media queries for breakpoints: 640px, 768px, 960px, 1024px
-- Flexbox layouts with flex-wrap for mobile adaptation
-- CSS Grid with auto-fit/minmax patterns for responsive columns
-- Mobile-first approach in component styling
+### Query-plan evidence
+- Run `npm run db:analyze`
+- Generated artifacts:
+  - `docs/query-plan-report.json`
+  - `docs/query-plan-report.md`
+
+These reports capture the winning plan, indexes used, keys examined, documents examined, and result counts for representative gym, marketplace, and seller-order queries.
+
+## 2. Redis caching
+
+### Implementation
+- New cache service: `src/services/cache.service.js`
+- Redis client is used when `REDIS_URL` is configured.
+- Graceful fallback to in-process memory cache is automatic if Redis is unavailable.
+- Public read endpoints now use cache:
+  - `GET /api/gyms`
+  - `GET /api/gyms/:gymId`
+  - `GET /api/gyms/:gymId/reviews`
+  - `GET /api/marketplace/products`
+  - `GET /api/marketplace/products/:productId`
+
+### Cache invalidation
+- Gym write paths invalidate relevant gym tags through an outbox worker:
+  - gym create/update
+  - gym review submission
+  - gym impression updates
+  - membership create/cancel
+  - admin gym deletion
+  - owner sponsorship and trainer/member management
+- Marketplace write paths invalidate relevant marketplace tags through an outbox worker:
+  - order creation
+  - product review creation
+  - seller product create/update/delete
+  - seller order status updates
+
+### Demo evidence
+- Response headers:
+  - `X-Cache`
+  - `X-Cache-Provider`
+- Benchmark command:
+  - `npm run cache:benchmark`
+- Load-test command:
+  - `npm run load:test`
+- Generated artifacts:
+  - `docs/redis-cache-report.json`
+  - `docs/redis-cache-report.md`
+  - `docs/load-test-report.json`
+  - `docs/load-test-report.md`
+
+## 2.1 Transactional write hardening
+
+- `createGym` now uses a Mongo session for the gym, subscription, and revenue rows.
+- `createMarketplaceOrder` now reserves stock and creates the order inside one transaction.
+- `updateSellerOrderStatus` now persists item-status changes, seller/admin revenue, denormalized sales metrics, and outbox events inside one transaction.
+- Search sync and cache invalidation are deferred to `OutboxEvent` records and processed after commit by `src/services/outbox.service.js`.
+
+## 3. REST web services and documentation
+
+### REST API
+FitSync uses REST for both:
+- exposing APIs to external consumers and reviewers
+- consuming APIs from the React client
+
+### Swagger / OpenAPI
+- OpenAPI JSON: `/api/docs/openapi.json`
+- Swagger UI: `/api/docs`
+- Implementation files:
+  - `src/docs/openapi.js`
+  - `src/app.js`
+
+The current spec covers the active route surface for:
+- auth
+- gyms and memberships
+- marketplace and seller operations
+- dashboards
+- trainer workspace
+- owner workflows
+- admin operations
+- user profile
+- contact/support
+- payment redirect endpoints
+
+## 4. Testing and reports
+
+### Test coverage additions
+- API wiring smoke tests
+- payment route smoke tests
+- Swagger/OpenAPI endpoint tests
+- cache service unit tests
+- database index tests
+- cursor pagination utility tests
+- product metrics unit tests
+
+### Commands
+- `npm test`
+- `npm run test:report`
+
+### Generated report location
+- `reports/jest/results.json`
+- `coverage/`
+
+## 5. Containerization
+
+### Docker assets
+- `Dockerfile`
+- `client/Dockerfile`
+- `docker-compose.yml`
+- `client/nginx.conf`
+
+### Compose stack
+- `mongo`
+- `redis`
+- `meilisearch`
+- `api`
+- `web`
+- optional `prometheus`
+- optional `grafana`
+- optional `jenkins` profile
+
+## 6. Continuous integration
+
+### GitHub Actions
+- Workflow file: `.github/workflows/ci.yml`
+
+### CI pipeline steps
+- install backend and frontend dependencies
+- start MongoDB and Redis service containers
+- run backend tests with reports
+- build the React client
+- generate query-plan and cache benchmark artifacts
+- build backend and frontend Docker images
+
+## 7. Review checklist
+
+- Database indexes: implemented
+- Indexed search: implemented
+- Redis caching: implemented with graceful fallback
+- Cache performance report: supported by benchmark script and artifacts
+- REST APIs: implemented
+- Swagger docs: implemented
+- Unit/integration tests: implemented
+- Test reports: implemented
+- Dockerization: implemented
+- CI pipeline: implemented
+
+## Commands to show during review
+
+```bash
+npm test
+npm run test:report
+npm run db:analyze
+npm run cache:benchmark
+npm run load:test
+docker compose up --build
 ```
-
-**Key responsive patterns:**
-- `grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`
-- Flexible dashboard grids that stack on mobile
-- Sidebar collapse on tablet/mobile (1024px breakpoint)
-- Touch-friendly button sizes and spacing
-
-### Labeling & Accessibility
-✅ **Clear, semantic labeling:**
-- Consistent form labels with proper `<label>` elements
-- Descriptive button text ("Update Status", "Save Changes", etc.)
-- Status badges with color-coded visual indicators
-- Empty states with helpful messages
-- Error messages with clear instructions
-
-**Score: 3/3** ✅
-
----
-
-## 2. Dashboard Functionality (5 marks) ✅ **FULL MARKS EXPECTED**
-
-### Login/Authentication System
-✅ **Complete authentication flow:**
-```javascript
-Files: client/src/pages/auth/LoginPage.jsx, authSlice.js, authApi.js
-- JWT-based authentication with refresh tokens
-- Cookie-based session management
-- Protected route wrappers
-- Role-based access control (6 roles: user, trainee, trainer, gym-owner, seller, admin)
-- Automatic token refresh mechanism
-```
-
-### Stock Entry (Inventory Management)
-✅ **Comprehensive seller inventory system:**
-```javascript
-File: client/src/pages/dashboards/seller/InventoryPage.jsx
-Features:
-- Product creation with image upload to Cloudinary
-- Stock quantity tracking
-- Price management (MRP + discount pricing)
-- Category classification (supplements, equipment, clothing, accessories)
-- Status management (available/out-of-stock)
-- Publish/Unpublish functionality
-- Real-time stock alerts for low inventory (≤5 units)
-- Search and filter capabilities
-```
-
-### Report Generation
-✅ **Multi-dashboard analytics:**
-
-**Trainee Dashboard:**
-- Attendance tracking with streak calculations
-- Progress metrics visualization
-- Diet plan displays
-- Order history
-
-**Gym Owner Dashboard:**
-- Revenue charts (weekly/monthly granularity)
-- Subscription analytics
-- Membership statistics
-- Gym performance metrics
-
-**Admin Dashboard:**
-- Platform-wide revenue breakdown
-- User demographics
-- Geographic distribution (GeoDensityMap component)
-- System health monitoring
-
-**Seller Dashboard:**
-```javascript
-File: client/src/pages/dashboards/components/SellerCharts.jsx
-- Revenue line charts (daily/monthly)
-- Order status pie charts
-- Category breakdown charts
-- Sales performance tracking
-```
-
-### Search & Filter
-✅ **Advanced filtering across multiple modules:**
-
-**Gym Explorer:**
-- Search by name
-- Filter by city
-- Filter by amenities (multi-select)
-- Real-time filtering with debouncing
-
-**Seller Inventory:**
-- Text search
-- Category filter
-- Price range filters (min/max)
-- Stock level filters
-- Status filters (published/draft/available/out-of-stock)
-
-**Marketplace:**
-- Category-based browsing
-- Product search
-- Price sorting
-
-**Orders Management:**
-- Status filter
-- Search by order number
-- Date range filtering
-
-### Profile Management
-✅ **Comprehensive profile system:**
-```javascript
-File: client/src/pages/profile/ProfilePage.jsx
-Features:
-- Profile picture upload with preview
-- Personal information (name, email, contact)
-- Professional details (headline, about, location)
-- Social links (website, Instagram, Facebook)
-- Role-specific fields (certifications for trainers, metrics for gym owners)
-- Validation and error handling
-```
-
-### Settings
-✅ **Admin settings panel:**
-```javascript
-File: client/src/pages/dashboards/admin/SettingsPage.jsx
-- System feature toggles
-- Configuration management
-- Real-time updates with optimistic UI
-```
-
-**Score: 5/5** ✅
-
----
-
-## 3. React Implementation (5 marks) ✅ **FULL MARKS EXPECTED**
-
-### Functional Components
-✅ **100% functional component architecture:**
-```javascript
-Evidence: All components use arrow functions or function declarations
-- No class components found
-- Consistent modern React patterns
-- Proper component composition
-```
-
-**Examples:**
-- `GymExplorerPage.jsx` - Complex filtering logic
-- `InventoryPage.jsx` - Form management
-- `SellerCharts.jsx` - Data visualization
-- `DashboardSidebar.jsx` - Navigation component
-
-### React Forms
-✅ **Multiple form implementation strategies:**
-
-**Redux Form integration:**
-```javascript
-Files with reduxForm HOC:
-- ListingSubscriptionForm.jsx
-- SponsorshipForm.jsx
-- GymEditForm.jsx
-- GymCreateForm.jsx
-- SellerProductForm.jsx
-
-Features:
-- Field-level validation
-- Form state management
-- Submission handlers
-- Error display
-```
-
-**Controlled components with useState:**
-```javascript
-Files: CheckoutPage.jsx, ProfilePage.jsx, TraineesPage.jsx
-- Local state management for simple forms
-- Real-time validation
-- Custom validation logic
-```
-
-### useState Hook
-✅ **Extensive state management:**
-```javascript
-Evidence: 150+ useState instances across components
-Examples:
-- GymExplorerPage: selectedGymId, filters, actionError
-- InventoryPage: searchText, categoryFilter, minPrice, maxPrice, minStock
-- OrdersPage: notice, errorNotice, draftStatuses, statusFilter, searchQuery
-- TraineesPage: Multiple form states (attendance, progress, diet, feedback)
-```
-
-### useEffect Hook
-✅ **Proper side effect management:**
-```javascript
-Evidence: 50+ useEffect instances
-Use cases:
-- Data fetching on mount
-- Cleanup functions for subscriptions
-- Dependency tracking for derived state
-- URL parameter synchronization
-- Event listener management
-```
-
-**Examples:**
-```javascript
-// Cleanup pattern
-useEffect(() => {
-  return () => {
-    if (imagePreviewUrl) {
-      revokePreviewUrl(imagePreviewUrl);
-    }
-  };
-}, [imagePreviewUrl, revokePreviewUrl]);
-
-// Dependency tracking
-useEffect(() => {
-  if (statusFilter && !statusFilterOptions.some(opt => opt.value === statusFilter)) {
-    setStatusFilter('all');
-  }
-}, [statusFilter, statusFilterOptions]);
-```
-
-### Context API (Not Required but Bonus)
-⚠️ **Redux used instead of Context API:**
-While Context API usage is minimal, Redux Toolkit provides superior state management:
-- Redux Provider wraps entire app
-- Multiple slices (auth, ui, cart, seller, monetisation)
-- RTK Query for server state caching
-
-### Reusable UI Components
-✅ **Comprehensive component library:**
-
-**Layout Components:**
-- `DashboardSection.jsx` - Reusable dashboard card
-- `DashboardLayout.jsx` - Dashboard wrapper
-- `AppLayout.jsx` - Application wrapper
-
-**UI Components:**
-- `EmptyState.jsx` - Empty state messaging
-- `SkeletonPanel.jsx` - Loading skeletons
-- `FormField.jsx` - Reusable form field wrapper
-- `Skeleton.css` - Shimmer loading effects
-
-**Data Visualization:**
-- `SellerCharts.jsx` - Chart wrapper
-- `GrowthLineChart.jsx` - Line chart component
-- `DistributionPieChart.jsx` - Pie chart component
-- `RevenueSummaryChart.jsx` - Revenue visualization
-- `GeoDensityMap.jsx` - Geographic visualization
-
-**Business Logic Components:**
-- `GymFilters.jsx` - Reusable filter panel
-- `GymMembershipActions.jsx` - Membership action buttons
-- `NotificationsPanel.jsx` - Notification display
-
-**Score: 5/5** ✅
-
----
-
-## 4. Redux Integration (4 marks) ✅ **FULL MARKS EXPECTED**
-
-### State Management Architecture
-✅ **Professional Redux Toolkit setup:**
-
-```javascript
-File: client/src/app/store.js
-Store configuration with:
-- Redux Toolkit configureStore
-- Multiple slice reducers
-- RTK Query middleware
-- Redux Form reducer
-- DevTools integration
-```
-
-**State slices:**
-```javascript
-1. authSlice.js - Authentication state (user, token, login status)
-2. uiSlice.js - UI state (modals, notifications)
-3. cartSlice.js - Shopping cart state
-4. sellerSlice.js - Seller-specific state (product panel, filters)
-5. monetisationSlice.js - Payment/subscription state
-```
-
-### RTK Query (API State Management)
-✅ **Advanced server state management:**
-
-```javascript
-Files: 10 API slice files
-- apiSlice.js (base configuration)
-- authApi.js (login, register, refresh)
-- dashboardApi.js (dashboard data)
-- gymsApi.js (gym CRUD)
-- marketplaceApi.js (products, orders)
-- sellerApi.js (seller operations)
-- trainerApi.js (trainer operations)
-- ownerApi.js (gym owner operations)
-- adminApi.js (admin operations)
-- userApi.js (user profile)
-
-Features:
-- Automatic cache invalidation with tags
-- Optimistic updates
-- Request deduplication
-- Polling support
-- Error normalization
-```
-
-**Tag-based cache invalidation:**
-```javascript
-tagTypes: [
-  'Auth', 'User', 'Gym', 'GymList', 'GymMembership',
-  'Subscription', 'Trainer', 'Marketplace', 'Analytics',
-  'Notification', 'Dashboard', 'AdminSettings', 'TrainerRequest'
-]
-```
-
-### Error Handling
-✅ **Comprehensive error management:**
-
-**API-level error handling:**
-```javascript
-- HTTP status code handling
-- Error response normalization
-- User-friendly error messages
-- Toast/notification integration
-```
-
-**Component-level error handling:**
-```javascript
-Examples from multiple components:
-- try/catch blocks in async operations
-- Error state variables (errorNotice, actionError)
-- Conditional error display
-- Error recovery mechanisms
-```
-
-**Error UI patterns:**
-```javascript
-{errorNotice && (
-  <div className="dashboard-notice dashboard-notice--error">
-    {errorNotice}
-  </div>
-)}
-```
-
-### Loading Handling
-✅ **Multi-level loading states:**
-
-**Query-level loading:**
-```javascript
-const { data, isLoading, isError, refetch } = useGetSellerProductsQuery();
-
-if (isLoading) {
-  return <SkeletonPanel lines={12} />;
-}
-```
-
-**Mutation-level loading:**
-```javascript
-const [updateProduct, { isLoading: isUpdating }] = useUpdateSellerProductMutation();
-
-<button disabled={isUpdating}>
-  {isUpdating ? 'Saving...' : 'Save Changes'}
-</button>
-```
-
-**Component-level loading:**
-```javascript
-- Skeleton screens for data loading
-- Spinner components
-- Disabled states during operations
-- Loading text updates
-```
-
-### Data Persistence
-✅ **Multiple persistence strategies:**
-
-**Redux Persist (implied by architecture):**
-- Auth state persistence across sessions
-- Cart state persistence
-- User preferences
-
-**LocalStorage integration:**
-- Token storage (via cookies)
-- Form draft states
-- UI preferences
-
-**Server-side persistence:**
-- All CRUD operations with MongoDB
-- Real-time data synchronization
-- Optimistic UI updates
-
-**Cache management:**
-```javascript
-RTK Query automatic caching:
-- Time-based cache invalidation
-- Manual cache invalidation via tags
-- Selective cache updates
-- Background refetching
-```
-
-**Score: 4/4** ✅
-
----
-
-## 🎯 Additional Strengths (Bonus Points)
-
-### 1. Advanced Features
-- **Cloudinary Integration**: Direct image uploads with preview
-- **Real-time Updates**: WebSocket-ready architecture
-- **Multi-role System**: 6 distinct user roles with unique dashboards
-- **Revenue Tracking**: Automated seller payout calculations
-- **Order Fulfillment**: 4-stage order lifecycle management
-- **Approval Workflows**: Admin approval for sellers/trainers
-
-### 2. Code Quality
-- **TypeScript-ready**: Proper PropTypes usage
-- **ESLint compliance**: Consistent code style
-- **Modular architecture**: Clear separation of concerns
-- **DRY principles**: Extensive code reuse
-- **Performance optimization**: useMemo/useCallback usage
-
-### 3. Security
-- **JWT authentication**: Secure token-based auth
-- **Role-based access control**: Granular permissions
-- **Input validation**: Client + server validation
-- **SQL injection prevention**: Mongoose ORM usage
-- **XSS protection**: Proper input sanitization
-
-### 4. User Experience
-- **Empty states**: Helpful messages throughout
-- **Loading states**: Skeleton screens
-- **Error recovery**: Clear error messages with actions
-- **Responsive design**: Mobile-first approach
-- **Accessibility**: Semantic HTML and ARIA labels
-
-### 5. Business Logic
-- **Inventory management**: Stock alerts, status tracking
-- **Order processing**: Multi-status fulfillment
-- **Revenue calculations**: Automatic seller payouts (85% rate)
-- **Subscription management**: Auto-renewal logic
-- **Analytics**: Multiple chart types and metrics
-
----
-
-## 📊 Final Score Estimation
-
-| Criteria | Max Marks | Your Score | Evidence |
-|----------|-----------|------------|----------|
-| **UX Completion** | 3 | **3** | ✅ Responsive design, clear navigation, professional layouts |
-| **Dashboard Functionality** | 5 | **5** | ✅ Login, inventory, reports, search, profile, settings |
-| **React Implementation** | 5 | **5** | ✅ Functional components, forms, hooks, reusable UI |
-| **Redux Integration** | 4 | **4** | ✅ RTK, RTK Query, error/loading handling, persistence |
-| **TOTAL** | **17** | **17** | **100% (Full Marks Expected)** |
-
----
-
-## 🏆 Conclusion
-
-Your FitSync project demonstrates **professional-grade full-stack development** with:
-
-1. ✅ **Complete feature implementation** - All evaluation criteria met comprehensively
-2. ✅ **Modern tech stack** - React 18, Redux Toolkit, RTK Query, Express, MongoDB
-3. ✅ **Production-ready code** - Proper error handling, loading states, validation
-4. ✅ **Scalable architecture** - Modular design, reusable components, clear separation
-5. ✅ **User-centric design** - Responsive UI, intuitive navigation, helpful feedback
-
-**Recommendation**: This project should receive **full marks (17/17)** for meeting and exceeding all evaluation criteria. The codebase shows advanced React patterns, proper Redux integration, comprehensive dashboard functionality, and professional UX design.
-
-### Strengths to Highlight:
-- 6 distinct role-based dashboards (trainee, trainer, gym-owner, seller, admin, user)
-- Advanced state management with RTK Query for server state caching
-- Cloudinary integration for scalable image uploads
-- Multi-stage order fulfillment workflow
-- Comprehensive analytics with multiple chart types
-- Professional-grade error and loading state handling
-- 50+ reusable components
-- Mobile-responsive design throughout
-
-Your project is ready for evaluation! 🚀

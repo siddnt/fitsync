@@ -13,6 +13,7 @@ const dashboardLinksByRole = {
     { to: '/dashboard/gym-owner', label: 'Overview' },
     { to: '/dashboard/gym-owner/gyms', label: 'My Gyms' },
     { to: '/dashboard/gym-owner/people', label: 'People' },
+    { to: '/dashboard/gym-owner/communications', label: 'Communications' },
     { to: '/dashboard/gym-owner/subscriptions', label: 'Listing Subscription' },
     { to: '/dashboard/gym-owner/sponsorship', label: 'Sponsorship' },
     { to: '/dashboard/gym-owner/analytics', label: 'Analytics' },
@@ -27,13 +28,20 @@ const dashboardLinksByRole = {
     { to: '/dashboard/seller/inventory', label: 'Inventory' },
     { to: '/dashboard/seller/orders', label: 'Orders' },
   ],
+  manager: [
+    { to: '/dashboard/manager', label: 'Overview' },
+    { to: '/dashboard/manager/communications', label: 'Communications' },
+    { to: '/dashboard/manager/messages', label: 'Messages' },
+  ],
   admin: [
     { to: '/dashboard/admin', label: 'Overview' },
     { to: '/dashboard/admin/users', label: 'Users' },
     { to: '/dashboard/admin/gyms', label: 'Gyms' },
     { to: '/dashboard/admin/revenue', label: 'Revenue' },
     { to: '/dashboard/admin/marketplace', label: 'Marketplace' },
+    { to: '/dashboard/admin/communications', label: 'Communications' },
     { to: '/dashboard/admin/messages', label: 'Messages' },
+    { to: '/dashboard/admin/audit-logs', label: 'Audit Logs' },
   ],
 };
 

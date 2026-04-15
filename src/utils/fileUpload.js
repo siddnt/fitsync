@@ -122,6 +122,8 @@ export const uploadOnCloudinary = async (absolutePath, options = {}) => {
             resource_type: resourceType,
             overwrite: false,
             unique_filename: true,
+            fetch_format: resourceType === 'image' ? 'auto' : undefined,
+            quality: resourceType === 'image' ? 'auto:good' : undefined,
         });
 
         await cleanupLocalFile(absolutePath);

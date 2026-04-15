@@ -1,5 +1,67 @@
 import mongoose from "mongoose";
 
+const productSalesMetricSchema = new mongoose.Schema(
+    {
+        totalSold: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        lastSoldAt: Date,
+        recentDaily: {
+            type: [
+                new mongoose.Schema(
+                    {
+                        date: {
+                            type: String,
+                            required: true
+                        },
+                        quantity: {
+                            type: Number,
+                            required: true,
+                            min: 1
+                        }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
+        }
+    },
+    { _id: false }
+);
+
+const productReviewMetricSchema = new mongoose.Schema(
+    {
+        count: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        averageRating: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        lastReviewedAt: Date
+    },
+    { _id: false }
+);
+
+const productMetricsSchema = new mongoose.Schema(
+    {
+        sales: {
+            type: productSalesMetricSchema,
+            default: () => ({})
+        },
+        reviews: {
+            type: productReviewMetricSchema,
+            default: () => ({})
+        }
+    },
+    { _id: false }
+);
+
 const productSchema = new mongoose.Schema(
     {
         seller: {
@@ -49,6 +111,10 @@ const productSchema = new mongoose.Schema(
             type: Boolean,
             default: true
         },
+        metrics: {
+            type: productMetricsSchema,
+            default: () => ({})
+        },
         metadata: {
             type: Map,
             of: String,
@@ -71,6 +137,36 @@ productSchema.pre("validate", function (next) {
 
     next();
 });
+
+const PUBLIC_PRODUCT_FILTER = { isPublished: true };
+
+productSchema.index(
+    { isPublished: 1, category: 1, status: 1, stock: 1, updatedAt: -1 },
+    { partialFilterExpression: PUBLIC_PRODUCT_FILTER }
+);
+productSchema.index(
+    { isPublished: 1, price: 1, updatedAt: -1 },
+    { partialFilterExpression: PUBLIC_PRODUCT_FILTER }
+);
+productSchema.index(
+    { isPublished: 1, createdAt: -1 },
+    { partialFilterExpression: PUBLIC_PRODUCT_FILTER }
+);
+productSchema.index(
+    {
+        name: "text",
+        description: "text",
+        category: "text"
+    },
+    {
+        weights: {
+            name: 10,
+            category: 4,
+            description: 2
+        },
+        name: "product_search_text_idx"
+    }
+);
 
 const Product = mongoose.model("Product", productSchema);
 export default Product;

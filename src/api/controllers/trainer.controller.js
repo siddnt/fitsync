@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
+import TrainerAvailability from '../../models/trainerAvailability.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import { recordAuditLog } from '../../services/audit.service.js';
 
 const toObjectId = (value, name) => {
   if (!value) {
@@ -446,4 +448,84 @@ export const markFeedbackReviewed = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { feedbackId }, 'Feedback marked as reviewed.'));
+});
+
+export const upsertAvailability = asyncHandler(async (req, res) => {
+  const trainerId = req.user?._id;
+  const gymId = toObjectId(req.body?.gymId, 'Gym id');
+  const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
+  const timezone = req.body?.timezone || 'Asia/Calcutta';
+  const notes = req.body?.notes ?? '';
+
+  const assignment = await TrainerAssignment.findOne({ trainer: trainerId, gym: gymId, status: 'active' }).lean();
+  if (!assignment) {
+    throw new ApiError(403, 'You can only manage availability for gyms where you are active.');
+  }
+
+  const normalizedSlots = slots.map((slot, index) => {
+    const dayOfWeek = Number(slot.dayOfWeek);
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+      throw new ApiError(400, `Slot ${index + 1} has an invalid day of week.`);
+    }
+    if (!slot.startTime || !slot.endTime) {
+      throw new ApiError(400, `Slot ${index + 1} must have start and end times.`);
+    }
+
+    return {
+      dayOfWeek,
+      startTime: String(slot.startTime).trim(),
+      endTime: String(slot.endTime).trim(),
+      capacity: Math.max(Number(slot.capacity) || 1, 1),
+      locationLabel: String(slot.locationLabel ?? '').trim(),
+      sessionType: String(slot.sessionType ?? 'personal-training').trim(),
+    };
+  });
+
+  const availability = await TrainerAvailability.findOneAndUpdate(
+    { trainer: trainerId, gym: gymId },
+    {
+      $set: {
+        slots: normalizedSlots,
+        timezone,
+        notes,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+
+  await recordAuditLog({
+    actor: trainerId,
+    actorRole: req.user?.role,
+    action: 'trainer.availability.updated',
+    entityType: 'trainerAvailability',
+    entityId: availability._id,
+    summary: 'Trainer availability updated',
+    metadata: { gymId, slots: normalizedSlots.length },
+  });
+
+  return res.status(200).json(new ApiResponse(200, { availability }, 'Availability updated successfully.'));
+});
+
+export const getMyAvailability = asyncHandler(async (req, res) => {
+  const entries = await TrainerAvailability.find({ trainer: req.user?._id })
+    .populate({ path: 'gym', select: 'name location' })
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, { availability: entries }, 'Availability fetched successfully.'));
+});
+
+export const getTrainerAvailability = asyncHandler(async (req, res) => {
+  const trainerId = toObjectId(req.params.trainerId, 'Trainer id');
+  const gymId = req.query?.gymId ? toObjectId(req.query.gymId, 'Gym id') : null;
+
+  const filter = { trainer: trainerId };
+  if (gymId) {
+    filter.gym = gymId;
+  }
+
+  const entries = await TrainerAvailability.find(filter)
+    .populate({ path: 'gym', select: 'name location' })
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, { availability: entries }, 'Trainer availability fetched successfully.'));
 });

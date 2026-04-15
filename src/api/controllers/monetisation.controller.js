@@ -5,6 +5,7 @@ import Revenue from '../../models/revenue.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { invalidateCacheByTags } from '../../services/cache.service.js';
 import {
   LISTING_PLANS,
   SPONSORSHIP_PACKAGES,
@@ -142,6 +143,7 @@ export const purchaseSponsorship = asyncHandler(async (req, res) => {
 
   gym.lastUpdatedBy = req.user._id;
   await gym.save();
+  await invalidateCacheByTags(['gyms:list', `gym:${gymId}`]);
 
   await recordRevenue({
     amount: packageDetails.amount,

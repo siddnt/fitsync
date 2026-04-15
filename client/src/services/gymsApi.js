@@ -92,10 +92,6 @@ export const gymsApi = apiSlice.injectEndpoints({
         url: `/gyms/${id}/impressions`,
         method: 'POST',
       }),
-      invalidatesTags: (_result, _error, id) => [
-        { type: 'Gym', id },
-        { type: 'Analytics', id: 'GYM_IMPRESSIONS' },
-      ],
     }),
     updateGym: builder.mutation({
       query: ({ id, ...payload }) => ({

@@ -37,11 +37,19 @@ export const adminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'Analytics', 'AdminSettings'],
     }),
+    getAuditLogs: builder.query({
+      query: (params = {}) => ({
+        url: '/admin/audit-logs',
+        params,
+      }),
+      providesTags: ['AdminAudit'],
+    }),
   }),
 });
 
 export const {
   useGetAdminTogglesQuery,
+  useGetAuditLogsQuery,
   useDeleteUserMutation,
   useDeleteGymMutation,
   useUpdateAdminTogglesMutation,

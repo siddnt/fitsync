@@ -6,6 +6,7 @@ const roleToPath = {
   'gym-owner': 'gym-owner',
   trainer: 'trainer',
   seller: 'seller',
+  manager: 'manager',
   admin: 'admin',
 };
 

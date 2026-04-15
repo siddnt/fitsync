@@ -68,6 +68,22 @@ export const sellerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'Marketplace', id: 'SELLER_ORDERS' }, 'Dashboard', 'Marketplace'],
     }),
+    updateSellerOrderTracking: builder.mutation({
+      query: ({ orderId, itemId, carrier, trackingNumber, trackingUrl, status }) => ({
+        url: `/marketplace/seller/orders/${orderId}/items/${itemId}/tracking`,
+        method: 'PATCH',
+        body: { carrier, trackingNumber, trackingUrl, status },
+      }),
+      invalidatesTags: [{ type: 'Marketplace', id: 'SELLER_ORDERS' }, 'Dashboard', 'Marketplace', 'Notification'],
+    }),
+    reviewReturnRequest: builder.mutation({
+      query: ({ orderId, itemId, decision, note }) => ({
+        url: `/marketplace/seller/orders/${orderId}/items/${itemId}/return`,
+        method: 'PATCH',
+        body: { decision, note },
+      }),
+      invalidatesTags: [{ type: 'Marketplace', id: 'SELLER_ORDERS' }, 'Dashboard', 'Marketplace', 'Notification'],
+    }),
   }),
 });
 
@@ -78,4 +94,6 @@ export const {
   useDeleteSellerProductMutation,
   useGetSellerOrdersQuery,
   useUpdateSellerOrderStatusMutation,
+  useUpdateSellerOrderTrackingMutation,
+  useReviewReturnRequestMutation,
 } = sellerApi;

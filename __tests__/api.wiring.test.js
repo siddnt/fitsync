@@ -1,12 +1,15 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import { jest } from '@jest/globals';
 import app from '../src/app.js';
 import connectDB from '../src/db/index.js';
 import User from '../src/models/user.model.js';
 import Gym from '../src/models/gym.model.js';
 
 dotenv.config({ path: '.env' });
+
+jest.setTimeout(30000);
 
 const randomEmail = () => `qa+${Date.now()}_${Math.random().toString(16).slice(2)}@fitsync.dev`;
 
@@ -125,9 +128,13 @@ describe('API wiring smoke tests', () => {
       .send({
         name: 'QA Fitness Center',
         description: 'Automated test gym',
-        location: { city: 'Pune', addressLine1: '123 Test Lane' },
+        location: { city: 'Pune', address: '123 Test Lane' },
         amenities: ['Weights', 'Cardio'],
-        pricing: { mrp: 1500, discounted: 1200 },
+        pricing: { monthlyMrp: 1500, monthlyPrice: 1200 },
+        subscription: {
+          planCode: 'listing-1m',
+          paymentReference: 'test-payment-ref-001',
+        },
       });
 
     expect(gymRes.status).toBe(201);

@@ -6,6 +6,8 @@ import {
   useGetTrainerTraineesQuery,
 } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
 import '../Dashboard.css';
 
 const TrainerTraineesPage = () => {
@@ -65,12 +67,61 @@ const TrainerTraineesPage = () => {
       const matchesStatus = filters.status === 'all' || trainee.status === filters.status;
       const matchesQuery =
         !normalizedQuery ||
-        [trainee.name, trainee.email, trainee.gym?.name]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(normalizedQuery));
+        matchesAcrossFields(
+          [trainee.name, trainee.email, trainee.gym?.name, trainee.status, ...(trainee.goals ?? [])],
+          normalizedQuery,
+        );
       return matchesGym && matchesStatus && matchesQuery;
     });
   }, [trainees, filters, searchTerm]);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const suggestions = [];
+    const seen = new Set();
+
+    trainees.forEach((trainee) => {
+      [
+        {
+          value: trainee.name,
+          meta: `${trainee.gym?.name ?? 'No gym'} • ${formatStatus(trainee.status ?? 'active')}`,
+        },
+        {
+          value: trainee.gym?.name,
+          meta: `Gym • ${trainee.name ?? 'Unnamed trainee'}`,
+        },
+        ...((trainee.goals ?? []).map((goal) => ({
+          value: goal,
+          meta: `Goal • ${trainee.name ?? 'Unnamed trainee'}`,
+        }))),
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+        const lower = normalized.toLowerCase();
+        if (!matchesPrefix(lower, query)) {
+          return;
+        }
+        const key = `${index}:${lower}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [trainees, searchTerm]);
 
   if (isLoading) {
     return (
@@ -113,12 +164,15 @@ const TrainerTraineesPage = () => {
             <div className="trainer-trainee-panel__filters">
               <label htmlFor="trainee-search">
                 <span>Search</span>
-                <input
+                <SearchSuggestInput
                   id="trainee-search"
-                  type="search"
-                  placeholder="Name, email, or gym"
                   value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
+                  onChange={setSearchTerm}
+                  onSelect={(suggestion) => setSearchTerm(suggestion.label)}
+                  suggestions={searchSuggestions}
+                  placeholder="Search by trainee name, gym, or goal"
+                  ariaLabel="Search trainees"
+                  noResultsText="No trainees match those search attributes."
                 />
               </label>
               <label htmlFor="trainee-gym">

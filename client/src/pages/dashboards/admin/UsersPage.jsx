@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
 import '../Dashboard.css';
 
+const getUserId = (user) => user?._id ?? user?.id;
+
 const AdminUsersPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
-  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'seller');
+  const pending = (data?.data?.pending ?? []).filter((user) => ['seller', 'manager'].includes(user.role));
   const recent = data?.data?.recent ?? [];
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
@@ -20,7 +26,7 @@ const AdminUsersPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'admin'];
+    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
     const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
     const merged = [...new Set([...knownRoles, ...dynamicRoles])];
     return ['all', ...merged];
@@ -30,6 +36,50 @@ const AdminUsersPage = () => {
     const values = Array.from(new Set(recent.map((user) => user.status).filter(Boolean)));
     return ['all', ...values];
   }, [recent]);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const suggestions = [];
+    const seen = new Set();
+
+    recent.forEach((user) => {
+      [
+        {
+          value: user.name,
+          meta: `${user.email ?? 'No email'} • ${formatStatus(user.role)}`,
+        },
+        {
+          value: user.email,
+          meta: `${user.name ?? 'Unknown user'} • ${formatStatus(user.role)}`,
+        },
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+        const lower = normalized.toLowerCase();
+        if (!matchesPrefix(lower, query)) {
+          return;
+        }
+        const key = `${index}:${lower}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [recent, searchTerm]);
 
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -44,8 +94,10 @@ const AdminUsersPage = () => {
       if (!query) {
         return true;
       }
-      const haystacks = [user.name, user.email].filter(Boolean).map((value) => value.toLowerCase());
-      return haystacks.some((value) => value.includes(query));
+      return matchesAcrossFields(
+        [user.name, user.email, user.role, user.status],
+        query,
+      );
     });
   }, [recent, roleFilter, statusFilter, searchTerm]);
 
@@ -186,7 +238,7 @@ const AdminUsersPage = () => {
             </tbody>
           </table>
         ) : (
-          <EmptyState message="No pending approvals. All caught up!" />
+          <EmptyState message="No pending seller or manager approvals. All caught up!" />
         )}
       </DashboardSection>
 
@@ -194,13 +246,15 @@ const AdminUsersPage = () => {
         title="Users"
         action={(
           <div className="users-toolbar">
-            <input
-              type="search"
-              className="inventory-toolbar__input"
-              placeholder="Search name or email"
+            <SearchSuggestInput
+              id="admin-users-search"
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label="Search users"
+              onChange={setSearchTerm}
+              onSelect={(suggestion) => setSearchTerm(suggestion.label)}
+              suggestions={searchSuggestions}
+              placeholder="Search by name or email"
+              ariaLabel="Search users"
+              noResultsText="No user matches those search attributes."
             />
             <select
               className="inventory-toolbar__input inventory-toolbar__input--select"
@@ -250,7 +304,12 @@ const AdminUsersPage = () => {
             </thead>
             <tbody>
               {filteredUsers.map((user) => (
-                <tr key={user._id}>
+                <tr
+                  key={user._id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/dashboard/admin/users/${getUserId(user)}`)}
+                  title="Click to view details"
+                >
                   <td>
                     <div className="dashboard-table__user">
                       {user.profilePicture ? (

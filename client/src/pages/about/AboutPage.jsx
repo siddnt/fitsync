@@ -26,7 +26,7 @@ const AboutPage = () => {
                         </p>
                     </div>
                     <div className="mission-image">
-                        <img src={missionImg} alt="Diverse group training" />
+                        <img src={missionImg} alt="Diverse group training" loading="lazy" decoding="async" />
                     </div>
                 </div>
 
@@ -47,7 +47,7 @@ const AboutPage = () => {
                         </p>
                     </div>
                     <div className="story-image">
-                        <img src={gymImg} alt="FitSync Origins" />
+                        <img src={gymImg} alt="FitSync Origins" loading="lazy" decoding="async" />
                     </div>
                 </div>
 

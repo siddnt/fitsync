@@ -79,7 +79,7 @@ const Hero = () => {
           transition: 'transform 0.1s ease-out'
         }}
       >
-        <img src={heroCollageImg} alt="FitSync Platform" className="hero-image" />
+        <img src={heroCollageImg} alt="FitSync Platform" className="hero-image" loading="eager" fetchPriority="high" decoding="async" />
       </div>
     </section>
   );

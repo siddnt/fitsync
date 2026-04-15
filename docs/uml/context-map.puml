@@ -1,0 +1,50 @@
+@startuml
+!pragma layout smetana
+top to bottom direction
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Segoe UI
+skinparam nodesep 60
+skinparam ranksep 75
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #334155
+  FontColor #0F172A
+  RoundCorner 16
+}
+
+rectangle "Administration and Support\nContext" as ASC #EDE9FE
+rectangle "Identity and Access\nContext" as IAC #E2E8F0
+rectangle "Gym Discovery and Membership\nContext" as GMC #DBEAFE
+rectangle "Trainer Engagement\nContext" as TEC #DCFCE7
+rectangle "Marketplace and Fulfillment\nContext" as MPC #FEF3C7
+rectangle "Monetization and Revenue\nContext" as MRC #FCE7F3
+
+ASC -[hidden]right-> IAC
+IAC -[hidden]down-> GMC
+GMC -[hidden]right-> TEC
+GMC -[hidden]down-> MPC
+TEC -[hidden]down-> MRC
+
+IAC --> GMC : Shared Kernel\nUserId, role, status
+IAC --> TEC : Shared Kernel\nUserId, role, status
+IAC --> MPC : Shared Kernel\nUserId, role, status
+IAC --> MRC : Shared Kernel\nowner/user identity
+
+GMC --> TEC : Customer/Supplier\napproved gym + membership state
+GMC --> MRC : Customer/Supplier\ngym listing state
+MPC --> MRC : Published Language\norder settlement + payout facts
+
+ASC --> IAC : Governance\naccess policy
+ASC --> GMC : Governance\nmoderation rules
+ASC --> MPC : Governance\nmoderation rules
+ASC --> TEC : Governance\nfeature toggles
+
+legend right
+  = Context Map =
+  Shared Kernel: shared core concepts
+  Customer/Supplier: downstream depends on upstream model
+  Published Language: translated business facts between contexts
+  Governance: administrative policy influence
+endlegend
+@enduml

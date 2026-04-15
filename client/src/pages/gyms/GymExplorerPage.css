@@ -132,6 +132,31 @@
   box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.25);
 }
 
+.gym-filters__search {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.gym-filters__search-input {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--light-text-color);
+  padding: 0.8rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gym-filters__search-input:focus {
+  border-color: rgba(229, 9, 20, 0.75);
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.25);
+}
+
+.gym-filters .search-suggest__dropdown {
+  background: rgba(10, 12, 20, 0.98);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 .gym-filters__chips {
   display: flex;
   flex-wrap: wrap;

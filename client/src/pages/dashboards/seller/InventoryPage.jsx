@@ -19,6 +19,8 @@ import {
   setFilterStatus,
 } from '../../../features/seller/sellerSlice.js';
 import { reset } from 'redux-form';
+import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
 import '../Dashboard.css';
 
 const filters = [
@@ -161,10 +163,14 @@ const InventoryPage = () => {
       list = list.filter((product) => (product.status ?? '').toLowerCase() === filterStatus);
     }
 
-    // search by name
+    // search by name/category/description/status
     if (searchText.trim()) {
-      const t = searchText.trim().toLowerCase();
-      list = list.filter((p) => (p.name || '').toLowerCase().includes(t));
+      list = list.filter((product) =>
+        matchesAcrossFields(
+          [product.name, product.category, product.description, product.status],
+          searchText,
+        ),
+      );
     }
 
     // category filter
@@ -190,6 +196,50 @@ const InventoryPage = () => {
 
     return list;
   }, [products, filterStatus, searchText, categoryFilter, minPrice, maxPrice, minStock]);
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const suggestions = [];
+    const seen = new Set();
+
+    products.forEach((product) => {
+      [
+        {
+          value: product.name,
+          meta: `${product.category ? formatStatus(product.category) : 'Uncategorised'} • ${formatStatus(product.status ?? 'available')}`,
+        },
+        {
+          value: product.category,
+          meta: `Category • ${product.name ?? 'Unnamed product'}`,
+        },
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+        const lower = normalized.toLowerCase();
+        if (!matchesPrefix(lower, query)) {
+          return;
+        }
+        const key = `${index}:${lower}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [products, searchText]);
 
   const approvalError = error?.status === 403 ? error : null;
   const approvalMessage = approvalError?.data?.message
@@ -445,12 +495,15 @@ const InventoryPage = () => {
         </div>
 
         <div className="inventory-toolbar">
-          <input
-            type="text"
-            placeholder="Search by name"
+          <SearchSuggestInput
+            id="seller-inventory-search"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="inventory-toolbar__input"
+            onChange={setSearchText}
+            onSelect={(suggestion) => setSearchText(suggestion.label)}
+            suggestions={searchSuggestions}
+            placeholder="Search by product name or category"
+            ariaLabel="Search products"
+            noResultsText="No products match those search attributes."
           />
           <select
             value={categoryFilter}

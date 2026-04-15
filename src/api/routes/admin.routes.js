@@ -4,6 +4,7 @@ import {
 	deleteUserAccount,
 	deleteGymListing,
 	getAdminToggles,
+	getAuditHistory,
 	updateAdminToggles,
 	updateUserStatus,
 } from '../controllers/admin.controller.js';
@@ -15,6 +16,7 @@ router.use(verifyJWT, authorizeRoles('admin'));
 router.delete('/users/:userId', deleteUserAccount);
 router.patch('/users/:userId/status', updateUserStatus);
 router.delete('/gyms/:gymId', deleteGymListing);
+router.get('/audit-logs', getAuditHistory);
 router.get('/settings/toggles', getAdminToggles);
 router.patch('/settings/toggles', updateAdminToggles);
 

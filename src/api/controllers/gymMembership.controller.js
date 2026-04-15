@@ -7,8 +7,15 @@ import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { invalidateCacheByTags } from '../../services/cache.service.js';
+import { recordAuditLog } from '../../services/audit.service.js';
+import { createNotifications } from '../../services/notification.service.js';
+import { syncGymAnalyticsSnapshot } from '../../services/gymMetrics.service.js';
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+
+const invalidateGymReadCaches = async (gymId) =>
+  invalidateCacheByTags(['gyms:list', gymId ? `gym:${gymId}` : null]);
 
 const mapMembership = (membership) => {
   if (!membership) {
@@ -379,6 +386,36 @@ export const joinGym = asyncHandler(async (req, res) => {
   );
 
   await Promise.all(updates);
+  await Promise.all([
+    createNotifications([
+      {
+        user: user._id,
+        type: 'membership-active',
+        title: 'Gym membership confirmed',
+        message: `Your membership at ${gym.name} is active.`,
+        link: `/gyms/${gym._id}`,
+        metadata: { gymId: gym._id, membershipId: membership._id },
+      },
+      {
+        user: assignment.trainer._id,
+        type: 'new-trainee',
+        title: 'New trainee assigned',
+        message: `${user.name ?? 'A trainee'} joined ${gym.name} under your guidance.`,
+        link: '/dashboards/trainer',
+        metadata: { gymId: gym._id, traineeId: user._id },
+      },
+    ]),
+    recordAuditLog({
+      actor: user._id,
+      actorRole: user.role,
+      action: 'membership.joined',
+      entityType: 'gymMembership',
+      entityId: membership._id,
+      summary: `Membership started for ${gym.name}`,
+      metadata: { gymId: gym._id, trainerId: assignment.trainer._id },
+    }),
+  ]);
+  await syncGymAnalyticsSnapshot(gym._id);
 
   const assignmentUpdate = await TrainerAssignment.findOneAndUpdate(
     { trainer: assignment.trainer._id, gym: gym._id, 'trainees.trainee': user._id },
@@ -447,6 +484,7 @@ export const joinGym = asyncHandler(async (req, res) => {
     .populate({ path: 'gym', select: 'name location pricing' })
     .populate({ path: 'trainer', select: 'name profilePicture' })
     .lean();
+  await invalidateGymReadCaches(gym._id);
 
   return res
     .status(201)
@@ -575,11 +613,22 @@ export const leaveGym = asyncHandler(async (req, res) => {
   }
 
   await Promise.all(updates);
+  await recordAuditLog({
+    actor: requester._id,
+    actorRole: requester.role,
+    action: 'membership.cancelled',
+    entityType: 'gymMembership',
+    entityId: membership._id,
+    summary: 'Membership cancelled',
+    metadata: { gymId, trainerId },
+  });
+  await syncGymAnalyticsSnapshot(gymId);
 
   const populated = await GymMembership.findById(membership._id)
     .populate({ path: 'gym', select: 'name location' })
     .populate({ path: 'trainer', select: 'name profilePicture' })
     .lean();
+  await invalidateGymReadCaches(gymId);
 
   return res
     .status(200)

@@ -1,0 +1,68 @@
+@startuml
+!pragma layout smetana
+top to bottom direction
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Segoe UI
+skinparam nodesep 55
+skinparam ranksep 65
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #334155
+  FontColor #0F172A
+}
+hide empty members
+
+package "Membership View" {
+  class "User\n(owner role view)" as OwnerUser <<Entity>>
+  class "User\n(trainee role view)" as TraineeUser <<Entity>>
+  class "User\n(trainer role view)" as TrainerUser <<Entity>>
+  class Gym <<Entity>>
+  class GymMembership <<Entity>>
+  class TrainerAssignment <<Entity>>
+  class TrainerProgress <<Entity>>
+}
+
+package "Marketplace View" {
+  class "User\n(customer role view)" as CustomerUser <<Entity>>
+  class "User\n(seller role view)" as SellerUser <<Entity>>
+  class Product <<Entity>>
+  class Order <<Entity>>
+  class OrderItem <<ValueObject>>
+  class ProductReview <<Entity>>
+}
+
+package "Monetization View" {
+  class GymListingSubscription <<Entity>>
+  class Revenue <<Entity>>
+  class "User\n(revenue owner view)" as RevenueUser <<Entity>>
+}
+
+OwnerUser "1" -- "0..*" Gym : owns
+TraineeUser "1" -- "0..*" GymMembership : enrolls
+TrainerUser "0..1" -- "0..*" GymMembership : mentors
+Gym "1" -- "0..*" GymMembership : has
+TrainerUser "1" -- "0..*" TrainerAssignment : trainer
+Gym "1" -- "0..*" TrainerAssignment : gym
+TrainerUser "1" -- "0..*" TrainerProgress : coach
+TraineeUser "1" -- "0..*" TrainerProgress : trainee
+Gym "1" -- "0..*" TrainerProgress : hosts
+
+SellerUser "1" -- "0..*" Product : sells
+CustomerUser "1" -- "0..*" Order : places
+Order "1" *-- "1..*" OrderItem : contains
+Product "1" -- "0..*" OrderItem : appears in
+Product "1" -- "0..*" ProductReview : receives
+CustomerUser "1" -- "0..*" ProductReview : writes
+
+Gym "1" -- "0..*" GymListingSubscription : has
+OwnerUser "1" -- "0..*" GymListingSubscription : purchases
+Order "1" -- "0..*" Revenue : generates
+RevenueUser "0..1" -- "0..*" Revenue : earns
+
+legend right
+  = Cardinality View =
+  Multiple "User role views" are shown only to reduce crossing lines.
+  They all refer to the same underlying User entity in the domain model.
+endlegend
+@enduml

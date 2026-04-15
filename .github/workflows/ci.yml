@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      MONGODB_URI: mongodb://127.0.0.1:27017/fitsync
+      REDIS_URL: redis://127.0.0.1:6379
+      GYM_IMPRESSION_FLUSH_INTERVAL_MS: 15000
+      MEILISEARCH_HOST: http://127.0.0.1:7700
+      MEILISEARCH_API_KEY: fitsync-meili-key
+      SEARCH_BOOTSTRAP_ON_STARTUP: true
+      SEARCH_SYNC_FLUSH_INTERVAL_MS: 1000
+      SEARCH_SYNC_MAX_QUEUE_ITEMS: 1000
+      SEARCH_SYNC_QUEUE_NAME: fitsync-search-sync
+      CORS_ORIGIN: http://localhost:5173,http://localhost:8080,http://localhost:4000
+      JWT_SECRET: ci-jwt-secret
+      REFRESH_TOKEN_SECRET: ci-refresh-secret
+      STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_dummy
+      UPI_DUMMY_MODE: true
+      DEMO_UPI_ID: fitsync.demo@upi
+      DEMO_UPI_NAME: FitSync Demo
+    services:
+      mongo:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval \"quit(db.adminCommand({ ping: 1 }).ok ? 0 : 2)\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      meilisearch:
+        image: getmeili/meilisearch:v1.12
+        ports:
+          - 7700:7700
+        env:
+          MEILI_MASTER_KEY: fitsync-meili-key
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix client ci
+
+      - name: Run backend tests with reports
+        run: npm run test:report
+
+      - name: Build frontend
+        run: npm run client:build
+
+      - name: Analyze query plans
+        run: npm run db:analyze
+
+      - name: Benchmark cache
+        run: npm run cache:benchmark
+
+      - name: Run HTTP load tests
+        run: npm run load:test
+
+      - name: Build Docker images
+        run: |
+          docker build -t fitsync-api .
+          docker build -t fitsync-web ./client
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitsync-reports
+          path: |
+            coverage
+            reports
+            docs/query-plan-report.json
+            docs/query-plan-report.md
+            docs/redis-cache-report.json
+            docs/redis-cache-report.md
+            docs/load-test-report.json
+            docs/load-test-report.md

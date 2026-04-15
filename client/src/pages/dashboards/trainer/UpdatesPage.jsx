@@ -8,6 +8,8 @@ import {
   useRecordProgressMutation,
   useAssignDietMutation,
   useShareFeedbackMutation,
+  useGetMyAvailabilityQuery,
+  useUpdateAvailabilityMutation,
 } from '../../../services/trainerApi.js';
 import { formatDate } from '../../../utils/format.js';
 import '../Dashboard.css';
@@ -48,6 +50,15 @@ const defaultFeedback = () => ({
   category: 'general',
 });
 
+const defaultAvailabilitySlot = () => ({
+  dayOfWeek: '1',
+  startTime: '07:00',
+  endTime: '08:00',
+  capacity: '1',
+  sessionType: 'personal-training',
+  locationLabel: '',
+});
+
 const TrainerUpdatesPage = () => {
   const { data, isLoading, isError, refetch } = useGetTrainerTraineesQuery();
   const rawAssignments = data?.data?.assignments;
@@ -78,6 +89,12 @@ const TrainerUpdatesPage = () => {
   const [progressForm, setProgressForm] = useState(defaultProgress());
   const [dietForm, setDietForm] = useState(defaultDiet());
   const [feedbackForm, setFeedbackForm] = useState(defaultFeedback());
+  const [availabilityForm, setAvailabilityForm] = useState({
+    gymId: '',
+    timezone: 'Asia/Calcutta',
+    notes: '',
+    slot: defaultAvailabilitySlot(),
+  });
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
 
@@ -85,10 +102,30 @@ const TrainerUpdatesPage = () => {
   const [recordProgress, { isLoading: isRecordingProgress }] = useRecordProgressMutation();
   const [assignDiet, { isLoading: isAssigningDiet }] = useAssignDietMutation();
   const [shareFeedback, { isLoading: isSharingFeedback }] = useShareFeedbackMutation();
+  const { data: availabilityResponse } = useGetMyAvailabilityQuery();
+  const [updateAvailability, { isLoading: isUpdatingAvailability }] = useUpdateAvailabilityMutation();
 
   const selectedTrainee = useMemo(
     () => trainees.find((t) => t.internalId === selectedTraineeId),
     [trainees, selectedTraineeId]
+  );
+
+  const trainerGyms = useMemo(() => {
+    const unique = new Map();
+    assignments.forEach((assignment) => {
+      const gym = assignment.gym;
+      if (gym?.id && !unique.has(gym.id)) {
+        unique.set(gym.id, gym);
+      }
+    });
+    return Array.from(unique.values());
+  }, [assignments]);
+
+  const availabilityEntries = availabilityResponse?.data?.availability ?? [];
+
+  const selectedAvailabilityEntry = useMemo(
+    () => availabilityEntries.find((entry) => entry.gym?._id === availabilityForm.gymId || entry.gym?.id === availabilityForm.gymId),
+    [availabilityEntries, availabilityForm.gymId],
   );
 
   const bmiPreview = useMemo(() => {
@@ -114,6 +151,27 @@ const TrainerUpdatesPage = () => {
       // setSelectedTraineeId(trainees[0].internalId);
     }
   }, [trainees, selectedTraineeId]);
+
+  useEffect(() => {
+    if (!availabilityForm.gymId && trainerGyms.length) {
+      setAvailabilityForm((prev) => ({
+        ...prev,
+        gymId: trainerGyms[0].id,
+      }));
+    }
+  }, [availabilityForm.gymId, trainerGyms]);
+
+  useEffect(() => {
+    if (!selectedAvailabilityEntry) {
+      return;
+    }
+
+    setAvailabilityForm((prev) => ({
+      ...prev,
+      timezone: selectedAvailabilityEntry.timezone || prev.timezone,
+      notes: selectedAvailabilityEntry.notes || '',
+    }));
+  }, [selectedAvailabilityEntry]);
 
   const resetNotices = () => {
     setNotice(null);
@@ -223,6 +281,54 @@ const TrainerUpdatesPage = () => {
     }
   };
 
+  const handleAvailabilitySlotChange = (field, value) => {
+    setAvailabilityForm((prev) => ({
+      ...prev,
+      slot: {
+        ...prev.slot,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleAvailabilitySubmit = async (event) => {
+    event.preventDefault();
+    if (!availabilityForm.gymId) {
+      setErrorNotice('Select a gym before saving availability.');
+      return;
+    }
+
+    resetNotices();
+
+    const existingSlots = selectedAvailabilityEntry?.slots ?? [];
+    const nextSlot = {
+      dayOfWeek: Number(availabilityForm.slot.dayOfWeek),
+      startTime: availabilityForm.slot.startTime,
+      endTime: availabilityForm.slot.endTime,
+      capacity: Number(availabilityForm.slot.capacity) || 1,
+      sessionType: availabilityForm.slot.sessionType,
+      locationLabel: availabilityForm.slot.locationLabel,
+    };
+
+    const slots = [...existingSlots, nextSlot];
+
+    try {
+      await updateAvailability({
+        gymId: availabilityForm.gymId,
+        timezone: availabilityForm.timezone,
+        notes: availabilityForm.notes,
+        slots,
+      }).unwrap();
+      setNotice('Availability slot saved.');
+      setAvailabilityForm((prev) => ({
+        ...prev,
+        slot: defaultAvailabilitySlot(),
+      }));
+    } catch (err) {
+      setErrorNotice(err?.data?.message ?? 'Failed to save availability.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid">
@@ -283,8 +389,147 @@ const TrainerUpdatesPage = () => {
         </div>
       )}
 
-      {selectedTrainee ? (
+      {selectedTrainee || trainerGyms.length ? (
         <div className="forms-grid">
+          <section className="record-form-card">
+            <div className="card-header">
+              <h3>Availability</h3>
+              <p>Publish weekly slots for your active gyms.</p>
+            </div>
+            <form onSubmit={handleAvailabilitySubmit}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Gym</label>
+                  <select
+                    value={availabilityForm.gymId}
+                    onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, gymId: e.target.value }))}
+                    className="premium-select"
+                  >
+                    <option value="" disabled>Select gym</option>
+                    {trainerGyms.map((gym) => (
+                      <option key={gym.id} value={gym.id}>
+                        {gym.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Timezone</label>
+                  <input
+                    type="text"
+                    value={availabilityForm.timezone}
+                    onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, timezone: e.target.value }))}
+                    className="premium-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Day of Week</label>
+                  <select
+                    value={availabilityForm.slot.dayOfWeek}
+                    onChange={(e) => handleAvailabilitySlotChange('dayOfWeek', e.target.value)}
+                    className="premium-select"
+                  >
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Start</label>
+                  <input
+                    type="time"
+                    value={availabilityForm.slot.startTime}
+                    onChange={(e) => handleAvailabilitySlotChange('startTime', e.target.value)}
+                    className="premium-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End</label>
+                  <input
+                    type="time"
+                    value={availabilityForm.slot.endTime}
+                    onChange={(e) => handleAvailabilitySlotChange('endTime', e.target.value)}
+                    className="premium-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Capacity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={availabilityForm.slot.capacity}
+                    onChange={(e) => handleAvailabilitySlotChange('capacity', e.target.value)}
+                    className="premium-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Session Type</label>
+                  <input
+                    type="text"
+                    value={availabilityForm.slot.sessionType}
+                    onChange={(e) => handleAvailabilitySlotChange('sessionType', e.target.value)}
+                    className="premium-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Location Label</label>
+                  <input
+                    type="text"
+                    value={availabilityForm.slot.locationLabel}
+                    onChange={(e) => handleAvailabilitySlotChange('locationLabel', e.target.value)}
+                    className="premium-input"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group full-width">
+                <label>Availability Notes</label>
+                <textarea
+                  value={availabilityForm.notes}
+                  onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="premium-textarea"
+                  placeholder="Optional notes for members"
+                />
+              </div>
+
+              <div className="trainer-availability-list">
+                <strong>Saved slots for selected gym</strong>
+                {selectedAvailabilityEntry?.slots?.length ? (
+                  <ul>
+                    {selectedAvailabilityEntry.slots.map((slot, index) => (
+                      <li key={`${slot.dayOfWeek}-${slot.startTime}-${index}`}>
+                        <span>
+                          Day {slot.dayOfWeek} • {slot.startTime} - {slot.endTime}
+                        </span>
+                        <small>{slot.sessionType || 'personal-training'} • cap {slot.capacity || 1}</small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">No saved slots yet for this gym.</p>
+                )}
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" disabled={isUpdatingAvailability} className="premium-btn">
+                  {isUpdatingAvailability ? 'Saving...' : 'Add availability slot'}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          {selectedTrainee ? (
+            <>
           {/* Attendance Form */}
           <section className="record-form-card">
             <div className="card-header">
@@ -513,6 +758,8 @@ const TrainerUpdatesPage = () => {
               </div>
             </form>
           </section>
+            </>
+          ) : null}
         </div>
       ) : (
         <div className="empty-selection-state">

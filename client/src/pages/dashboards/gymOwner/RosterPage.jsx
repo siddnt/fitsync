@@ -9,8 +9,48 @@ import {
   useRemoveTrainerFromGymMutation,
   useRemoveGymMemberMutation,
 } from '../../../services/ownerApi.js';
+import { useGetTrainerAvailabilityQuery } from '../../../services/trainerApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const TrainerAvailabilitySummary = ({ trainerId, gymId }) => {
+  const { data, isLoading, isError } = useGetTrainerAvailabilityQuery(
+    { trainerId, gymId },
+    { skip: !trainerId || !gymId },
+  );
+
+  const entries = data?.data?.availability ?? [];
+  const slots = entries.flatMap((entry) => entry.slots ?? []);
+
+  if (isLoading) {
+    return <small className="owner-roster-schedule__state">Loading schedule...</small>;
+  }
+
+  if (isError) {
+    return <small className="owner-roster-schedule__state">Schedule unavailable.</small>;
+  }
+
+  if (!slots.length) {
+    return <small className="owner-roster-schedule__state">No availability shared yet.</small>;
+  }
+
+  return (
+    <div className="owner-roster-schedule">
+      {slots.slice(0, 3).map((slot, index) => (
+        <span key={`${slot.dayOfWeek}-${slot.startTime}-${index}`} className="owner-roster-schedule__pill">
+          {WEEKDAY_LABELS[slot.dayOfWeek] ?? `Day ${slot.dayOfWeek}`} {slot.startTime}-{slot.endTime}
+        </span>
+      ))}
+      {slots.length > 3 ? (
+        <span className="owner-roster-schedule__pill owner-roster-schedule__pill--muted">
+          +{slots.length - 3} more
+        </span>
+      ) : null}
+    </div>
+  );
+};
 
 const GymOwnerRosterPage = () => {
   const {
@@ -207,6 +247,7 @@ const GymOwnerRosterPage = () => {
                                   ? `Requested ${trainer.requestedAt ? formatDate(trainer.requestedAt) : 'recently'}`
                                   : `Approved ${trainer.approvedAt ? formatDate(trainer.approvedAt) : 'recently'}`}
                               </small>
+                              <TrainerAvailabilitySummary trainerId={trainer.id} gymId={gym.id} />
                             </div>
                             <div className="owner-roster-actions">
                               <button

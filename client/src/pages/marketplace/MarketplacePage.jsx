@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
 import { useGetMarketplaceCatalogQuery } from '../../services/marketplaceApi.js';
+import SearchSuggestInput from '../../components/dashboard/SearchSuggestInput.jsx';
+import { matchesAcrossFields } from '../../utils/search.js';
 import ProductFilters from './components/ProductFilters.jsx';
 import ProductCard from './components/ProductCard.jsx';
 import './MarketplacePage.css';
@@ -38,11 +40,6 @@ const MarketplacePage = () => {
     const timer = setTimeout(() => setFeedback(null), 2800);
     return () => clearTimeout(timer);
   }, [feedback]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 350);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
 
   useEffect(() => {
     setPage(1);
@@ -94,13 +91,88 @@ const MarketplacePage = () => {
     refetch,
   } = useGetMarketplaceCatalogQuery(queryParams);
 
-  const products = data?.data?.products ?? [];
+  const serverProducts = data?.data?.products ?? [];
   const pagination = data?.data?.pagination;
+
+  // Client-side prefix filter so products narrow live while typing,
+  // without waiting for the server round-trip.
+  const products = useMemo(() => {
+    const typed = searchInput.trim();
+    if (!typed) return serverProducts;
+    return serverProducts.filter((p) =>
+      matchesAcrossFields(
+        [p.name, p.category, p.seller?.name],
+        typed,
+      ),
+    );
+  }, [serverProducts, searchInput]);
+
   const totalResults = pagination?.total ?? products.length;
   const totalPages = pagination?.totalPages ?? 1;
   const showingUpperBound = Math.min(page * PAGE_SIZE, totalResults);
   const showingLowerBound = totalResults === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const isEmptyState = !isLoading && !isFetching && !products.length && !isError;
+
+  // Accumulate products across API responses so suggestions stay useful
+  // while the user is still typing (before the debounced API call returns).
+  const [productPool, setProductPool] = useState([]);
+  useEffect(() => {
+    if (!products.length) return;
+    setProductPool((prev) => {
+      const existing = new Set(prev.map((p) => p.id));
+      const next = [...prev];
+      products.forEach((p) => {
+        if (p.id && !existing.has(p.id)) {
+          next.push(p);
+        }
+      });
+      return next;
+    });
+  }, [products]);
+
+  // Build suggestion candidates from the accumulated pool.
+  // SearchSuggestInput handles prefix-matching and ranking internally,
+  // so we don't filter here — we just supply all known values.
+  const searchSuggestions = useMemo(() => {
+    const suggestions = [];
+    const seen = new Set();
+
+    productPool.forEach((product) => {
+      [
+        {
+          value: product.name,
+          meta: `${product.category ?? 'Product'} • ${product.seller?.name ?? 'Unknown seller'}`,
+        },
+        {
+          value: product.category,
+          meta: `Category • ${product.name ?? 'Unnamed product'}`,
+        },
+        {
+          value: product.seller?.name,
+          meta: `Seller • ${product.name ?? 'Unnamed product'}`,
+        },
+      ].forEach((entry, index) => {
+        const normalized = entry.value?.toString().trim();
+        if (!normalized) {
+          return;
+        }
+
+        const key = `${index}:${normalized.toLowerCase()}`;
+        if (seen.has(key)) {
+          return;
+        }
+
+        seen.add(key);
+        suggestions.push({
+          id: key,
+          label: normalized,
+          meta: entry.meta,
+        });
+      });
+    });
+
+    return suggestions;
+  }, [productPool]);
 
   const updateFilters = (partial) => {
     setFilters((prev) => ({ ...prev, ...partial }));
@@ -160,13 +232,20 @@ const MarketplacePage = () => {
     <div className="marketplace-page">
       <header className="marketplace-hero">
         <form className="marketplace-search-simple" onSubmit={handleSearchSubmit}>
-          <input
+          <SearchSuggestInput
             id="marketplace-search"
-            type="search"
             placeholder="Search for protein, straps, or sellers"
             value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
+            onChange={setSearchInput}
+            onSelect={(suggestion) => {
+              setSearchInput(suggestion.label);
+              setSearchQuery(suggestion.label.trim());
+            }}
+            suggestions={searchSuggestions}
             aria-label="Search marketplace catalogue"
+            noResultsText="No products match those search attributes."
+            className="marketplace-search-simple__field"
+            inputClassName="marketplace-search-simple__input"
           />
           <button type="submit">Search</button>
         </form>

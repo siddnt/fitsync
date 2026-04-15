@@ -7,6 +7,29 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
+import {
+  buildCacheKey,
+  getOrSetCache,
+  invalidateCacheByTags,
+  shouldBypassCache,
+} from '../../services/cache.service.js';
+import {
+  buildNextProductSalesMetrics,
+  getProductReviewSnapshot,
+  getProductSalesSnapshot,
+} from '../../services/productMetrics.service.js';
+import { enqueueOutboxEvents } from '../../services/outbox.service.js';
+import {
+  searchProductIndex,
+} from '../../services/search.service.js';
+import { applyPublicCacheHeaders } from '../../utils/httpCache.js';
+import { recordAuditLog } from '../../services/audit.service.js';
+import { createNotifications } from '../../services/notification.service.js';
+import {
+  buildCursorFilter,
+  buildCursorSortStage,
+  encodeCursorToken,
+} from '../../utils/cursorPagination.js';
 
 const toObjectId = (value, label) => {
   if (!value) {
@@ -53,6 +76,12 @@ const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
 }, {});
 
 const ORDER_NUMBER_PREFIX = 'FS';
+const MARKETPLACE_LIST_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished createdAt updatedAt seller metrics';
+const MARKETPLACE_DETAIL_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished updatedAt seller metrics';
+const MARKETPLACE_ORDER_PRODUCT_SELECT = 'seller name price image stock status isPublished metrics';
+const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role';
+const MARKETPLACE_REVIEW_SELECT = 'rating title comment createdAt isVerifiedPurchase user';
+const MARKETPLACE_REVIEW_USER_SELECT = 'name profilePicture role';
 
 const ensureSellerActive = (user) => {
   if (!user) {
@@ -132,7 +161,7 @@ const normaliseCategory = (value) => {
   return lower;
 };
 
-const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const normalizeSearchTerm = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
 
 const canTransitionStatus = (currentStatus, nextStatus) => {
   const current = normaliseItemStatus(currentStatus);
@@ -153,7 +182,7 @@ const canTransitionStatus = (currentStatus, nextStatus) => {
 };
 
 // Returns an integer discount percentage bounded between 0 and 100.
-const computeDiscountPercentage = (mrp, price) => {
+export const computeDiscountPercentage = (mrp, price) => {
   const mrpValue = Number(mrp);
   const priceValue = Number(price);
 
@@ -189,6 +218,49 @@ const mapProduct = (product) => ({
   updatedAt: product.updatedAt,
 });
 
+const applyCacheHeaders = (res, meta = {}) => {
+  res.set('X-Cache', String(meta.state ?? 'miss').toUpperCase());
+  res.set('X-Cache-Provider', meta.provider ?? 'memory');
+};
+
+const buildMarketplaceCacheTags = ({ productId, productIds = [] } = {}) => {
+  const tags = new Set(['marketplace:catalogue']);
+
+  [productId, ...productIds]
+    .filter(Boolean)
+    .forEach((value) => tags.add(`marketplace:product:${value}`));
+
+  return Array.from(tags);
+};
+
+const invalidateMarketplaceCaches = async ({ productId, productIds = [] } = {}) =>
+  invalidateCacheByTags(buildMarketplaceCacheTags({ productId, productIds }));
+
+const buildMarketplaceOutboxEvents = ({ productId, productIds = [], deleted = false } = {}) =>
+  buildMarketplaceCacheTags({ productId, productIds })
+    .filter((tag) => tag !== 'marketplace:catalogue' || productId || productIds.length)
+    .reduce((events, _tag, index, source) => {
+      if (index === 0) {
+        events.push({
+          topic: 'product.cache.invalidate',
+          aggregateType: 'product',
+          aggregateId: String(productId ?? productIds[0] ?? 'catalogue'),
+          payload: {
+            tags: buildMarketplaceCacheTags({ productId, productIds }),
+          },
+        });
+      }
+
+      return events;
+    }, []).concat(
+      [...new Set([productId, ...productIds].filter(Boolean).map(String))].map((id) => ({
+        topic: deleted ? 'product.search.delete' : 'product.search.upsert',
+        aggregateType: 'product',
+        aggregateId: id,
+        payload: {},
+      })),
+    );
+
 const mapCatalogueProduct = (product) => {
   const sellerDoc = product.seller ?? null;
   let sellerName = null;
@@ -223,88 +295,355 @@ const mapCatalogueProduct = (product) => {
 
 const toIdString = (value) => (value ? value.toString() : null);
 
-const collectProductSalesStats = async (productIds, { recentWindowDays = 30 } = {}) => {
-  if (!productIds?.length) {
-    return new Map();
-  }
-
-  const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - recentWindowDays);
-
-  const stats = await Order.aggregate([
-    { $match: { 'orderItems.product': { $in: productIds } } },
-    { $project: { createdAt: 1, orderItems: 1 } },
-    { $unwind: '$orderItems' },
-    {
-      $match: {
-        'orderItems.product': { $in: productIds },
-        'orderItems.status': 'delivered',
-      },
-    },
-    {
-      $group: {
-        _id: '$orderItems.product',
-        totalSold: { $sum: '$orderItems.quantity' },
-        soldLast30Days: {
-          $sum: {
-            $cond: [{ $gte: ['$createdAt', sinceDate] }, '$orderItems.quantity', 0],
-          },
-        },
-      },
-    },
-  ]);
-
-  const map = new Map();
-  stats.forEach((entry) => {
-    map.set(String(entry._id), {
-      totalSold: Number(entry.totalSold) || 0,
-      soldLast30Days: Number(entry.soldLast30Days) || 0,
-    });
-  });
-  return map;
-};
-
-const collectProductReviewStats = async (productIds) => {
-  if (!productIds?.length) {
-    return new Map();
-  }
-
-  const stats = await ProductReview.aggregate([
-    { $match: { product: { $in: productIds } } },
-    {
-      $group: {
-        _id: '$product',
-        reviewCount: { $sum: 1 },
-        averageRating: { $avg: '$rating' },
-      },
-    },
-  ]);
-
-  const map = new Map();
-  stats.forEach((entry) => {
-    const averageRating = Number(entry.averageRating ?? 0);
-    map.set(String(entry._id), {
-      reviewCount: Number(entry.reviewCount) || 0,
-      averageRating: averageRating > 0 ? Math.round(averageRating * 10) / 10 : 0,
-    });
-  });
-  return map;
-};
-
-const shapeMarketplaceProduct = (product, salesStats = {}, reviewStats = {}) => {
+const shapeMarketplaceProduct = (product) => {
   const base = mapCatalogueProduct(product);
+  const salesStats = getProductSalesSnapshot(product);
+  const reviewStats = getProductReviewSnapshot(product);
+
   return {
     ...base,
     stats: {
-      soldLast30Days: salesStats.soldLast30Days ?? 0,
-      totalSold: salesStats.totalSold ?? 0,
+      soldLast30Days: salesStats.soldLast30Days,
+      totalSold: salesStats.totalSold,
       inStock: product.stock > 0 && product.status === 'available',
     },
     reviews: {
-      count: reviewStats.reviewCount ?? 0,
-      averageRating: reviewStats.averageRating ?? 0,
+      count: reviewStats.count,
+      averageRating: reviewStats.averageRating,
     },
   };
+};
+
+const orderProductsByIds = (products = [], ids = []) => {
+  const orderMap = new Map(ids.map((id, index) => [String(id), index]));
+  return [...products].sort((left, right) =>
+    (orderMap.get(String(left._id)) ?? Number.MAX_SAFE_INTEGER)
+      - (orderMap.get(String(right._id)) ?? Number.MAX_SAFE_INTEGER));
+};
+
+const resolveMarketplaceLastModified = (products = []) =>
+  products.reduce((latest, product) => {
+    const updatedAt = new Date(product.updatedAt ?? 0).getTime();
+    return Math.max(latest, Number.isNaN(updatedAt) ? 0 : updatedAt);
+  }, 0);
+
+const buildMarketplaceCollectionVersion = (products = [], pagination = {}, searchStrategy = 'browse') =>
+  JSON.stringify({
+    ids: products.map((product) => String(product.id ?? product._id)),
+    updatedAt: products.map((product) => product.updatedAt ?? null),
+    total: pagination.total ?? products.length,
+    page: pagination.page ?? 1,
+    pageSize: pagination.pageSize ?? products.length,
+    searchStrategy,
+  });
+
+const buildMarketplaceDetailVersion = (product) =>
+  JSON.stringify({
+    id: String(product?.id ?? product?._id ?? ''),
+    updatedAt: product?.updatedAt ?? null,
+    reviewCount: product?.reviews?.count ?? 0,
+    reviewItems: (product?.reviews?.items ?? []).map((review) => ({
+      id: review.id,
+      createdAt: review.createdAt,
+    })),
+  });
+
+const MARKETPLACE_CURSOR_SORT_FIELDS = {
+  featured: [
+    { field: 'updatedAt', order: -1, type: 'date' },
+    { field: '_id', order: -1, type: 'objectId' },
+  ],
+  newest: [
+    { field: 'createdAt', order: -1, type: 'date' },
+    { field: '_id', order: -1, type: 'objectId' },
+  ],
+  priceLow: [
+    { field: 'price', order: 1, type: 'number' },
+    { field: '_id', order: 1, type: 'objectId' },
+  ],
+  priceHigh: [
+    { field: 'price', order: -1, type: 'number' },
+    { field: '_id', order: -1, type: 'objectId' },
+  ],
+};
+
+const SELLER_PRODUCT_CURSOR_SORT_FIELDS = [
+  { field: 'updatedAt', order: -1, type: 'date' },
+  { field: '_id', order: -1, type: 'objectId' },
+];
+
+const SELLER_ORDER_CURSOR_SORT_FIELDS = [
+  { field: 'createdAt', order: -1, type: 'date' },
+  { field: '_id', order: -1, type: 'objectId' },
+];
+
+const recalculateProductReviewMetrics = async (productId, { session } = {}) => {
+  const productObjectId = toObjectId(productId, 'Product id');
+  const [stats] = await ProductReview.aggregate([
+    { $match: { product: productObjectId } },
+    {
+      $group: {
+        _id: '$product',
+        count: { $sum: 1 },
+        averageRating: { $avg: '$rating' },
+        lastReviewedAt: { $max: '$updatedAt' },
+      },
+    },
+  ]).session(session ?? null);
+
+  const count = Number(stats?.count ?? 0) || 0;
+  const averageRating = Number(stats?.averageRating ?? 0);
+
+  await Product.findByIdAndUpdate(productObjectId, {
+    $set: {
+      'metrics.reviews.count': count,
+      'metrics.reviews.averageRating': averageRating > 0 ? Math.round(averageRating * 10) / 10 : 0,
+      'metrics.reviews.lastReviewedAt': stats?.lastReviewedAt ?? null,
+    },
+  }, { session });
+};
+
+const reserveInventoryForMarketplaceOrder = async (preparedItems = [], { session } = {}) => {
+  const reservations = [];
+
+  try {
+    for (const { productId, quantity } of preparedItems) {
+      // eslint-disable-next-line no-await-in-loop
+      const reservedProduct = await Product.findOneAndUpdate(
+        {
+          _id: productId,
+          isPublished: true,
+          status: 'available',
+          stock: { $gte: quantity },
+        },
+        [
+          {
+            $set: {
+              stock: { $subtract: ['$stock', quantity] },
+              status: {
+                $cond: [
+                  { $lte: [{ $subtract: ['$stock', quantity] }, 0] },
+                  'out-of-stock',
+                  '$status',
+                ],
+              },
+            },
+          },
+        ],
+        { new: true, session },
+      )
+        .select(MARKETPLACE_ORDER_PRODUCT_SELECT)
+        .lean();
+
+      if (!reservedProduct) {
+        throw new ApiError(400, 'One or more products are unavailable in the requested quantity.');
+      }
+
+      reservations.push({
+        product: reservedProduct,
+        quantity,
+      });
+    }
+
+    return reservations;
+  } catch (error) {
+    if (reservations.length) {
+      await Product.bulkWrite(
+        reservations.map(({ product, quantity }) => ({
+          updateOne: {
+            filter: { _id: product._id },
+            update: [
+              {
+                $set: {
+                  stock: { $add: ['$stock', quantity] },
+                  status: {
+                    $cond: [
+                      { $gt: [{ $add: ['$stock', quantity] }, 0] },
+                      'available',
+                      '$status',
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        })),
+        { ordered: false, session },
+      );
+    }
+
+    throw error;
+  }
+};
+
+const releaseMarketplaceInventoryReservations = async (reservations = [], { session } = {}) => {
+  if (!reservations.length) {
+    return;
+  }
+
+  await Product.bulkWrite(
+    reservations.map(({ product, quantity }) => ({
+      updateOne: {
+        filter: { _id: product._id },
+        update: [
+          {
+            $set: {
+              stock: { $add: ['$stock', quantity] },
+              status: {
+                $cond: [
+                  { $gt: [{ $add: ['$stock', quantity] }, 0] },
+                  'available',
+                  '$status',
+                ],
+              },
+            },
+          },
+        ],
+      },
+    })),
+    { ordered: false, session },
+  );
+};
+
+const updateDeliveredProductSalesMetrics = async (deliveredItems = [], deliveredAt = new Date(), { session } = {}) => {
+  if (!deliveredItems.length) {
+    return;
+  }
+
+  const groupedQuantities = deliveredItems.reduce((acc, item) => {
+    const productId = toIdString(item.product?._id ?? item.product);
+    if (!productId) {
+      return acc;
+    }
+
+    acc.set(productId, (acc.get(productId) ?? 0) + Number(item.quantity ?? 0));
+    return acc;
+  }, new Map());
+
+  if (!groupedQuantities.size) {
+    return;
+  }
+
+  const products = await Product.find({ _id: { $in: Array.from(groupedQuantities.keys()) } })
+    .select('_id metrics')
+    .session(session ?? null)
+    .lean();
+
+  if (!products.length) {
+    return;
+  }
+
+  await Product.bulkWrite(
+    products.map((product) => {
+      const quantity = groupedQuantities.get(String(product._id)) ?? 0;
+      const nextSalesMetrics = buildNextProductSalesMetrics(product.metrics?.sales, quantity, deliveredAt);
+
+      return {
+        updateOne: {
+          filter: { _id: product._id },
+          update: {
+            $set: {
+              'metrics.sales.totalSold': nextSalesMetrics.totalSold,
+              'metrics.sales.lastSoldAt': nextSalesMetrics.lastSoldAt,
+              'metrics.sales.recentDaily': nextSalesMetrics.recentDaily,
+            },
+          },
+        },
+      };
+    }),
+    { ordered: false, session },
+  );
+
+  await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productIds: products.map((product) => product._id) }), { session });
+};
+
+const resolveCatalogueSort = (sort, searchStrategy) => {
+  if (sort === 'priceLow') {
+    return { price: 1, updatedAt: -1 };
+  }
+
+  if (sort === 'priceHigh') {
+    return { price: -1, updatedAt: -1 };
+  }
+
+  if (sort === 'newest') {
+    return { createdAt: -1 };
+  }
+
+  if (searchStrategy === 'text') {
+    return { score: { $meta: 'textScore' }, updatedAt: -1 };
+  }
+
+  return { updatedAt: -1 };
+};
+
+const resolveCatalogueSearchPlan = async (baseFilters, search, sort, { offset = 0, limit = 24 } = {}) => {
+  const normalizedSearch = normalizeSearchTerm(search);
+  if (!normalizedSearch) {
+    return {
+      filters: baseFilters,
+      total: null,
+      searchStrategy: 'browse',
+      sortStage: resolveCatalogueSort(sort, 'browse'),
+    };
+  }
+
+  const textFilters = {
+    ...baseFilters,
+    $text: { $search: normalizedSearch },
+  };
+  const textTotal = await Product.countDocuments(textFilters);
+
+  if (textTotal > 0) {
+    return {
+      filters: textFilters,
+      total: textTotal,
+      searchStrategy: 'text',
+      sortStage: resolveCatalogueSort(sort, 'text'),
+    };
+  }
+
+  const external = await searchProductIndex(normalizedSearch, {
+    category: baseFilters.category,
+    minPrice: baseFilters.price?.$gte,
+    maxPrice: baseFilters.price?.$lte,
+    inStock: Boolean(baseFilters.stock?.$gt === 0 || baseFilters.status === 'available'),
+    sort,
+    offset,
+    limit,
+  });
+
+  return {
+    filters: external.ids.length ? { _id: { $in: external.ids } } : { _id: { $in: [] } },
+    total: external.total,
+    searchStrategy: external.provider === 'meilisearch' ? 'meilisearch' : 'no-match',
+    sortStage: resolveCatalogueSort(sort, 'browse'),
+    orderedIds: external.ids,
+  };
+};
+
+const prepareMarketplaceOrderItems = (items = []) => {
+  const preparedItems = new Map();
+
+  items.forEach((item, index) => {
+    const quantity = Number(item?.quantity ?? 0);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new ApiError(400, `Quantity for item ${index + 1} is invalid.`);
+    }
+
+    const productId = toObjectId(item?.productId ?? item?.id, 'Product id');
+    const key = toIdString(productId);
+    const existing = preparedItems.get(key);
+
+    if (existing) {
+      existing.quantity += quantity;
+      return;
+    }
+
+    preparedItems.set(key, { productId, quantity });
+  });
+
+  return Array.from(preparedItems.values());
 };
 
 const mapBuyerOrder = (order) => ({
@@ -324,6 +663,8 @@ const mapBuyerOrder = (order) => ({
     price: item.price,
     image: item.image ?? item.product?.image ?? null,
     status: normaliseItemStatus(item.status),
+    tracking: item.tracking ?? null,
+    returnRequest: item.returnRequest ?? { status: 'none' },
   })),
   shippingAddress: order.shippingAddress,
 });
@@ -358,6 +699,8 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
     page = 1,
     pageSize = 24,
   } = req.query ?? {};
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor.trim() : '';
+  const paginationMode = String(req.query.pagination ?? '').trim().toLowerCase();
 
   const filters = { isPublished: true };
 
@@ -380,115 +723,183 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
     filters.price = { ...(filters.price ?? {}), $lte: maxPriceValue };
   }
 
-  if (search && search.trim()) {
-    const term = escapeRegex(search.trim());
-    filters.$or = [
-      { name: { $regex: term, $options: 'i' } },
-      { description: { $regex: term, $options: 'i' } },
-    ];
-  }
-
   const resolvedPageSize = Math.min(Math.max(Number(pageSize) || 24, 6), 60);
   const resolvedPage = Math.max(Number(page) || 1, 1);
   const skip = (resolvedPage - 1) * resolvedPageSize;
 
-  let sortStage = { updatedAt: -1 };
-  if (sort === 'priceLow') {
-    sortStage = { price: 1 };
-  } else if (sort === 'priceHigh') {
-    sortStage = { price: -1 };
-  } else if (sort === 'newest') {
-    sortStage = { createdAt: -1 };
+  const { value: payload, meta } = await getOrSetCache(
+    {
+      key: buildCacheKey('marketplace:catalogue', req.query),
+      ttlSeconds: 120,
+      staleWhileRevalidateSeconds: 180,
+      tags: ['marketplace:catalogue'],
+      bypass: shouldBypassCache(req),
+    },
+    async () => {
+      const searchPlan = await resolveCatalogueSearchPlan(filters, search, sort, {
+        offset: skip,
+        limit: resolvedPageSize,
+      });
+
+      const cursorSortFields = MARKETPLACE_CURSOR_SORT_FIELDS[sort] ?? MARKETPLACE_CURSOR_SORT_FIELDS.featured;
+      const useCursorPagination = paginationMode === 'cursor' && searchPlan.searchStrategy === 'browse';
+
+      if (useCursorPagination) {
+        const cursorFilters = buildCursorFilter({
+          baseFilter: searchPlan.filters,
+          cursor,
+          sortFields: cursorSortFields,
+        });
+
+        if (!cursorFilters) {
+          throw new ApiError(400, 'Invalid cursor');
+        }
+
+        const products = await Product.find(cursorFilters)
+          .select(MARKETPLACE_LIST_PRODUCT_SELECT)
+          .populate({ path: 'seller', select: MARKETPLACE_SELLER_SELECT })
+          .sort(buildCursorSortStage(cursorSortFields))
+          .limit(resolvedPageSize + 1)
+          .lean();
+
+        const hasMore = products.length > resolvedPageSize;
+        const pageItems = hasMore ? products.slice(0, resolvedPageSize) : products;
+        const nextCursor = hasMore
+          ? encodeCursorToken({ document: pageItems[pageItems.length - 1], sortFields: cursorSortFields })
+          : null;
+
+        return {
+          products: pageItems.map(shapeMarketplaceProduct),
+          pagination: {
+            mode: 'cursor',
+            pageSize: resolvedPageSize,
+            hasMore,
+            nextCursor,
+          },
+          searchStrategy: searchPlan.searchStrategy,
+        };
+      }
+
+      const catalogueQuery = Product.find(searchPlan.filters)
+        .select(MARKETPLACE_LIST_PRODUCT_SELECT)
+        .populate({ path: 'seller', select: MARKETPLACE_SELLER_SELECT });
+
+      if (!searchPlan.orderedIds?.length) {
+        catalogueQuery.sort(searchPlan.sortStage).skip(skip).limit(resolvedPageSize);
+      }
+
+      const [products, total] = await Promise.all([
+        catalogueQuery.lean(),
+        searchPlan.total === null ? Product.countDocuments(searchPlan.filters) : Promise.resolve(searchPlan.total),
+      ]);
+
+      const orderedProducts = searchPlan.orderedIds?.length
+        ? orderProductsByIds(products, searchPlan.orderedIds)
+        : products;
+      const enriched = orderedProducts.map(shapeMarketplaceProduct);
+
+      return {
+        products: enriched,
+        pagination: {
+          page: resolvedPage,
+          pageSize: resolvedPageSize,
+          total,
+          totalPages: Math.ceil(total / resolvedPageSize) || 0,
+        },
+        searchStrategy: searchPlan.searchStrategy,
+      };
+    },
+  );
+
+  applyCacheHeaders(res, meta);
+  if (applyPublicCacheHeaders(req, res, {
+    scope: 'marketplace:catalogue',
+    version: buildMarketplaceCollectionVersion(payload.products, payload.pagination, payload.searchStrategy),
+    lastModified: resolveMarketplaceLastModified(payload.products),
+    maxAgeSeconds: 60,
+    staleWhileRevalidateSeconds: 180,
+  })) {
+    return;
   }
-
-  const baseQuery = Product.find(filters)
-    .populate({ path: 'seller', select: 'name firstName lastName email role' })
-    .sort(sortStage)
-    .skip(skip)
-    .limit(resolvedPageSize)
-    .lean();
-
-  const [products, total] = await Promise.all([
-    baseQuery,
-    Product.countDocuments(filters),
-  ]);
-
-  const productIds = products.map((product) => product._id);
-  const [salesStats, reviewStats] = await Promise.all([
-    collectProductSalesStats(productIds),
-    collectProductReviewStats(productIds),
-  ]);
-
-  const enriched = products.map((product) => {
-    const key = String(product._id);
-    return shapeMarketplaceProduct(product, salesStats.get(key), reviewStats.get(key));
-  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, {
-      products: enriched,
-      pagination: {
-        page: resolvedPage,
-        pageSize: resolvedPageSize,
-        total,
-        totalPages: Math.ceil(total / resolvedPageSize) || 0,
-      },
-    }, 'Marketplace catalogue fetched successfully'));
+    .json(new ApiResponse(200, payload, 'Marketplace catalogue fetched successfully'));
 });
 
 export const getMarketplaceProduct = asyncHandler(async (req, res) => {
   const productId = toObjectId(req.params.productId, 'Product id');
 
-  const product = await Product.findOne({ _id: productId, isPublished: true })
-    .populate({ path: 'seller', select: 'name firstName lastName email role profilePicture' })
-    .lean();
-
-  if (!product) {
-    throw new ApiError(404, 'Product not found');
-  }
-
-  const key = String(product._id);
-  const [salesStats, reviewStats, reviewItems] = await Promise.all([
-    collectProductSalesStats([product._id]),
-    collectProductReviewStats([product._id]),
-    ProductReview.find({ product: productId })
-      .sort({ createdAt: -1 })
-      .limit(12)
-      .populate({ path: 'user', select: 'name profilePicture role' })
-      .lean(),
-  ]);
-
-  const shaped = shapeMarketplaceProduct(product, salesStats.get(key), reviewStats.get(key));
-
-  const reviewPayload = reviewItems.map((review) => ({
-    id: review._id,
-    rating: review.rating,
-    title: review.title || null,
-    comment: review.comment || '',
-    createdAt: review.createdAt,
-    isVerifiedPurchase: review.isVerifiedPurchase,
-    user: review.user
-      ? {
-          id: review.user._id,
-          name: review.user.name,
-          avatar: review.user.profilePicture ?? null,
-          role: review.user.role ?? null,
-        }
-      : null,
-  }));
-
-  const productPayload = {
-    ...shaped,
-    reviews: {
-      ...shaped.reviews,
-      items: reviewPayload,
+  const { value: payload, meta } = await getOrSetCache(
+    {
+      key: buildCacheKey('marketplace:product', { productId: String(productId) }),
+      ttlSeconds: 120,
+      staleWhileRevalidateSeconds: 180,
+      tags: ['marketplace:catalogue', `marketplace:product:${productId}`],
+      bypass: shouldBypassCache(req),
     },
-  };
+    async () => {
+      const product = await Product.findOne({ _id: productId, isPublished: true })
+        .select(MARKETPLACE_DETAIL_PRODUCT_SELECT)
+        .populate({ path: 'seller', select: MARKETPLACE_SELLER_SELECT })
+        .lean();
+
+      if (!product) {
+        throw new ApiError(404, 'Product not found');
+      }
+
+      const reviewItems = await ProductReview.find({ product: productId })
+        .select(MARKETPLACE_REVIEW_SELECT)
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .populate({ path: 'user', select: MARKETPLACE_REVIEW_USER_SELECT })
+        .lean();
+
+      const shaped = shapeMarketplaceProduct(product);
+
+      const reviewPayload = reviewItems.map((review) => ({
+        id: review._id,
+        rating: review.rating,
+        title: review.title || null,
+        comment: review.comment || '',
+        createdAt: review.createdAt,
+        isVerifiedPurchase: review.isVerifiedPurchase,
+        user: review.user
+          ? {
+              id: review.user._id,
+              name: review.user.name,
+              avatar: review.user.profilePicture ?? null,
+              role: review.user.role ?? null,
+            }
+          : null,
+      }));
+
+      return {
+        product: {
+          ...shaped,
+          reviews: {
+            ...shaped.reviews,
+            items: reviewPayload,
+          },
+        },
+      };
+    },
+  );
+
+  applyCacheHeaders(res, meta);
+  if (applyPublicCacheHeaders(req, res, {
+    scope: 'marketplace:product',
+    version: buildMarketplaceDetailVersion(payload.product),
+    lastModified: payload.product?.updatedAt,
+    maxAgeSeconds: 90,
+    staleWhileRevalidateSeconds: 180,
+  })) {
+    return;
+  }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { product: productPayload }, 'Marketplace product fetched successfully'));
+    .json(new ApiResponse(200, payload, 'Marketplace product fetched successfully'));
 });
 
 export const createMarketplaceOrder = asyncHandler(async (req, res) => {
@@ -505,62 +916,7 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Select at least one product to place an order.');
   }
 
-  const preparedItems = items.map((item, index) => {
-    const quantity = Number(item?.quantity ?? 0);
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      throw new ApiError(400, `Quantity for item ${index + 1} is invalid.`);
-    }
-
-    return {
-      productId: toObjectId(item?.productId ?? item?.id, 'Product id'),
-      quantity,
-    };
-  });
-
-  const productIds = preparedItems.map((item) => item.productId);
-
-  const products = await Product.find({ _id: { $in: productIds } });
-
-  if (!products.length) {
-    throw new ApiError(404, 'Selected products could not be found.');
-  }
-
-  const productMap = new Map(products.map((product) => [String(product._id), product]));
-
-  const initialStatusTimestamp = new Date();
-
-  const orderItems = preparedItems.map(({ productId, quantity }) => {
-    const product = productMap.get(String(productId));
-
-    if (!product) {
-      throw new ApiError(404, 'One or more products are no longer available.');
-    }
-
-    if (!product.isPublished || product.status !== 'available' || product.stock <= 0) {
-      throw new ApiError(400, `${product.name} is currently unavailable.`);
-    }
-
-    if (quantity > product.stock) {
-      throw new ApiError(400, `Only ${product.stock} units of ${product.name} are available right now.`);
-    }
-
-    return {
-      seller: product.seller ?? undefined,
-      product: product._id,
-      name: product.name,
-      quantity,
-      price: product.price,
-      image: product.image,
-      status: 'processing',
-      lastStatusAt: initialStatusTimestamp,
-      statusHistory: [{
-        status: 'processing',
-        note: null,
-        updatedBy: null,
-        updatedAt: initialStatusTimestamp,
-      }],
-    };
-  });
+  const preparedItems = prepareMarketplaceOrderItems(items);
 
   const requiredAddressFields = ['firstName', 'lastName', 'email', 'phone', 'address', 'city', 'state', 'zipCode'];
 
@@ -568,40 +924,58 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Please provide a complete shipping address.');
   }
 
-  const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
   const tax = 0;
   const shippingCost = 0;
-  const total = subtotal + tax + shippingCost;
+  const session = await mongoose.startSession();
+  let orderId;
+  let productIds = [];
 
-  const orderNumber = await generateOrderNumber();
+  try {
+    await session.withTransaction(async () => {
+      const initialStatusTimestamp = new Date();
+      const reservations = await reserveInventoryForMarketplaceOrder(preparedItems, { session });
+      productIds = reservations.map(({ product }) => product._id);
 
-  const order = await Order.create({
-    user: userId,
-    orderItems,
-    shippingAddress,
-    paymentMethod,
-    subtotal,
-    tax,
-    shippingCost,
-    total,
-    orderNumber,
-  });
+      const orderItems = reservations.map(({ product, quantity }) => ({
+        seller: product.seller ?? undefined,
+        product: product._id,
+        name: product.name,
+        quantity,
+        price: product.price,
+        image: product.image,
+        status: 'processing',
+        lastStatusAt: initialStatusTimestamp,
+        statusHistory: [{
+          status: 'processing',
+          note: null,
+          updatedBy: null,
+          updatedAt: initialStatusTimestamp,
+        }],
+      }));
 
-  await Promise.all(orderItems.map(async (item) => {
-    const product = productMap.get(String(item.product));
-    if (!product) {
-      return;
-    }
+      const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
+      const total = subtotal + tax + shippingCost;
+      const orderNumber = await generateOrderNumber();
+      const [createdOrder] = await Order.create([{
+        user: userId,
+        orderItems,
+        shippingAddress,
+        paymentMethod,
+        subtotal,
+        tax,
+        shippingCost,
+        total,
+        orderNumber,
+      }], { session });
 
-    const updatedStock = Math.max(0, (product.stock || 0) - item.quantity);
-    product.stock = updatedStock;
-    if (updatedStock === 0) {
-      product.status = 'out-of-stock';
-    }
-    await product.save();
-  }));
+      orderId = createdOrder._id;
+      await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productIds }), { session });
+    });
+  } finally {
+    await session.endSession();
+  }
 
-  const populated = await Order.findById(order._id)
+  const populated = await Order.findById(orderId)
     .populate({
       path: 'orderItems.product',
       select: 'name image',
@@ -667,23 +1041,34 @@ export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'You can only review items after they are delivered.');
   }
 
-  const review = await ProductReview.findOneAndUpdate(
-    { product: productId, user: userId },
-    {
-      $set: {
-        rating: resolvedRating,
-        title: trimmedTitle,
-        comment: trimmedComment,
-        order: order._id,
-        isVerifiedPurchase: true,
-      },
-      $setOnInsert: {
-        product: productId,
-        user: userId,
-      },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  const session = await mongoose.startSession();
+  let review;
+  try {
+    await session.withTransaction(async () => {
+      review = await ProductReview.findOneAndUpdate(
+        { product: productId, user: userId },
+        {
+          $set: {
+            rating: resolvedRating,
+            title: trimmedTitle,
+            comment: trimmedComment,
+            order: order._id,
+            isVerifiedPurchase: true,
+          },
+          $setOnInsert: {
+            product: productId,
+            user: userId,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true, session },
+      );
+
+      await recalculateProductReviewMetrics(productId, { session });
+      await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productId }), { session });
+    });
+  } finally {
+    await session.endSession();
+  }
 
   return res
     .status(201)
@@ -692,6 +1077,39 @@ export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
 
 export const listSellerProducts = asyncHandler(async (req, res) => {
   ensureSellerActive(req.user);
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor.trim() : '';
+  const paginationMode = String(req.query.pagination ?? '').trim().toLowerCase();
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+
+  if (paginationMode === 'cursor') {
+    const filters = buildCursorFilter({
+      baseFilter: { seller: req.user._id },
+      cursor,
+      sortFields: SELLER_PRODUCT_CURSOR_SORT_FIELDS,
+    });
+
+    if (!filters) {
+      throw new ApiError(400, 'Invalid cursor');
+    }
+
+    const products = await Product.find(filters)
+      .sort(buildCursorSortStage(SELLER_PRODUCT_CURSOR_SORT_FIELDS))
+      .limit(limit + 1)
+      .lean();
+
+    const hasMore = products.length > limit;
+    const pageItems = hasMore ? products.slice(0, limit) : products;
+    const nextCursor = hasMore
+      ? encodeCursorToken({ document: pageItems[pageItems.length - 1], sortFields: SELLER_PRODUCT_CURSOR_SORT_FIELDS })
+      : null;
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {
+        products: pageItems.map(mapProduct),
+        pagination: { mode: 'cursor', limit, hasMore, nextCursor },
+      }, 'Products fetched successfully'));
+  }
 
   const products = await Product.find({ seller: req.user._id })
     .sort({ updatedAt: -1 })
@@ -798,6 +1216,7 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     isPublished: publishFlag,
     metadata: metadataEntries.length ? new Map(metadataEntries) : undefined,
   });
+  await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productId: product._id }));
 
   return res
     .status(201)
@@ -924,6 +1343,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
   }
 
   await product.save();
+  await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productId }));
 
   return res
     .status(200)
@@ -939,6 +1359,7 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
   }
 
   await product.deleteOne();
+  await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productId, deleted: true }));
 
   return res
     .status(200)
@@ -1039,8 +1460,50 @@ const recordSellerPayoutIfEligible = (orderDoc, sellerId) => {
   };
 };
 
+const toOrderItemIdString = (value) => (value ? String(value) : null);
+
 export const listSellerOrders = asyncHandler(async (req, res) => {
   const sellerId = req.user._id;
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor.trim() : '';
+  const paginationMode = String(req.query.pagination ?? '').trim().toLowerCase();
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+
+  if (paginationMode === 'cursor') {
+    const filters = buildCursorFilter({
+      baseFilter: {
+        $or: [
+          { seller: sellerId },
+          { 'orderItems.seller': sellerId },
+        ],
+      },
+      cursor,
+      sortFields: SELLER_ORDER_CURSOR_SORT_FIELDS,
+    });
+
+    if (!filters) {
+      throw new ApiError(400, 'Invalid cursor');
+    }
+
+    const orders = await Order.find(filters)
+      .sort(buildCursorSortStage(SELLER_ORDER_CURSOR_SORT_FIELDS))
+      .limit(limit + 1)
+      .populate({ path: 'user', select: 'name email' })
+      .lean();
+
+    const hasMore = orders.length > limit;
+    const pageItems = hasMore ? orders.slice(0, limit) : orders;
+    const nextCursor = hasMore
+      ? encodeCursorToken({ document: pageItems[pageItems.length - 1], sortFields: SELLER_ORDER_CURSOR_SORT_FIELDS })
+      : null;
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {
+        orders: pageItems.map((order) => mapOrder(order, sellerId)),
+        statusOptions: Array.from(SELLER_STATUS_FLAGS),
+        pagination: { mode: 'cursor', limit, hasMore, nextCursor },
+      }, 'Orders fetched successfully'));
+  }
 
   const orders = await Order.find({
     $or: [
@@ -1070,111 +1533,146 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid status selection');
   }
 
-  const order = await Order.findOne({
-    _id: orderId,
-    $or: [
-      { seller: sellerId },
-      { 'orderItems.seller': sellerId },
-    ],
-  }).populate({ path: 'user', select: 'name email' });
+  const session = await mongoose.startSession();
+  let refreshedOrderId = null;
+  let payoutResult = null;
+  let updatedProductIds = [];
 
-  if (!order) {
-    throw new ApiError(404, 'Order not found');
-  }
+  try {
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        _id: orderId,
+        $or: [
+          { seller: sellerId },
+          { 'orderItems.seller': sellerId },
+        ],
+      }).session(session);
 
-  const relevantItems = getSellerOrderItems(order, sellerId);
-  if (!relevantItems.length) {
-    throw new ApiError(403, 'You cannot update this order');
-  }
+      if (!order) {
+        throw new ApiError(404, 'Order not found');
+      }
 
-  const targetItems = itemId === 'all'
-    ? relevantItems
-    : relevantItems.filter((item) => normaliseSellerId(item._id) === normaliseSellerId(itemId));
+      const relevantItems = getSellerOrderItems(order, sellerId);
+      if (!relevantItems.length) {
+        throw new ApiError(403, 'You cannot update this order');
+      }
 
-  if (!targetItems.length) {
-    throw new ApiError(404, 'Order item not found for this seller');
-  }
+      const targetItems = itemId === 'all'
+        ? relevantItems
+        : relevantItems.filter((item) => normaliseSellerId(item._id) === normaliseSellerId(itemId));
 
-  const now = new Date();
+      if (!targetItems.length) {
+        throw new ApiError(404, 'Order item not found for this seller');
+      }
 
-  const normaliseOrderItemStatuses = (items) => {
-    items.forEach((item) => {
-      item.status = normaliseItemStatus(item.status);
+      const now = new Date();
+      const allItems = order.orderItems || [];
+      allItems.forEach((item) => {
+        item.status = normaliseItemStatus(item.status);
+      });
+
+      const deliveredItems = [];
+      targetItems.forEach((item) => {
+        const currentStatus = normaliseItemStatus(item.status);
+        if (!canTransitionStatus(currentStatus, nextStatus)) {
+          throw new ApiError(400, 'Order items can only move forward through the fulfillment steps.');
+        }
+
+        if (nextStatus === 'delivered' && currentStatus !== 'delivered') {
+          deliveredItems.push({ product: item.product, quantity: item.quantity });
+        }
+
+        item.status = nextStatus;
+        item.lastStatusAt = now;
+        if (!Array.isArray(item.statusHistory)) {
+          item.statusHistory = [];
+        }
+        item.statusHistory.push({
+          status: nextStatus,
+          note,
+          updatedBy: sellerId,
+          updatedAt: now,
+        });
+
+        if (nextStatus !== 'delivered') {
+          item.payoutRecorded = false;
+        }
+      });
+
+      order.status = deriveSellerOrderStatus(order.orderItems || []);
+      payoutResult = recordSellerPayoutIfEligible(order, sellerId);
+      await order.save({ session });
+
+      if (deliveredItems.length) {
+        await updateDeliveredProductSalesMetrics(deliveredItems, now, { session });
+      }
+
+      if (payoutResult) {
+        const metadataEntries = [
+          ['orderId', String(order._id)],
+          ['sellerId', String(sellerId)],
+          ['itemsCount', String(payoutResult.itemsCount)],
+          ['grossAmount', String(payoutResult.grossAmount)],
+          ['commission', String(payoutResult.adminCommission)],
+        ];
+
+        if (payoutResult.sellerPayout > 0) {
+          await Revenue.create([{
+            order: order._id,
+            amount: payoutResult.sellerPayout,
+            user: sellerId,
+            type: 'seller',
+            description: `Order ${order.orderNumber ?? order._id} items delivered (85% seller share)`,
+            metadata: new Map(metadataEntries),
+          }], { session });
+        }
+
+        if (payoutResult.adminCommission > 0) {
+          await Revenue.create([{
+            order: order._id,
+            amount: payoutResult.adminCommission,
+            user: null,
+            type: 'marketplace',
+            description: `Admin commission from order ${order.orderNumber ?? order._id} delivery (15%)`,
+            metadata: new Map([
+              ...metadataEntries,
+              ['sellerPayout', String(payoutResult.sellerPayout)],
+            ]),
+          }], { session });
+        }
+      }
+
+      updatedProductIds = (order.orderItems || []).map((item) => item.product).filter(Boolean);
+      await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productIds: updatedProductIds }), { session });
+      refreshedOrderId = order._id;
     });
-  };
-
-  const allItems = order.orderItems || [];
-  normaliseOrderItemStatuses(allItems);
-
-  targetItems.forEach((item) => {
-    const currentStatus = normaliseItemStatus(item.status);
-    if (!canTransitionStatus(currentStatus, nextStatus)) {
-      throw new ApiError(400, 'Order items can only move forward through the fulfillment steps.');
-    }
-
-    item.status = nextStatus;
-    item.lastStatusAt = now;
-    if (!Array.isArray(item.statusHistory)) {
-      item.statusHistory = [];
-    }
-    item.statusHistory.push({
-      status: nextStatus,
-      note,
-      updatedBy: sellerId,
-      updatedAt: now,
-    });
-
-    if (nextStatus !== 'delivered') {
-      item.payoutRecorded = false;
-    }
-  });
-
-  order.status = deriveSellerOrderStatus(order.orderItems || []);
-
-  const payoutResult = recordSellerPayoutIfEligible(order, sellerId);
-
-  await order.save();
-
-  if (payoutResult) {
-    const metadataEntries = [
-      ['orderId', String(order._id)],
-      ['sellerId', String(sellerId)],
-      ['itemsCount', String(payoutResult.itemsCount)],
-      ['grossAmount', String(payoutResult.grossAmount)],
-      ['commission', String(payoutResult.adminCommission)],
-    ];
-
-    const sellerRevenuePromise = payoutResult.sellerPayout > 0
-      ? Revenue.create({
-        order: order._id,
-        amount: payoutResult.sellerPayout,
-        user: sellerId,
-        type: 'seller',
-        description: `Order ${order.orderNumber ?? order._id} items delivered (85% seller share)`,
-        metadata: new Map(metadataEntries),
-      })
-      : Promise.resolve(null);
-
-    const adminRevenuePromise = payoutResult.adminCommission > 0
-      ? Revenue.create({
-        order: order._id,
-        amount: payoutResult.adminCommission,
-        user: null,
-        type: 'marketplace',
-        description: `Admin commission from order ${order.orderNumber ?? order._id} delivery (15%)`,
-        metadata: new Map([
-          ...metadataEntries,
-          ['sellerPayout', String(payoutResult.sellerPayout)],
-        ]),
-      })
-      : Promise.resolve(null);
-
-    await Promise.all([sellerRevenuePromise, adminRevenuePromise]);
+  } finally {
+    await session.endSession();
   }
 
-  const refreshed = await Order.findById(order._id)
+  const refreshed = await Order.findById(refreshedOrderId)
     .populate({ path: 'user', select: 'name email' })
     .lean();
+
+  await Promise.all([
+    createNotifications([{
+      user: refreshed.user?._id ?? refreshed.user,
+      type: 'order-status',
+      title: 'Order status updated',
+      message: `Your order ${refreshed.orderNumber ?? refreshed._id} was updated to ${nextStatus}.`,
+      link: '/dashboards/trainee/orders',
+      metadata: { orderId: refreshed._id, status: nextStatus },
+    }]),
+    recordAuditLog({
+      actor: sellerId,
+      actorRole: req.user?.role,
+      action: 'marketplace.order.status.updated',
+      entityType: 'order',
+      entityId: refreshed._id,
+      summary: `Order status updated to ${nextStatus}`,
+      metadata: { itemId, payout: payoutResult },
+    }),
+  ]);
 
   return res
     .status(200)
@@ -1194,4 +1692,197 @@ export const settleSellerOrder = asyncHandler(async (req, res) => {
   req.params.itemId = 'all';
   req.body = { ...(req.body ?? {}), status: 'delivered' };
   return updateSellerOrderStatus(req, res);
+});
+
+export const updateSellerOrderTracking = asyncHandler(async (req, res) => {
+  const orderId = toObjectId(req.params.orderId, 'Order id');
+  const { itemId } = req.params;
+  const sellerId = req.user?._id;
+  const {
+    carrier,
+    trackingNumber,
+    trackingUrl,
+    status = 'in-transit',
+  } = req.body ?? {};
+
+  const order = await Order.findOne({
+    _id: orderId,
+    $or: [
+      { seller: sellerId },
+      { 'orderItems.seller': sellerId },
+    ],
+  }).populate({ path: 'user', select: 'name email' });
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found');
+  }
+
+  const item = (order.orderItems || []).find((entry) => toOrderItemIdString(entry._id) === String(itemId));
+  if (!item || normaliseSellerId(item.seller ?? order.seller) !== normaliseSellerId(sellerId)) {
+    throw new ApiError(404, 'Order item not found for this seller');
+  }
+
+  item.tracking = {
+    carrier: String(carrier ?? '').trim(),
+    trackingNumber: String(trackingNumber ?? '').trim(),
+    trackingUrl: String(trackingUrl ?? '').trim(),
+    updatedAt: new Date(),
+  };
+  item.status = normaliseItemStatus(status);
+  item.lastStatusAt = new Date();
+  order.status = deriveSellerOrderStatus(order.orderItems || []);
+  await order.save();
+
+  await Promise.all([
+    createNotifications([{
+      user: order.user?._id ?? order.user,
+      type: 'order-tracking',
+      title: 'Order tracking updated',
+      message: `Tracking details were updated for ${item.name}.`,
+      link: '/dashboards/trainee/orders',
+      metadata: {
+        orderId: order._id,
+        itemId: item._id,
+        tracking: item.tracking,
+      },
+    }]),
+    recordAuditLog({
+      actor: sellerId,
+      actorRole: req.user?.role,
+      action: 'marketplace.tracking.updated',
+      entityType: 'order',
+      entityId: order._id,
+      summary: `Tracking updated for ${item.name}`,
+      metadata: { itemId: item._id, tracking: item.tracking },
+    }),
+  ]);
+
+  return res.status(200).json(new ApiResponse(200, {
+    order: mapOrder(order.toObject(), sellerId),
+  }, 'Tracking updated successfully'));
+});
+
+export const requestMarketplaceReturn = asyncHandler(async (req, res) => {
+  const orderId = toObjectId(req.params.orderId, 'Order id');
+  const { itemId } = req.params;
+  const userId = req.user?._id;
+  const reason = String(req.body?.reason ?? '').trim();
+
+  if (!reason) {
+    throw new ApiError(400, 'Return reason is required.');
+  }
+
+  const order = await Order.findOne({ _id: orderId, user: userId }).populate({ path: 'user', select: 'name email' });
+  if (!order) {
+    throw new ApiError(404, 'Order not found.');
+  }
+
+  const item = (order.orderItems || []).find((entry) => toOrderItemIdString(entry._id) === String(itemId));
+  if (!item) {
+    throw new ApiError(404, 'Order item not found.');
+  }
+  if (normaliseItemStatus(item.status) !== 'delivered') {
+    throw new ApiError(400, 'Returns can only be requested after delivery.');
+  }
+
+  item.returnRequest = {
+    status: 'requested',
+    reason,
+    requestedAt: new Date(),
+    requestedBy: userId,
+    refundAmount: (item.price || 0) * (item.quantity || 0),
+  };
+  await order.save();
+
+  await Promise.all([
+    createNotifications([{
+      user: item.seller ?? order.seller,
+      type: 'return-request',
+      title: 'Return requested',
+      message: `A buyer requested a return for ${item.name}.`,
+      link: '/dashboards/seller/orders',
+      metadata: { orderId: order._id, itemId: item._id, reason },
+    }]),
+    recordAuditLog({
+      actor: userId,
+      actorRole: req.user?.role,
+      action: 'marketplace.return.requested',
+      entityType: 'order',
+      entityId: order._id,
+      summary: `Return requested for ${item.name}`,
+      metadata: { itemId: item._id, reason },
+    }),
+  ]);
+
+  return res.status(200).json(new ApiResponse(200, {
+    itemId: item._id,
+    returnRequest: item.returnRequest,
+  }, 'Return request submitted successfully.'));
+});
+
+export const reviewMarketplaceReturn = asyncHandler(async (req, res) => {
+  const orderId = toObjectId(req.params.orderId, 'Order id');
+  const { itemId } = req.params;
+  const sellerId = req.user?._id;
+  const decision = String(req.body?.decision ?? '').trim().toLowerCase();
+  const note = String(req.body?.note ?? '').trim();
+
+  if (!['approved', 'rejected', 'refunded'].includes(decision)) {
+    throw new ApiError(400, 'Decision must be approved, rejected, or refunded.');
+  }
+
+  const order = await Order.findOne({
+    _id: orderId,
+    $or: [
+      { seller: sellerId },
+      { 'orderItems.seller': sellerId },
+    ],
+  }).populate({ path: 'user', select: 'name email' });
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found');
+  }
+
+  const item = (order.orderItems || []).find((entry) => toOrderItemIdString(entry._id) === String(itemId));
+  if (!item || normaliseSellerId(item.seller ?? order.seller) !== normaliseSellerId(sellerId)) {
+    throw new ApiError(404, 'Order item not found for this seller');
+  }
+  if (item.returnRequest?.status !== 'requested' && decision !== 'refunded') {
+    throw new ApiError(400, 'There is no pending return request for this item.');
+  }
+
+  item.returnRequest = {
+    ...(item.returnRequest?.toObject?.() ?? item.returnRequest ?? {}),
+    status: decision,
+    reviewedAt: new Date(),
+    reviewedBy: sellerId,
+    note,
+    refundAmount: item.returnRequest?.refundAmount ?? (item.price || 0) * (item.quantity || 0),
+  };
+  await order.save();
+
+  await Promise.all([
+    createNotifications([{
+      user: order.user?._id ?? order.user,
+      type: 'return-update',
+      title: 'Return request updated',
+      message: `Your return request for ${item.name} was ${decision}.`,
+      link: '/dashboards/trainee/orders',
+      metadata: { orderId: order._id, itemId: item._id, decision },
+    }]),
+    recordAuditLog({
+      actor: sellerId,
+      actorRole: req.user?.role,
+      action: `marketplace.return.${decision}`,
+      entityType: 'order',
+      entityId: order._id,
+      summary: `Return ${decision} for ${item.name}`,
+      metadata: { itemId: item._id, note },
+    }),
+  ]);
+
+  return res.status(200).json(new ApiResponse(200, {
+    itemId: item._id,
+    returnRequest: item.returnRequest,
+  }, 'Return request updated successfully.'));
 });

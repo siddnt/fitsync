@@ -30,6 +30,7 @@ export const apiSlice = createApi({
     'AdminSettings',
     'TrainerRequest',
     'Contact',
+    'InternalCommunication',
   ],
   endpoints: () => ({}),
 });

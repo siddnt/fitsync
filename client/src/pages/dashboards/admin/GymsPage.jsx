@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -8,6 +9,7 @@ import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js
 import '../Dashboard.css';
 
 const AdminGymsPage = () => {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useGetAdminGymsQuery();
   const [deleteGym, { isLoading: isDeleting }] = useDeleteGymMutation();
   const gyms = data?.data?.gyms ?? [];
@@ -93,7 +95,12 @@ const AdminGymsPage = () => {
             </thead>
             <tbody>
               {gyms.map((gym) => (
-                <tr key={gym.id}>
+                <tr
+                  key={gym.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/dashboard/admin/gyms/${gym.id}`)}
+                  title="Click to view details"
+                >
                   <td>
                     <strong>{gym.name}</strong>
                     <div>

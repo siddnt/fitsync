@@ -8,7 +8,9 @@ import Revenue from '../../models/revenue.model.js';
 import Order from '../../models/order.model.js';
 import Product from '../../models/product.model.js';
 import ProductReview from '../../models/productReview.model.js';
+import Review from '../../models/review.model.js';
 import User from '../../models/user.model.js';
+import Contact from '../../models/contact.model.js';
 import {
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
@@ -45,6 +47,7 @@ const toDate = (value) => {
 
 const OWNER_REVENUE_SHARE = 0.5;
 const TRAINER_REVENUE_SHARE = 0.5;
+const SELLER_REVENUE_SHARE = 0.85;
 const DIET_MEAL_SLOTS = [
   { key: 'breakfast', label: 'Breakfast' },
   { key: 'lunch', label: 'Lunch' },
@@ -251,13 +254,54 @@ const normaliseOrderItemStatus = (status) => {
 };
 
 
-const summariseOrderStatus = (order) => {
-  const items = order?.orderItems || [];
+const toEntityIdString = (value) => {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'object' && value._id) {
+    return String(value._id);
+  }
+  return String(value);
+};
+
+const filterOrderItemsBySeller = (orderItems = [], sellerId = null) => {
+  const items = Array.isArray(orderItems) ? orderItems : [];
+  const sellerKey = toEntityIdString(sellerId);
+
+  if (!sellerKey) {
+    return items;
+  }
+
+  return items.filter((item) => toEntityIdString(item?.seller) === sellerKey);
+};
+
+const buildOrderItemSummaries = (orderItems = [], { sellerId = null } = {}) =>
+  filterOrderItemsBySeller(orderItems, sellerId).map((item) => {
+    const quantity = Number(item?.quantity) || 0;
+    const price = Number(item?.price) || 0;
+
+    return {
+      id: item?._id || null,
+      productId: item?.product?._id || item?.product || null,
+      sellerId: item?.seller?._id || item?.seller || null,
+      name: item?.name || '',
+      quantity,
+      price,
+      subtotal: price * quantity,
+      status: normaliseOrderItemStatus(item?.status),
+      lastStatusAt: item?.lastStatusAt || null,
+    };
+  });
+
+const summariseOrderItemsStatus = (items = []) => {
   if (!items.length) {
     return 'processing';
   }
 
-  const statuses = items.map((item) => normaliseOrderItemStatus(item.status));
+  const statuses = items.map((item) => normaliseOrderItemStatus(item?.status));
 
   if (statuses.every((status) => status === 'delivered')) {
     return 'delivered';
@@ -271,15 +315,74 @@ const summariseOrderStatus = (order) => {
   return 'processing';
 };
 
-const buildOrderSummary = (orders = []) =>
-  orders.map((order) => ({
-    id: order._id,
-    orderNumber: order.orderNumber,
-    total: formatCurrency(order.total, 'INR'),
-    status: summariseOrderStatus(order),
-    createdAt: order.createdAt,
-    itemsCount: order.orderItems?.reduce((total, item) => total + (item.quantity || 0), 0) ?? 0,
-  }));
+const summariseOrderStatus = (order, sellerId = null) =>
+  summariseOrderItemsStatus(buildOrderItemSummaries(order?.orderItems, { sellerId }));
+
+const buildOrderSummary = (orders = [], { sellerId = null, mapExtra = null } = {}) =>
+  orders.map((order) => {
+    const items = buildOrderItemSummaries(order?.orderItems, { sellerId });
+    const itemsCount = items.reduce((total, item) => total + (item.quantity || 0), 0);
+    const sellerSubtotal = items.reduce((total, item) => total + (item.subtotal || 0), 0);
+
+    const summary = {
+      id: order._id,
+      orderNumber: order.orderNumber,
+      total: sellerId ? sellerSubtotal : (Number(order?.total) || 0),
+      orderTotal: Number(order?.total) || 0,
+      currency: 'INR',
+      status: summariseOrderItemsStatus(items),
+      createdAt: order.createdAt,
+      itemsCount,
+      items,
+    };
+
+    if (typeof mapExtra === 'function') {
+      return {
+        ...summary,
+        ...(mapExtra(order) || {}),
+      };
+    }
+
+    return summary;
+  });
+
+const buildDerivedSellerRevenueEvents = (orders = [], sellerId = null) =>
+  orders
+    .map((order) => {
+      const items = buildOrderItemSummaries(order?.orderItems, { sellerId });
+      if (!items.length || !items.every((item) => item.status === 'delivered')) {
+        return null;
+      }
+
+      const grossAmount = items.reduce((sum, item) => sum + (Number(item?.subtotal) || 0), 0);
+      const payoutAmount = calculateRevenueShare(grossAmount, SELLER_REVENUE_SHARE);
+
+      if (payoutAmount <= 0) {
+        return null;
+      }
+
+      const deliveredAt = items.reduce((latestDate, item) => {
+        const candidate = toDate(item?.lastStatusAt);
+        if (!candidate) {
+          return latestDate;
+        }
+        if (!latestDate || candidate > latestDate) {
+          return candidate;
+        }
+        return latestDate;
+      }, null);
+
+      return {
+        id: `derived-seller-${order?._id}`,
+        type: 'seller',
+        amount: payoutAmount,
+        currency: 'INR',
+        description: `Order ${order?.orderNumber ?? order?._id} delivered items seller share (derived from order fulfillment)`,
+        createdAt: deliveredAt || order?.createdAt || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
 const computeAttendanceStreak = (attendance = []) => {
   if (!attendance.length) return 0;
@@ -1640,7 +1743,7 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
 });
 
 export const getAdminUsers = asyncHandler(async (_req, res) => {
-  const pendingQuery = User.find({ status: 'pending', role: 'seller' })
+  const pendingQuery = User.find({ status: 'pending', role: { $in: ['seller', 'manager'] } })
     .select('name email role createdAt profile.location profile.headline')
     .lean();
 
@@ -1661,11 +1764,720 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
   );
 });
 
+export const getAdminUserDetails = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const parsedUserId = toObjectId(userId);
+
+  if (!parsedUserId) {
+    throw new ApiError(400, 'Invalid user id.');
+  }
+
+  const [user, adminToggles] = await Promise.all([
+    User.findById(parsedUserId)
+      .select('-password -refreshToken')
+      .lean(),
+    loadAdminToggles(),
+  ]);
+
+  if (!user) {
+    throw new ApiError(404, 'User not found.');
+  }
+
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const isOwnerRole = normalizedRole === 'gym-owner';
+  const isSellerRole = normalizedRole === 'seller';
+  const isTrainerRole = normalizedRole === 'trainer';
+  const isTraineeRole = ['trainee', 'user', 'member'].includes(normalizedRole);
+  const isManagerRole = normalizedRole === 'manager';
+
+  const toUserSummary = (entity) => (entity?._id
+    ? {
+      id: entity._id,
+      name: entity.name,
+      email: entity.email,
+      role: entity.role,
+      status: entity.status,
+      profilePicture: entity.profilePicture || '',
+    }
+    : null);
+
+  const toGymSummary = (gym) => (gym?._id
+    ? {
+      id: gym._id,
+      name: gym.name,
+      city: gym.location?.city || '',
+      state: gym.location?.state || '',
+    }
+    : null);
+
+  const primaryGymId = user?.traineeMetrics?.primaryGym;
+
+  const [
+    membershipCount,
+    orderCount,
+    recentOrders,
+    gymsOwnedCount,
+    trainerTraineeRows,
+    traineeMembershipDocs,
+    trainerAssignmentDocs,
+    trainerMembershipDocs,
+    primaryGymDoc,
+    sellerProductDocs,
+    sellerRevenueDocs,
+    sellerOrdersCount,
+    ownerGymDocs,
+    ownerRevenueDocs,
+    ownerSubscriptionDocs,
+    ownerRevenueEventDocs,
+    sellerOrderDocs,
+    sellerRevenueEventDocs,
+    traineeGymReviewDocs,
+    traineeProductReviewDocs,
+    trainerProgressAsTrainerDocs,
+    trainerProgressAsTraineeDocs,
+    managedGymDocs,
+  ] = await Promise.all([
+    GymMembership.countDocuments({
+      trainee: parsedUserId,
+      status: { $in: ['active', 'pending', 'paused'] },
+    }),
+    Order.countDocuments({ user: parsedUserId }),
+    Order.find({ user: parsedUserId })
+      .sort({ createdAt: -1 })
+      .limit(25)
+      .select('orderNumber total status createdAt orderItems.name orderItems.quantity orderItems.status orderItems.price orderItems.product orderItems.seller')
+      .lean(),
+    Gym.countDocuments({ owner: parsedUserId }),
+    TrainerAssignment.aggregate([
+      {
+        $match: {
+          trainer: parsedUserId,
+          status: { $in: ['active', 'pending'] },
+        },
+      },
+      { $unwind: { path: '$trainees', preserveNullAndEmptyArrays: false } },
+      { $match: { 'trainees.status': 'active' } },
+      {
+        $group: {
+          _id: '$trainer',
+          traineeIds: { $addToSet: '$trainees.trainee' },
+        },
+      },
+      { $project: { count: { $size: '$traineeIds' } } },
+    ]),
+    GymMembership.find({
+      trainee: parsedUserId,
+      status: { $in: ['active', 'pending', 'paused'] },
+    })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainer', select: 'name email role status profilePicture' })
+      .lean(),
+    TrainerAssignment.find({
+      trainer: parsedUserId,
+      status: { $in: ['active', 'pending', 'inactive'] },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainees.trainee', select: 'name email role status profilePicture' })
+      .lean(),
+    GymMembership.find({
+      trainer: parsedUserId,
+      status: { $in: ['active', 'pending', 'paused'] },
+    })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainee', select: 'name email role status profilePicture' })
+      .lean(),
+    primaryGymId
+      ? Gym.findById(primaryGymId).select('name location').lean()
+      : Promise.resolve(null),
+    Product.find({ seller: parsedUserId })
+      .select('name price stock image status isPublished metrics createdAt')
+      .sort({ createdAt: -1 })
+      .lean(),
+    Revenue.aggregate([
+      { $match: { user: parsedUserId, type: 'seller' } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]),
+    Order.countDocuments({ 'orderItems.seller': parsedUserId }),
+    Gym.find({ owner: parsedUserId })
+      .select('name location pricing status isPublished analytics sponsorship createdAt')
+      .sort({ createdAt: -1 })
+      .lean(),
+    Revenue.aggregate([
+      { $match: { user: parsedUserId, type: { $in: ['membership', 'enrollment', 'renewal'] } } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' } } }
+    ]),
+    isOwnerRole
+      ? GymListingSubscription.find({ owner: parsedUserId })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .populate({ path: 'gym', select: 'name location' })
+        .lean()
+      : Promise.resolve([]),
+    isOwnerRole
+      ? Revenue.find({
+        user: parsedUserId,
+        type: { $in: ['membership', 'enrollment', 'renewal', 'listing', 'sponsorship'] },
+      })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('amount type description createdAt')
+        .lean()
+      : Promise.resolve([]),
+    isSellerRole
+      ? Order.find({ 'orderItems.seller': parsedUserId })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('orderNumber total status createdAt orderItems user')
+        .populate({ path: 'user', select: 'name email role status profilePicture' })
+        .lean()
+      : Promise.resolve([]),
+    isSellerRole
+      ? Revenue.find({ user: parsedUserId, type: 'seller' })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .select('amount type description createdAt')
+        .lean()
+      : Promise.resolve([]),
+    isTraineeRole
+      ? Review.find({ user: parsedUserId })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .select('gym rating comment createdAt updatedAt')
+        .populate({ path: 'gym', select: 'name location' })
+        .lean()
+      : Promise.resolve([]),
+    isTraineeRole
+      ? ProductReview.find({ user: parsedUserId })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .select('product rating title comment isVerifiedPurchase createdAt updatedAt')
+        .populate({ path: 'product', select: 'name category price' })
+        .lean()
+      : Promise.resolve([]),
+    isTrainerRole
+      ? TrainerProgress.find({ trainer: parsedUserId })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .populate({ path: 'trainee', select: 'name email role status profilePicture' })
+        .populate({ path: 'gym', select: 'name location' })
+        .lean()
+      : Promise.resolve([]),
+    isTraineeRole
+      ? TrainerProgress.find({ trainee: parsedUserId })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .populate({ path: 'trainer', select: 'name email role status profilePicture' })
+        .populate({ path: 'gym', select: 'name location' })
+        .lean()
+      : Promise.resolve([]),
+    isManagerRole
+      ? Gym.find({ managers: parsedUserId })
+        .select('name location status isPublished analytics createdAt')
+        .sort({ createdAt: -1 })
+        .lean()
+      : Promise.resolve([]),
+  ]);
+
+  let ownerMembershipsDocs = [];
+  const ownerGymIds = (ownerGymDocs ?? []).map((gym) => gym._id);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  if (ownerGymDocs?.length) {
+    ownerMembershipsDocs = await GymMembership.find({
+      gym: { $in: ownerGymIds },
+      status: { $in: ['active', 'pending', 'paused'] },
+      plan: { $nin: TRAINER_PLAN_CODES },
+    })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'gym', select: 'name location' })
+      .populate({ path: 'trainee', select: 'name email role status profilePicture' })
+      .lean();
+  }
+
+  let ownerRevenue30dDocs = [];
+  let ownerMembershipRevenueAggregates = [];
+  let ownerMembershipRevenueEventDocs = [];
+
+  if (isOwnerRole) {
+    [ownerRevenue30dDocs, ownerMembershipRevenueAggregates, ownerMembershipRevenueEventDocs] = await Promise.all([
+      Revenue.aggregate([
+        {
+          $match: {
+            user: parsedUserId,
+            type: { $in: REVENUE_EARNING_TYPES },
+            createdAt: { $gte: thirtyDaysAgo },
+          },
+        },
+        { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
+      ]),
+      ownerGymIds.length
+        ? GymMembership.aggregate([
+          {
+            $match: {
+              gym: { $in: ownerGymIds },
+              plan: { $nin: TRAINER_PLAN_CODES },
+              'billing.status': 'paid',
+              'billing.amount': { $gt: 0 },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalCollected: { $sum: '$billing.amount' },
+              recentCollected: {
+                $sum: {
+                  $cond: [{ $gte: ['$createdAt', thirtyDaysAgo] }, '$billing.amount', 0],
+                },
+              },
+            },
+          },
+        ])
+        : Promise.resolve([]),
+      ownerGymIds.length
+        ? GymMembership.find({
+          gym: { $in: ownerGymIds },
+          plan: { $nin: TRAINER_PLAN_CODES },
+          'billing.status': 'paid',
+          'billing.amount': { $gt: 0 },
+        })
+          .sort({ createdAt: -1 })
+          .limit(100)
+          .select('gym trainee plan status billing createdAt')
+          .populate({ path: 'gym', select: 'name location' })
+          .populate({ path: 'trainee', select: 'name email role status profilePicture' })
+          .lean()
+        : Promise.resolve([]),
+    ]);
+  }
+
+  const activeTrainees = Number(trainerTraineeRows?.[0]?.count) || 0;
+
+  const traineeMemberships = (traineeMembershipDocs ?? []).map((membership) => ({
+    id: membership._id,
+    gym: toGymSummary(membership.gym),
+    trainer: toUserSummary(membership.trainer),
+    plan: membership.plan || 'monthly',
+    status: membership.status,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+  }));
+
+  const trainerAssignments = (trainerAssignmentDocs ?? []).map((assignment) => ({
+    id: assignment._id,
+    gym: toGymSummary(assignment.gym),
+    status: assignment.status || 'pending',
+    requestedAt: assignment.requestedAt || assignment.createdAt,
+    approvedAt: assignment.approvedAt || null,
+    trainees: (assignment.trainees ?? []).map((entry) => ({
+      trainee: toUserSummary(entry.trainee),
+      status: entry.status || 'active',
+      assignedAt: entry.assignedAt,
+    })),
+  }));
+
+  const trainerGymsMap = {};
+  trainerAssignments.forEach((assignment) => {
+    if (!assignment.gym?.id) return;
+    trainerGymsMap[String(assignment.gym.id)] = assignment.gym;
+  });
+  (trainerMembershipDocs ?? []).forEach((membership) => {
+    const gymSummary = toGymSummary(membership.gym);
+    if (!gymSummary?.id) return;
+    trainerGymsMap[String(gymSummary.id)] = gymSummary;
+  });
+  const trainerGyms = Object.values(trainerGymsMap);
+
+  const trainerTraineesMap = {};
+  trainerAssignments.forEach((assignment) => {
+    (assignment.trainees ?? []).forEach((entry) => {
+      if (!entry.trainee?.id) return;
+      const key = String(entry.trainee.id);
+      if (!trainerTraineesMap[key]) {
+        trainerTraineesMap[key] = { ...entry.trainee, assignmentCount: 0 };
+      }
+      trainerTraineesMap[key].assignmentCount += 1;
+    });
+  });
+  (trainerMembershipDocs ?? []).forEach((membership) => {
+    const traineeSummary = toUserSummary(membership.trainee);
+    if (!traineeSummary?.id) return;
+    const key = String(traineeSummary.id);
+    if (!trainerTraineesMap[key]) {
+      trainerTraineesMap[key] = { ...traineeSummary, assignmentCount: 0 };
+    }
+  });
+  const trainerTrainees = Object.values(trainerTraineesMap);
+
+  const ownerMemberships = ownerMembershipsDocs.map((membership) => ({
+    id: membership._id,
+    gym: toGymSummary(membership.gym),
+    trainee: toUserSummary(membership.trainee),
+    plan: membership.plan || 'monthly',
+    status: membership.status,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+    billingAmount: Number(membership?.billing?.amount) || 0,
+    billingCurrency: membership?.billing?.currency || 'INR',
+    billingStatus: membership?.billing?.status || 'pending',
+    createdAt: membership.createdAt,
+  }));
+
+  const ownerSubscriptions = (ownerSubscriptionDocs ?? []).map((subscription) => ({
+    id: subscription._id,
+    gym: toGymSummary(subscription.gym),
+    planCode: subscription.planCode,
+    amount: Number(subscription.amount) || 0,
+    currency: subscription.currency || 'INR',
+    status: subscription.status,
+    periodStart: subscription.periodStart,
+    periodEnd: subscription.periodEnd,
+    invoiceCount: Array.isArray(subscription.invoices) ? subscription.invoices.length : 0,
+    autoRenew: Boolean(subscription.autoRenew),
+    daysRemaining: subscription.periodEnd ? daysBetween(new Date(), subscription.periodEnd) : null,
+  }));
+
+  const mapRevenueEvent = (entry) => ({
+    id: entry._id,
+    type: entry.type || 'other',
+    amount: Number(entry.amount) || 0,
+    currency: entry.currency || 'INR',
+    description: entry.description || '',
+    createdAt: entry.createdAt,
+  });
+
+  const derivedOwnerRevenueEvents = (ownerMembershipRevenueEventDocs ?? []).map((membership) => ({
+    id: membership._id,
+    type: 'membership-share',
+    amount: calculateRevenueShare(membership?.billing?.amount, OWNER_REVENUE_SHARE),
+    currency: membership?.billing?.currency || 'INR',
+    description: [membership?.trainee?.name || membership?.trainee?.email || 'Member', membership?.gym?.name]
+      .filter(Boolean)
+      .join(' - '),
+    createdAt: membership.createdAt,
+  })).filter((entry) => entry.amount > 0);
+
+  const ownerRevenueEvents = (ownerRevenueEventDocs ?? []).length
+    ? (ownerRevenueEventDocs ?? []).map(mapRevenueEvent)
+    : derivedOwnerRevenueEvents;
+
+  const sellerProducts = (sellerProductDocs ?? []).map((product) => ({
+    id: product._id,
+    name: product.name,
+    price: Number(product.price) || 0,
+    mrp: Number(product.mrp) || Number(product.price) || 0,
+    stock: Number(product.stock) || 0,
+    image: product.image || '',
+    status: product.status,
+    isPublished: Boolean(product.isPublished),
+    totalSold: Number(product?.metrics?.sales?.totalSold) || 0,
+    reviewCount: Number(product?.metrics?.reviews?.count) || 0,
+    averageRating: Number(product?.metrics?.reviews?.averageRating) || 0,
+    createdAt: product.createdAt,
+  }));
+
+  const sellerOrders = buildOrderSummary(sellerOrderDocs ?? [], {
+    sellerId: parsedUserId,
+    mapExtra: (order) => ({
+      buyer: toUserSummary(order.user),
+    }),
+  });
+
+  const derivedSellerRevenueEvents = buildDerivedSellerRevenueEvents(
+    sellerOrderDocs ?? [],
+    parsedUserId,
+  );
+  const sellerRevenueEvents = (sellerRevenueEventDocs ?? []).length
+    ? (sellerRevenueEventDocs ?? []).map(mapRevenueEvent)
+    : derivedSellerRevenueEvents;
+
+  const ownerMembershipsByGym = ownerMembershipsDocs.reduce((acc, membership) => {
+    const gymKey = toEntityIdString(membership?.gym);
+    if (!gymKey) {
+      return acc;
+    }
+
+    if (!acc[gymKey]) {
+      acc[gymKey] = { totalMembers: 0, activeMembers: 0 };
+    }
+
+    acc[gymKey].totalMembers += 1;
+    if (membership?.status === 'active') {
+      acc[gymKey].activeMembers += 1;
+    }
+
+    return acc;
+  }, {});
+
+  const ownerSubscriptionByGym = (ownerSubscriptionDocs ?? []).reduce((acc, subscription) => {
+    const gymKey = toEntityIdString(subscription?.gym);
+    if (!gymKey) {
+      return acc;
+    }
+
+    const existing = acc[gymKey];
+    const candidateDate = toDate(subscription?.periodEnd)?.getTime() || 0;
+    const existingDate = toDate(existing?.periodEnd)?.getTime() || 0;
+
+    if (!existing || candidateDate >= existingDate) {
+      acc[gymKey] = subscription;
+    }
+
+    return acc;
+  }, {});
+
+  const ownerGyms = (ownerGymDocs ?? []).map((gym) => {
+    const gymKey = toEntityIdString(gym?._id);
+    const membershipSummary = ownerMembershipsByGym[gymKey] || { totalMembers: 0, activeMembers: 0 };
+    const listing = ownerSubscriptionByGym[gymKey];
+
+    return {
+      id: gym._id,
+      name: gym.name,
+      city: gym.location?.city || '',
+      state: gym.location?.state || '',
+      address: gym.location?.address || '',
+      status: gym.status,
+      isPublished: Boolean(gym.isPublished),
+      impressions: Number(gym?.analytics?.impressions) || 0,
+      memberships: membershipSummary.activeMembers,
+      totalMembers: membershipSummary.totalMembers,
+      rating: Number(gym?.analytics?.rating) || 0,
+      ratingCount: Number(gym?.analytics?.ratingCount) || 0,
+      monthlyPrice: Number(gym?.pricing?.monthlyPrice) || 0,
+      monthlyMrp: Number(gym?.pricing?.monthlyMrp) || 0,
+      currency: gym?.pricing?.currency || 'INR',
+      listing: listing
+        ? {
+          id: listing._id,
+          planCode: listing.planCode,
+          amount: Number(listing.amount) || 0,
+          currency: listing.currency || 'INR',
+          status: listing.status,
+          periodStart: listing.periodStart,
+          periodEnd: listing.periodEnd,
+          autoRenew: Boolean(listing.autoRenew),
+        }
+        : null,
+      sponsorship: {
+        status: gym?.sponsorship?.status || 'none',
+        package: gym?.sponsorship?.package || '',
+        expiresAt: gym?.sponsorship?.expiresAt || null,
+      },
+      createdAt: gym.createdAt,
+    };
+  });
+
+  const traineeGymReviews = (traineeGymReviewDocs ?? []).map((entry) => ({
+    id: entry._id,
+    gym: toGymSummary(entry.gym),
+    rating: Number(entry.rating) || 0,
+    comment: entry.comment || '',
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  }));
+
+  const traineeProductReviews = (traineeProductReviewDocs ?? []).map((entry) => ({
+    id: entry._id,
+    product: entry.product?._id
+      ? {
+        id: entry.product._id,
+        name: entry.product.name,
+        category: entry.product.category,
+        price: Number(entry.product.price) || 0,
+      }
+      : null,
+    rating: Number(entry.rating) || 0,
+    title: entry.title || '',
+    comment: entry.comment || '',
+    isVerifiedPurchase: Boolean(entry.isVerifiedPurchase),
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  }));
+
+  const trainerMemberships = (trainerMembershipDocs ?? []).map((membership) => ({
+    id: membership._id,
+    gym: toGymSummary(membership.gym),
+    trainee: toUserSummary(membership.trainee),
+    plan: membership.plan || 'monthly',
+    status: membership.status,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+  }));
+
+  const trainerProgressAsTrainer = (trainerProgressAsTrainerDocs ?? []).map((progress) => ({
+    id: progress._id,
+    gym: toGymSummary(progress.gym),
+    trainee: toUserSummary(progress.trainee),
+    attendanceCount: Array.isArray(progress.attendance) ? progress.attendance.length : 0,
+    progressMetricCount: Array.isArray(progress.progressMetrics) ? progress.progressMetrics.length : 0,
+    feedbackCount: Array.isArray(progress.feedback) ? progress.feedback.length : 0,
+    updatedAt: progress.updatedAt,
+  }));
+
+  const trainerProgressAsTrainee = (trainerProgressAsTraineeDocs ?? []).map((progress) => ({
+    id: progress._id,
+    gym: toGymSummary(progress.gym),
+    trainer: toUserSummary(progress.trainer),
+    attendanceCount: Array.isArray(progress.attendance) ? progress.attendance.length : 0,
+    progressMetricCount: Array.isArray(progress.progressMetrics) ? progress.progressMetrics.length : 0,
+    feedbackCount: Array.isArray(progress.feedback) ? progress.feedback.length : 0,
+    updatedAt: progress.updatedAt,
+  }));
+
+  const managedGyms = (managedGymDocs ?? []).map((gym) => ({
+    id: gym._id,
+    name: gym.name,
+    city: gym.location?.city || '',
+    state: gym.location?.state || '',
+    status: gym.status,
+    isPublished: Boolean(gym.isPublished),
+    impressions: Number(gym.analytics?.impressions) || 0,
+    memberships: Number(gym.analytics?.memberships) || 0,
+    createdAt: gym.createdAt,
+  }));
+
+  const ownerDerivedTotalRevenue = calculateRevenueShare(
+    ownerMembershipRevenueAggregates?.[0]?.totalCollected,
+    OWNER_REVENUE_SHARE,
+  );
+  const ownerDerivedRevenue30d = calculateRevenueShare(
+    ownerMembershipRevenueAggregates?.[0]?.recentCollected,
+    OWNER_REVENUE_SHARE,
+  );
+  const ownerTotalGyms = Number(gymsOwnedCount) || ownerGyms.length || 0;
+  const ownerTotalImpressions = ownerGyms.reduce(
+    (sum, gym) => sum + (Number(gym?.impressions) || 0),
+    0,
+  );
+  const ownerTotalActiveMembers = ownerGyms.reduce(
+    (sum, gym) => sum + (Number(gym?.memberships) || 0),
+    0,
+  );
+  const ownerTotalRevenue = Number(ownerRevenueDocs?.[0]?.totalAmount) || ownerDerivedTotalRevenue;
+  const ownerRevenue30d = Number(ownerRevenue30dDocs?.[0]?.totalAmount) || ownerDerivedRevenue30d;
+  const ownerExpenseEntries = collectOwnerExpenseEntries({
+    subscriptions: ownerSubscriptionDocs,
+    gyms: ownerGymDocs,
+  });
+  const ownerMonthlySpend = ownerExpenseEntries
+    .filter((entry) => entry.date >= thirtyDaysAgo)
+    .reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+  const ownerPublishedGyms = ownerGyms.filter((gym) => gym.isPublished).length;
+  const ownerSponsoredGyms = ownerGyms.filter((gym) => gym?.sponsorship?.status === 'active').length;
+  const ownerActiveListingSubscriptions = ownerSubscriptions.filter((subscription) => ['active', 'grace'].includes(subscription.status)).length;
+  const ownerExpiringSubscriptions = ownerSubscriptions.filter(
+    (subscription) => subscription.daysRemaining !== null && subscription.daysRemaining <= 14,
+  ).length;
+  const sellerTotalUnitsSold = sellerOrders.reduce((sum, order) => sum + (Number(order?.itemsCount) || 0), 0);
+  const sellerOrdersFulfilled = sellerOrders.filter((order) => order.status === 'delivered').length;
+  const sellerActiveProducts = sellerProducts.filter(
+    (product) => product.isPublished && product.status === 'available',
+  ).length;
+  const sellerReviewedProductsCount = sellerProducts.filter(
+    (product) => Number(product?.reviewCount) > 0,
+  ).length;
+  const sellerCatalogStock = sellerProducts.reduce(
+    (sum, product) => sum + (Number(product?.stock) || 0),
+    0,
+  );
+  const sellerReviewAggregate = sellerProducts.reduce(
+    (acc, product) => {
+      const count = Number(product?.reviewCount) || 0;
+      const average = Number(product?.averageRating) || 0;
+
+      acc.totalReviews += count;
+      acc.weightedRatings += average * count;
+      return acc;
+    },
+    { totalReviews: 0, weightedRatings: 0 },
+  );
+  const sellerAverageRating = sellerReviewAggregate.totalReviews
+    ? Number((sellerReviewAggregate.weightedRatings / sellerReviewAggregate.totalReviews).toFixed(1))
+    : null;
+  const derivedSellerRevenueTotal = derivedSellerRevenueEvents.reduce(
+    (sum, entry) => sum + (Number(entry?.amount) || 0),
+    0,
+  );
+  const sellerRevenueEventsCount = sellerRevenueEvents.length;
+  const sellerTotalRevenue = Number(sellerRevenueDocs?.[0]?.totalAmount) || derivedSellerRevenueTotal;
+
+  const enrichedUser = {
+    ...user,
+    id: user._id,
+    memberships: Number(membershipCount) || user?.traineeMetrics?.activeMemberships || 0,
+    orders: Number(orderCount) || 0,
+    gymsOwned: Number(gymsOwnedCount) || ownerGyms.length || user?.ownerMetrics?.totalGyms || 0,
+    ownerMetrics: {
+      ...(user?.ownerMetrics ?? {}),
+      totalGyms: ownerTotalGyms,
+      totalImpressions: ownerTotalImpressions,
+      totalRevenue: ownerTotalRevenue,
+      totalActiveMembers: ownerTotalActiveMembers,
+      monthlySpend: ownerMonthlySpend,
+      monthlyEarnings: ownerRevenue30d,
+      monthlyProfit: ownerRevenue30d - ownerMonthlySpend,
+      publishedGyms: ownerPublishedGyms,
+      sponsoredGyms: ownerSponsoredGyms,
+      activeListingSubscriptions: ownerActiveListingSubscriptions,
+      expiringSubscriptions: ownerExpiringSubscriptions,
+    },
+    sellerMetrics: {
+      ...(user?.sellerMetrics ?? {}),
+      totalRevenue: sellerTotalRevenue,
+      ordersFulfilled: sellerOrdersFulfilled,
+      productsCount: sellerProducts.length,
+      ordersCount: Number(sellerOrdersCount) || sellerOrders.length,
+      unitsSold: sellerTotalUnitsSold,
+      activeProducts: sellerActiveProducts,
+      reviewedProductsCount: sellerReviewedProductsCount,
+      catalogStock: sellerCatalogStock,
+      averageRating: sellerAverageRating,
+      revenueEventsCount: sellerRevenueEventsCount,
+    },
+    trainerMetrics: {
+      ...(user?.trainerMetrics ?? {}),
+      activeTrainees: activeTrainees || user?.trainerMetrics?.activeTrainees || 0,
+      associatedGyms: trainerGyms.length,
+      assignmentsCount: trainerAssignments.length,
+      progressRecordsCount: trainerProgressAsTrainer.length,
+    },
+    relationships: {
+      primaryGym: toGymSummary(primaryGymDoc),
+      traineeMemberships,
+      trainerMemberships,
+      trainerAssignments,
+      trainerGyms,
+      trainerTrainees,
+      trainerProgressAsTrainer,
+      trainerProgressAsTrainee,
+      orderHistory: buildOrderSummary(recentOrders ?? []),
+      traineeGymReviews,
+      traineeProductReviews,
+      sellerProducts,
+      sellerOrders,
+      sellerRevenueEvents,
+      ownerGyms,
+      ownerMemberships: ownerMemberships || [],
+      ownerSubscriptions,
+      ownerRevenueEvents,
+      managedGyms,
+    },
+  };
+
+  return res.status(200).json(
+    new ApiResponse(200, { user: enrichedUser, adminToggles }, 'User details fetched successfully'),
+  );
+});
+
 export const getAdminGyms = asyncHandler(async (_req, res) => {
   const gymsQuery = Gym.find()
     .sort({ createdAt: -1 })
     .limit(25)
-    .populate({ path: 'owner', select: 'name email' })
+    .populate({ path: 'owner', select: 'name email role' })
+    .populate({ path: 'managers', select: 'name email role' })
     .lean();
 
   const [gyms, adminToggles] = await Promise.all([
@@ -1680,6 +2492,14 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
     isPublished: gym.isPublished,
     city: gym.location?.city,
     owner: gym.owner ? { id: gym.owner._id, name: gym.owner.name, email: gym.owner.email } : null,
+    managers: Array.isArray(gym.managers)
+      ? gym.managers.map((manager) => ({
+        id: manager._id,
+        name: manager.name,
+        email: manager.email,
+        role: manager.role,
+      }))
+      : [],
     sponsorship: gym.sponsorship,
     analytics: gym.analytics,
     createdAt: gym.createdAt,
@@ -1688,6 +2508,180 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { gyms: data, adminToggles }, 'Admin gym list fetched successfully'));
+});
+
+export const getAdminGymDetails = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+  const parsedGymId = toObjectId(gymId);
+
+  if (!parsedGymId) {
+    throw new ApiError(400, 'Invalid gym id.');
+  }
+
+  const [gym, latestListingSubscription, adminToggles] = await Promise.all([
+    Gym.findById(parsedGymId)
+      .populate({ path: 'owner', select: 'name email contactNumber role status profile' })
+      .populate({ path: 'trainers', select: 'name email role status' })
+      .populate({ path: 'managers', select: 'name email role status profilePicture' })
+      .populate({ path: 'lastUpdatedBy', select: 'name email role status' })
+      .lean(),
+    GymListingSubscription.findOne({ gym: parsedGymId }).sort({ createdAt: -1 }).lean(),
+    loadAdminToggles(),
+  ]);
+
+  if (!gym) {
+    throw new ApiError(404, 'Gym not found.');
+  }
+
+  const [membershipDocs, assignmentDocs, reviewCount] = await Promise.all([
+    GymMembership.find({
+      gym: parsedGymId,
+      status: { $in: ['active', 'pending', 'paused'] },
+    })
+      .sort({ createdAt: -1 })
+      .populate({ path: 'trainee', select: 'name email role status profilePicture' })
+      .populate({ path: 'trainer', select: 'name email role status profilePicture' })
+      .lean(),
+    TrainerAssignment.find({ gym: parsedGymId })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .populate({ path: 'trainer', select: 'name email role status profilePicture' })
+      .populate({ path: 'trainees.trainee', select: 'name email role status profilePicture' })
+      .lean(),
+    Review.countDocuments({ gym: parsedGymId }),
+  ]);
+
+  const toUserSummary = (entity) => (entity?._id
+    ? { id: entity._id, name: entity.name, email: entity.email, role: entity.role, status: entity.status, profilePicture: entity.profilePicture || '' }
+    : null);
+
+  const memberships = membershipDocs.map((m) => ({
+    id: m._id,
+    trainee: toUserSummary(m.trainee),
+    trainer: toUserSummary(m.trainer),
+    plan: m.plan || 'monthly',
+    status: m.status,
+    startDate: m.startDate,
+    endDate: m.endDate,
+    createdAt: m.createdAt,
+  }));
+
+  const isTraineeRole = (role) => {
+    const normalised = String(role || '').toLowerCase();
+    return !normalised || ['trainee', 'user', 'member'].includes(normalised);
+  };
+
+  const assignments = assignmentDocs.map((a) => ({
+    id: a._id,
+    trainer: toUserSummary(a.trainer),
+    status: a.status || 'pending',
+    requestedAt: a.requestedAt || a.createdAt,
+    approvedAt: a.approvedAt || null,
+    trainees: (a.trainees ?? []).map((e) => ({
+      trainee: toUserSummary(e.trainee),
+      status: e.status || 'active',
+      assignedAt: e.assignedAt,
+    })),
+  }));
+
+  const activeAssignments = assignments.filter((a) => ['active', 'pending'].includes(a.status));
+
+  const assignedTrainerMap = {};
+  activeAssignments.forEach((a) => {
+    if (a.trainer?.id) assignedTrainerMap[String(a.trainer.id)] = a.trainer;
+  });
+
+  const assignedTraineeMap = {};
+  activeAssignments.forEach((a) => {
+    (a.trainees ?? []).forEach((e) => {
+      if (!e.trainee?.id || e.status !== 'active' || !isTraineeRole(e.trainee.role)) return;
+      const key = String(e.trainee.id);
+      if (!assignedTraineeMap[key]) assignedTraineeMap[key] = { ...e.trainee, assignmentCount: 0 };
+      assignedTraineeMap[key].assignmentCount += 1;
+    });
+  });
+
+  const traineeMap = {};
+  memberships.forEach((m) => {
+    if (m.trainee?.id && isTraineeRole(m.trainee.role)) traineeMap[String(m.trainee.id)] = m.trainee;
+  });
+
+  const trainerMap = {};
+  (Array.isArray(gym.trainers) ? gym.trainers : []).forEach((t) => {
+    const s = toUserSummary(t);
+    if (s?.id) trainerMap[String(s.id)] = s;
+  });
+  memberships.forEach((m) => { if (m.trainer?.id) trainerMap[String(m.trainer.id)] = m.trainer; });
+  Object.values(assignedTrainerMap).forEach((t) => { if (t?.id) trainerMap[String(t.id)] = t; });
+
+  const analyticsRating = Number(gym.analytics?.rating ?? 0);
+  const managerSummaries = Array.isArray(gym.managers)
+    ? gym.managers.map((manager) => toUserSummary(manager)).filter(Boolean)
+    : [];
+  const imageGallery = Array.isArray(gym.gallery) ? gym.gallery : [];
+  const imageAssets = Array.isArray(gym.images) ? gym.images : [];
+
+  const details = {
+    id: gym._id,
+    name: gym.name,
+    description: gym.description || '',
+    status: gym.status,
+    isPublished: Boolean(gym.isPublished),
+    isActive: Boolean(gym.isActive),
+    approvalStatus: gym.approvalStatus || 'approved',
+    createdAt: gym.createdAt,
+    updatedAt: gym.updatedAt,
+    approvedAt: gym.approvedAt || null,
+    lastUpdatedBy: toUserSummary(gym.lastUpdatedBy),
+    owner: gym.owner ? {
+      id: gym.owner._id,
+      name: gym.owner.name,
+      email: gym.owner.email,
+      contactNumber: gym.owner.contactNumber || '',
+      role: gym.owner.role,
+      status: gym.owner.status,
+      profile: gym.owner.profile || {},
+    } : null,
+    managers: managerSummaries,
+    trainers: Object.values(trainerMap),
+    members: memberships,
+    trainees: Object.values(traineeMap),
+    assignments,
+    assignedTrainers: Object.values(assignedTrainerMap),
+    assignedTrainees: Object.values(assignedTraineeMap),
+    location: { address: gym.location?.address || '', city: gym.location?.city || '', state: gym.location?.state || '', postalCode: gym.location?.postalCode || '', coordinates: gym.location?.coordinates || null },
+    contact: { phone: gym.contact?.phone || '', email: gym.contact?.email || '', website: gym.contact?.website || '', whatsapp: gym.contact?.whatsapp || '' },
+    pricing: { monthlyMrp: Number(gym.pricing?.monthlyMrp) || 0, monthlyPrice: Number(gym.pricing?.monthlyPrice) || 0, currency: gym.pricing?.currency || 'INR' },
+    schedule: { openTime: gym.schedule?.openTime || '', closeTime: gym.schedule?.closeTime || '', workingDays: Array.isArray(gym.schedule?.workingDays) ? gym.schedule.workingDays : [] },
+    features: Array.isArray(gym.features) ? gym.features : [],
+    amenities: Array.isArray(gym.amenities) ? gym.amenities : [],
+    keyFeatures: Array.isArray(gym.keyFeatures) ? gym.keyFeatures : [],
+    tags: Array.isArray(gym.tags) ? gym.tags : [],
+    images: imageAssets,
+    gallery: imageGallery,
+    sponsorship: { status: gym.sponsorship?.status || 'none', package: gym.sponsorship?.package || null, amount: Number(gym.sponsorship?.amount ?? gym.sponsorship?.monthlyBudget) || 0, expiresAt: gym.sponsorship?.expiresAt || null },
+    listingSubscription: latestListingSubscription ? {
+      id: latestListingSubscription._id, planCode: latestListingSubscription.planCode, amount: Number(latestListingSubscription.amount) || 0,
+      currency: latestListingSubscription.currency || 'INR', status: latestListingSubscription.status, periodStart: latestListingSubscription.periodStart,
+      periodEnd: latestListingSubscription.periodEnd, autoRenew: Boolean(latestListingSubscription.autoRenew),
+      invoiceCount: Array.isArray(latestListingSubscription.invoices) ? latestListingSubscription.invoices.length : 0,
+    } : null,
+    analytics: { impressions: Number(gym.analytics?.impressions) || 0, rating: Number(analyticsRating.toFixed(1)), ratingCount: Number(gym.analytics?.ratingCount) || Number(reviewCount) || 0, lastImpressionAt: gym.analytics?.lastImpressionAt || null, lastReviewAt: gym.analytics?.lastReviewAt || null },
+    metrics: {
+      activeMembers: memberships.length,
+      activeTrainers: Object.keys(trainerMap).length,
+      totalTrainees: Object.keys(traineeMap).length,
+      activeAssignments: activeAssignments.length,
+      assignedTrainers: Object.keys(assignedTrainerMap).length,
+      activeTrainees: Object.keys(assignedTraineeMap).length,
+      managers: managerSummaries.length,
+      imageAssets: imageAssets.length,
+      galleryAssets: imageGallery.length,
+      mediaAssets: imageAssets.length + imageGallery.length,
+      reviewCount: Number(reviewCount) || 0,
+    },
+  };
+
+  return res.status(200).json(new ApiResponse(200, { gym: details, adminToggles }, 'Admin gym details fetched successfully'));
 });
 
 export const getAdminRevenue = asyncHandler(async (_req, res) => {
@@ -1999,5 +2993,56 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, insights, 'Admin insights fetched successfully'));
+});
+
+const ensureManagerDashboard = (req) => {
+  if (!req.user || req.user.role !== 'manager') {
+    throw new ApiError(403, 'Only managers can access this resource.');
+  }
+  if (req.user.status !== 'active') {
+    throw new ApiError(403, 'Your manager account is awaiting admin approval.');
+  }
+};
+
+export const getManagerOverview = asyncHandler(async (req, res) => {
+  ensureManagerDashboard(req);
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    pendingApprovals,
+    activeSellers,
+    activeGymOwners,
+    totalGyms,
+    recentOrders,
+    contactMessages,
+    recentPending,
+  ] = await Promise.all([
+    User.countDocuments({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } }),
+    User.countDocuments({ role: 'seller', status: 'active' }),
+    User.countDocuments({ role: 'gym-owner', status: 'active' }),
+    Gym.countDocuments({ status: 'active' }),
+    Order.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+    Contact.countDocuments({ status: { $in: ['new', 'in-progress'] } }),
+    User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } })
+      .select('name email role createdAt profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      stats: {
+        pendingApprovals,
+        activeSellers,
+        activeGymOwners,
+        totalGyms,
+        recentOrders,
+        openMessages: contactMessages,
+      },
+      recentPending,
+    }, 'Manager overview fetched successfully.'),
+  );
 });
 

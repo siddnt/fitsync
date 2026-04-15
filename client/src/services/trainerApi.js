@@ -41,6 +41,25 @@ export const trainerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Dashboard', 'Trainer'],
     }),
+    getMyAvailability: builder.query({
+      query: () => '/trainer/availability/me',
+      providesTags: ['Trainer'],
+    }),
+    getTrainerAvailability: builder.query({
+      query: ({ trainerId, gymId } = {}) => ({
+        url: `/trainer/${trainerId}/availability`,
+        params: gymId ? { gymId } : undefined,
+      }),
+      providesTags: ['Trainer'],
+    }),
+    updateAvailability: builder.mutation({
+      query: (body) => ({
+        url: '/trainer/availability',
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['Dashboard', 'Trainer', 'Notification'],
+    }),
   }),
 });
 
@@ -50,4 +69,7 @@ export const {
   useAssignDietMutation,
   useShareFeedbackMutation,
   useReviewFeedbackMutation,
+  useGetMyAvailabilityQuery,
+  useGetTrainerAvailabilityQuery,
+  useUpdateAvailabilityMutation,
 } = trainerApi;

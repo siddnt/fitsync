@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-04-14T20:45:15.062Z",
+  "settings": {
+    "durationSeconds": 8,
+    "connections": 20,
+    "pipelining": 1
+  },
+  "results": [
+    {
+      "name": "Gym catalogue uncached",
+      "path": "/api/gyms?page=1&limit=12",
+      "durationSeconds": 8,
+      "connections": 20,
+      "pipelining": 1,
+      "requestsAverage": 33.13,
+      "requestsP95": 44,
+      "latencyAverageMs": 597.31,
+      "latencyP95Ms": 1088.67,
+      "throughputAverageBytes": 355656,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "name": "Gym catalogue cached",
+      "path": "/api/gyms?page=1&limit=12",
+      "durationSeconds": 8,
+      "connections": 20,
+      "pipelining": 1,
+      "requestsAverage": 665,
+      "requestsP95": 840,
+      "latencyAverageMs": 29.84,
+      "latencyP95Ms": 36.67,
+      "throughputAverageBytes": 7137472,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "name": "Marketplace catalogue uncached",
+      "path": "/api/marketplace/products?page=1&pageSize=12",
+      "durationSeconds": 8,
+      "connections": 20,
+      "pipelining": 1,
+      "requestsAverage": 36.5,
+      "requestsP95": 42,
+      "latencyAverageMs": 495.47,
+      "latencyP95Ms": 977.33,
+      "throughputAverageBytes": 136024,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    },
+    {
+      "name": "Marketplace catalogue cached",
+      "path": "/api/marketplace/products?page=1&pageSize=12",
+      "durationSeconds": 8,
+      "connections": 20,
+      "pipelining": 1,
+      "requestsAverage": 875,
+      "requestsP95": 1059,
+      "latencyAverageMs": 22.42,
+      "latencyP95Ms": 40.33,
+      "throughputAverageBytes": 3257856,
+      "non2xx": 0,
+      "errors": 0,
+      "timeouts": 0
+    }
+  ],
+  "comparisons": [
+    {
+      "label": "Gym catalogue",
+      "averageLatencyImprovementPercent": 95,
+      "requestThroughputGainPercent": 1907.24
+    },
+    {
+      "label": "Marketplace catalogue",
+      "averageLatencyImprovementPercent": 95.48,
+      "requestThroughputGainPercent": 2297.26
+    }
+  ]
+}

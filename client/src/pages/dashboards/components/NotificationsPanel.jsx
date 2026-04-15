@@ -18,9 +18,9 @@ const resolveBadgeClass = (type) => {
   }
 };
 
-const NotificationsPanel = ({ notifications }) => {
+const NotificationsPanel = ({ notifications, emptyMessage = 'We will surface monetisation events here.' }) => {
   if (!Array.isArray(notifications) || !notifications.length) {
-    return <EmptyState message="We will surface monetisation events here." />;
+    return <EmptyState message={emptyMessage} />;
   }
 
   return (
@@ -53,10 +53,12 @@ NotificationsPanel.propTypes = {
       createdAt: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
     }),
   ),
+  emptyMessage: PropTypes.string,
 };
 
 NotificationsPanel.defaultProps = {
   notifications: [],
+  emptyMessage: 'We will surface monetisation events here.',
 };
 
 export default NotificationsPanel;

@@ -6,8 +6,25 @@ import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { invalidateCacheByTags } from '../../services/cache.service.js';
+import { recordAuditLog } from '../../services/audit.service.js';
+import { createNotifications } from '../../services/notification.service.js';
+import { syncGymAnalyticsSnapshot } from '../../services/gymMetrics.service.js';
+import {
+  buildCursorFilter,
+  buildCursorSortStage,
+  encodeCursorToken,
+} from '../../utils/cursorPagination.js';
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+
+const invalidateGymReadCaches = async (gymId) =>
+  invalidateCacheByTags(['gyms:list', gymId ? `gym:${gymId}` : null]);
+
+const OWNER_REQUEST_CURSOR_SORT_FIELDS = [
+  { field: 'requestedAt', order: 1, type: 'date' },
+  { field: '_id', order: 1, type: 'objectId' },
+];
 
 const normalizeTrainer = (assignment) => {
   if (!assignment?.trainer) {
@@ -52,6 +69,9 @@ const normalizeGym = (assignment) => {
 
 export const listTrainerRequests = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
+  const cursor = typeof req.query.cursor === 'string' ? req.query.cursor.trim() : '';
+  const paginationMode = String(req.query.pagination ?? '').trim().toLowerCase();
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
 
   const gyms = await Gym.find({ owner: ownerId })
     .select('name location')
@@ -65,20 +85,40 @@ export const listTrainerRequests = asyncHandler(async (req, res) => {
 
   const gymIds = gyms.map((gym) => gym._id);
 
-  const assignments = await TrainerAssignment.find({
+  const baseFilter = {
     gym: { $in: gymIds },
     status: 'pending',
-  })
+  };
+  const findFilters = paginationMode === 'cursor'
+    ? buildCursorFilter({
+      baseFilter,
+      cursor,
+      sortFields: OWNER_REQUEST_CURSOR_SORT_FIELDS,
+    })
+    : baseFilter;
+
+  if (!findFilters) {
+    throw new ApiError(400, 'Invalid cursor');
+  }
+
+  const assignments = await TrainerAssignment.find(findFilters)
     .populate({
       path: 'trainer',
       select:
         'name firstName lastName email profilePicture status age height gender bio experienceYears certifications mentoredCount profile specializations trainerMetrics',
     })
     .populate({ path: 'gym', select: 'name location owner' })
-    .sort({ requestedAt: 1 })
+    .sort(paginationMode === 'cursor' ? buildCursorSortStage(OWNER_REQUEST_CURSOR_SORT_FIELDS) : { requestedAt: 1 })
+    .limit(paginationMode === 'cursor' ? limit + 1 : 0)
     .lean();
 
-  const requests = assignments
+  const hasMore = paginationMode === 'cursor' && assignments.length > limit;
+  const assignmentPage = hasMore ? assignments.slice(0, limit) : assignments;
+  const nextCursor = hasMore
+    ? encodeCursorToken({ document: assignmentPage[assignmentPage.length - 1], sortFields: OWNER_REQUEST_CURSOR_SORT_FIELDS })
+    : null;
+
+  const requests = assignmentPage
     .filter((assignment) => String(assignment.gym?.owner) === String(ownerId))
     .map((assignment) => ({
       id: String(assignment._id),
@@ -89,7 +129,12 @@ export const listTrainerRequests = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { requests }, 'Trainer requests fetched successfully.'));
+    .json(new ApiResponse(200, {
+      requests,
+      ...(paginationMode === 'cursor'
+        ? { pagination: { mode: 'cursor', limit, hasMore, nextCursor } }
+        : {}),
+    }, 'Trainer requests fetched successfully.'));
 });
 
 export const approveTrainerRequest = asyncHandler(async (req, res) => {
@@ -168,12 +213,10 @@ export const approveTrainerRequest = asyncHandler(async (req, res) => {
     ),
     Gym.updateOne(
       { _id: assignment.gym._id },
-      {
-        $inc: { 'analytics.trainers': 1 },
-        $set: { lastUpdatedBy: ownerId },
-      },
+      { $set: { lastUpdatedBy: ownerId } },
     ),
   ]);
+  await syncGymAnalyticsSnapshot(assignment.gym._id);
 
   const payload = {
     assignmentId: String(assignment._id),
@@ -182,6 +225,26 @@ export const approveTrainerRequest = asyncHandler(async (req, res) => {
     approvedAt: approvalDate,
     membershipStatus: membership?.status ?? 'active',
   };
+  await Promise.all([
+    createNotifications([{
+      user: assignment.trainer._id,
+      type: 'trainer-request-approved',
+      title: 'Trainer request approved',
+      message: `Your trainer access request for ${assignment.gym?.name ?? 'the gym'} was approved.`,
+      link: '/dashboards/trainer',
+      metadata: { gymId: assignment.gym._id, assignmentId: assignment._id },
+    }]),
+    recordAuditLog({
+      actor: ownerId,
+      actorRole: req.user?.role,
+      action: 'owner.trainer.approved',
+      entityType: 'trainerAssignment',
+      entityId: assignment._id,
+      summary: 'Trainer request approved',
+      metadata: { gymId: assignment.gym._id, trainerId: assignment.trainer._id },
+    }),
+  ]);
+  await invalidateGymReadCaches(assignment.gym._id);
 
   return res
     .status(200)
@@ -224,6 +287,27 @@ export const declineTrainerRequest = asyncHandler(async (req, res) => {
       },
     },
   );
+  await Promise.all([
+    createNotifications([{
+      user: assignment.trainer._id,
+      type: 'trainer-request-declined',
+      title: 'Trainer request declined',
+      message: 'Your trainer access request was declined.',
+      link: '/gyms',
+      metadata: { gymId: assignment.gym._id },
+    }]),
+    recordAuditLog({
+      actor: ownerId,
+      actorRole: req.user?.role,
+      action: 'owner.trainer.declined',
+      entityType: 'trainerAssignment',
+      entityId: assignment._id,
+      summary: 'Trainer request declined',
+      metadata: { gymId: assignment.gym._id, trainerId: assignment.trainer._id },
+    }),
+  ]);
+  await syncGymAnalyticsSnapshot(assignment.gym._id);
+  await invalidateGymReadCaches(assignment.gym._id);
 
   return res
     .status(200)
@@ -258,10 +342,7 @@ export const removeTrainerFromGym = asyncHandler(async (req, res) => {
   const updates = [
     Gym.updateOne(
       { _id: assignment.gym._id },
-      {
-        $inc: { 'analytics.trainers': -1 },
-        $set: { lastUpdatedBy: ownerId },
-      },
+      { $set: { lastUpdatedBy: ownerId } },
     ),
     GymMembership.updateMany(
       {
@@ -289,6 +370,17 @@ export const removeTrainerFromGym = asyncHandler(async (req, res) => {
   ];
 
   await Promise.all(updates);
+  await recordAuditLog({
+    actor: ownerId,
+    actorRole: req.user?.role,
+    action: 'owner.trainer.removed',
+    entityType: 'trainerAssignment',
+    entityId: assignment._id,
+    summary: 'Trainer removed from gym',
+    metadata: { gymId: assignment.gym._id, trainerId: assignment.trainer._id },
+  });
+  await syncGymAnalyticsSnapshot(assignment.gym._id);
+  await invalidateGymReadCaches(assignment.gym._id);
 
   return res
     .status(200)
@@ -327,10 +419,7 @@ export const removeGymMember = asyncHandler(async (req, res) => {
     updates.push(
       Gym.updateOne(
         { _id: membership.gym._id },
-        {
-          $inc: { 'analytics.memberships': -1 },
-          $set: { lastUpdatedBy: ownerId },
-        },
+        { $set: { lastUpdatedBy: ownerId } },
       ),
     );
   }
@@ -345,6 +434,17 @@ export const removeGymMember = asyncHandler(async (req, res) => {
   }
 
   await Promise.all(updates);
+  await recordAuditLog({
+    actor: ownerId,
+    actorRole: req.user?.role,
+    action: 'owner.member.removed',
+    entityType: 'gymMembership',
+    entityId: membership._id,
+    summary: 'Gym member removed',
+    metadata: { gymId: membership.gym._id, traineeId: membership.trainee },
+  });
+  await syncGymAnalyticsSnapshot(membership.gym._id);
+  await invalidateGymReadCaches(membership.gym._id);
 
   return res
     .status(200)

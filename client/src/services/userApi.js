@@ -4,15 +4,34 @@ export const userApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getProfile: builder.query({
       query: () => '/users/profile',
-      providesTags: ['Profile'],
+      providesTags: ['User'],
     }),
     updateProfile: builder.mutation({
-      query: (formData) => ({
+      query: (body) => ({
         url: '/users/profile',
         method: 'PATCH',
-        body: formData,
+        body,
       }),
-      invalidatesTags: ['Profile', 'User'],
+      invalidatesTags: ['User'],
+    }),
+    getMyNotifications: builder.query({
+      query: ({ limit = 12, unreadOnly = false } = {}) => ({
+        url: '/users/notifications',
+        params: { limit, unreadOnly },
+      }),
+      providesTags: ['Notification'],
+    }),
+    markNotificationsRead: builder.mutation({
+      query: (ids = []) => ({
+        url: '/users/notifications/read',
+        method: 'PATCH',
+        body: { ids },
+      }),
+      invalidatesTags: ['Notification'],
+    }),
+    getMyRecommendations: builder.query({
+      query: () => '/users/recommendations',
+      providesTags: ['User', 'Gym', 'Marketplace'],
     }),
   }),
 });
@@ -20,4 +39,7 @@ export const userApi = apiSlice.injectEndpoints({
 export const {
   useGetProfileQuery,
   useUpdateProfileMutation,
+  useGetMyNotificationsQuery,
+  useMarkNotificationsReadMutation,
+  useGetMyRecommendationsQuery,
 } = userApi;

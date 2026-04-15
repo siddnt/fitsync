@@ -19,8 +19,12 @@
   padding: 0.4rem;
 }
 
-.marketplace-search-simple input {
+.marketplace-search-simple__field {
   flex: 1;
+  min-width: 0;
+}
+
+.marketplace-search-simple__input {
   border: none;
   background: transparent;
   color: var(--light-text-color);
@@ -28,8 +32,14 @@
   font-size: 1rem;
 }
 
-.marketplace-search-simple input:focus {
+.marketplace-search-simple__input:focus {
   outline: none;
+  box-shadow: none;
+}
+
+.marketplace-search-simple .search-suggest__dropdown {
+  top: calc(100% + 0.65rem);
+  background: rgba(12, 14, 22, 0.98);
 }
 
 .marketplace-search-simple button {
@@ -46,6 +56,10 @@
   .marketplace-search-simple {
     flex-direction: column;
     border-radius: 20px;
+  }
+
+  .marketplace-search-simple__field {
+    width: 100%;
   }
 
   .marketplace-search-simple button {

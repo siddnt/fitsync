@@ -14,7 +14,7 @@
 
 .dashboard-shell__content {
   flex: 1;
-  padding: 2rem;
+  padding: 2.5rem 3rem;
   overflow-y: auto;
 }
 
