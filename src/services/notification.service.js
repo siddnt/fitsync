@@ -85,8 +85,13 @@ export const listNotificationsForUser = async (userId, { limit = 25, unreadOnly 
     filter.readAt = null;
   }
 
-  return Notification.find(filter)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const [notifications, unreadCount] = await Promise.all([
+    Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean(),
+    Notification.countDocuments({ user: userId, readAt: null }),
+  ]);
+
+  return { notifications, unreadCount };
 };

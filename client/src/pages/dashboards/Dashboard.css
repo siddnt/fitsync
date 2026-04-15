@@ -1640,6 +1640,12 @@
   padding: 1rem 1.25rem;
 }
 
+.notification-feed__link {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
 .notification-feed__meta {
   align-items: center;
   display: flex;
@@ -1650,6 +1656,12 @@
 .notification-feed__time {
   color: var(--muted-text-color);
   font-size: 0.8rem;
+}
+
+.notification-feed__title {
+  color: var(--light-text-color);
+  font-weight: 600;
+  margin: 0;
 }
 
 .notification-feed__message {

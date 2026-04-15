@@ -237,11 +237,11 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
   const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
   const unreadOnly = String(req.query.unreadOnly ?? '').toLowerCase() === 'true';
-  const notifications = await listNotificationsForUser(userId, { limit, unreadOnly });
+  const { notifications, unreadCount } = await listNotificationsForUser(userId, { limit, unreadOnly });
 
   return res.status(200).json(new ApiResponse(200, {
     notifications: notifications.map(notification => ({ ...notification, id: notification._id })),
-    unreadCount: notifications.filter((entry) => !entry.readAt).length,
+    unreadCount,
   }, 'Notifications fetched successfully'));
 });
 

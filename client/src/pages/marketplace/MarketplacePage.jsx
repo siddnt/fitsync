@@ -7,6 +7,7 @@ import SearchSuggestInput from '../../components/dashboard/SearchSuggestInput.js
 import { matchesAcrossFields } from '../../utils/search.js';
 import ProductFilters from './components/ProductFilters.jsx';
 import ProductCard from './components/ProductCard.jsx';
+import { saveBuyNowCheckoutItem } from './checkoutState.js';
 import './MarketplacePage.css';
 
 const PAGE_SIZE = 24;
@@ -217,9 +218,26 @@ const MarketplacePage = () => {
   }, [addProductToCart]);
 
   const handleBuyNow = useCallback((product) => {
-    addProductToCart(product);
-    navigate('/checkout');
-  }, [addProductToCart, navigate]);
+    const checkoutItem = saveBuyNowCheckoutItem({
+      id: product?.id,
+      name: product?.name,
+      price: product?.price,
+      image: product?.image,
+      seller: product?.seller ?? null,
+      quantity: 1,
+    });
+
+    if (!checkoutItem) {
+      return;
+    }
+
+    navigate('/checkout?mode=buy-now', {
+      state: {
+        checkoutMode: 'buy-now',
+        checkoutItem,
+      },
+    });
+  }, [navigate]);
 
   const handleViewDetails = useCallback((product) => {
     if (!product?.id) {

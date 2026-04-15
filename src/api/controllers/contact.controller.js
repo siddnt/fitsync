@@ -9,6 +9,18 @@ import { createNotification } from '../../services/notification.service.js';
 
 const MANAGER_OPEN_STATUSES = ['new', 'read', 'in-progress', 'responded'];
 
+const resolveSupportNotificationLink = (role) => {
+  if (role === 'manager') {
+    return '/dashboard/manager/messages';
+  }
+
+  if (role === 'admin') {
+    return '/dashboard/admin/messages';
+  }
+
+  return '/dashboard';
+};
+
 const resolveOptionalGymId = async (gymId) => {
   if (!gymId) {
     return null;
@@ -330,7 +342,7 @@ export const assignMessage = asyncHandler(async (req, res) => {
       title: 'Support ticket assigned',
       message: `A support ticket from ${message.name} has been assigned to you.`,
       metadata: { contactId: message._id },
-      link: '/dashboards/admin/messages',
+      link: resolveSupportNotificationLink(message.assignedTo?.role),
     });
   }
 

@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import './CheckoutPage.css';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
-import { useCreateMarketplaceOrderMutation } from '../../services/marketplaceApi.js';
+import { 
+  useCreateMarketplaceOrderMutation,
+  useCreateMarketplaceCheckoutSessionMutation 
+} from '../../services/marketplaceApi.js';
 import { formatCurrency } from '../../utils/format.js';
+import {
+  clearBuyNowCheckoutItem,
+  normalizeCheckoutItem,
+  readBuyNowCheckoutItem,
+  saveBuyNowCheckoutItem,
+  writePendingOrderSnapshot,
+} from './checkoutState.js';
 
 const phonePattern = /^[0-9]{10}$/;
 const pinPattern = /^[0-9]{6}$/;
@@ -27,10 +37,46 @@ const CheckoutPage = () => {
   const { user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [createOrder, { isLoading }] = useCreateMarketplaceOrderMutation();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const [createOrder, { isLoading: isCreatingOrder }] = useCreateMarketplaceOrderMutation();
+  const [createCheckoutSession, { isLoading: isCreatingSession }] = useCreateMarketplaceCheckoutSessionMutation();
   const [formState, setFormState] = useState(() => initialAddressState(user));
   const [error, setError] = useState(null);
   const [order, setOrder] = useState(null);
+
+  const isLoading = isCreatingOrder || isCreatingSession;
+  const isCardPayment = formState.paymentMethod === 'Credit / Debit Card';
+  const isBuyNowMode = searchParams.get('mode') === 'buy-now';
+
+  const buyNowStateItem = useMemo(
+    () => normalizeCheckoutItem(location.state?.checkoutMode === 'buy-now' ? location.state?.checkoutItem : null),
+    [location.state],
+  );
+
+  useEffect(() => {
+    if (isBuyNowMode && buyNowStateItem) {
+      saveBuyNowCheckoutItem(buyNowStateItem);
+      return;
+    }
+
+    if (!isBuyNowMode) {
+      clearBuyNowCheckoutItem();
+    }
+  }, [buyNowStateItem, isBuyNowMode]);
+
+  const buyNowItem = useMemo(() => {
+    if (!isBuyNowMode) {
+      return null;
+    }
+
+    return buyNowStateItem || readBuyNowCheckoutItem();
+  }, [buyNowStateItem, isBuyNowMode]);
+
+  const checkoutItems = useMemo(
+    () => (isBuyNowMode ? (buyNowItem ? [buyNowItem] : []) : items),
+    [buyNowItem, isBuyNowMode, items],
+  );
 
   useEffect(() => {
     setFormState((prev) => ({
@@ -42,7 +88,7 @@ const CheckoutPage = () => {
   }, [user?.firstName, user?.lastName, user?.email]);
 
   const totals = useMemo(() => {
-    const subtotal = items.reduce(
+    const subtotal = checkoutItems.reduce(
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0,
     );
@@ -51,7 +97,7 @@ const CheckoutPage = () => {
     const total = subtotal + tax + shipping;
 
     return { subtotal, tax, shipping, total };
-  }, [items]);
+  }, [checkoutItems]);
 
   const handleChange = (event) => {
     const { name } = event.target;
@@ -81,8 +127,10 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (!items.length) {
-      setError('Your cart is empty. Add a product before checking out.');
+    if (!checkoutItems.length) {
+      setError(isBuyNowMode
+        ? 'This Buy now item is no longer available. Please return to the product page and try again.'
+        : 'Your cart is empty. Add a product before checking out.');
       return;
     }
 
@@ -107,33 +155,89 @@ const CheckoutPage = () => {
     }
 
     try {
-      const payload = {
-        items: items.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-        })),
-        shippingAddress: {
-          firstName: formState.firstName.trim(),
-          lastName: formState.lastName.trim(),
-          email: formState.email.trim(),
-          phone: formState.phone.trim(),
-          address: formState.address.trim(),
-          city: formState.city.trim(),
-          state: formState.state.trim(),
-          zipCode: formState.zipCode.trim(),
-        },
-        paymentMethod: formState.paymentMethod,
-      };
+      // Handle card payment with Stripe redirect
+      if (formState.paymentMethod === 'Credit / Debit Card') {
+        const payload = {
+          items: checkoutItems.map((item) => ({
+            productId: item.id,
+            quantity: item.quantity,
+          })),
+          shippingAddress: {
+            firstName: formState.firstName.trim(),
+            lastName: formState.lastName.trim(),
+            email: formState.email.trim(),
+            phone: formState.phone.trim(),
+            address: formState.address.trim(),
+            city: formState.city.trim(),
+            state: formState.state.trim(),
+            zipCode: formState.zipCode.trim(),
+          },
+        };
 
-      const response = await createOrder(payload).unwrap();
-      setOrder(response?.data?.order ?? null);
-      dispatch(cartActions.clearCart());
+        // Store order snapshot in sessionStorage for success page
+        const orderSnapshot = {
+          checkoutMode: isBuyNowMode ? 'buy-now' : 'cart',
+          items: checkoutItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            image: item.image,
+          })),
+          subtotal: totals.subtotal,
+          tax: totals.tax,
+          shippingCost: totals.shipping,
+          total: totals.total,
+          shippingAddress: payload.shippingAddress,
+        };
+        writePendingOrderSnapshot(orderSnapshot);
+
+        const response = await createCheckoutSession(payload).unwrap();
+        const checkoutUrl = response?.data?.checkoutUrl;
+        
+        if (checkoutUrl) {
+          // Redirect to Stripe Checkout
+          window.location.href = checkoutUrl;
+        } else {
+          setError('Failed to create checkout session. Please try again.');
+        }
+      } else {
+        // Handle Cash on Delivery
+        const payload = {
+          items: checkoutItems.map((item) => ({
+            productId: item.id,
+            quantity: item.quantity,
+          })),
+          shippingAddress: {
+            firstName: formState.firstName.trim(),
+            lastName: formState.lastName.trim(),
+            email: formState.email.trim(),
+            phone: formState.phone.trim(),
+            address: formState.address.trim(),
+            city: formState.city.trim(),
+            state: formState.state.trim(),
+            zipCode: formState.zipCode.trim(),
+          },
+          paymentMethod: formState.paymentMethod,
+        };
+
+        const response = await createOrder(payload).unwrap();
+        setOrder(response?.data?.order ?? null);
+        if (isBuyNowMode) {
+          clearBuyNowCheckoutItem();
+        } else {
+          dispatch(cartActions.clearCart());
+        }
+      }
     } catch (apiError) {
       setError(apiError?.data?.message ?? 'We could not place the order right now. Please try again.');
     }
   };
 
   const handleContinueShopping = () => {
+    if (isBuyNowMode) {
+      clearBuyNowCheckoutItem();
+    }
     navigate('/marketplace');
   };
 
@@ -167,15 +271,15 @@ const CheckoutPage = () => {
     );
   }
 
-  if (!items.length) {
+  if (!checkoutItems.length) {
     return (
       <div className="checkout-page">
         <header>
           <h1>Checkout</h1>
-          <p>Add some products to your cart to continue.</p>
+          <p>{isBuyNowMode ? 'The selected Buy now item is unavailable.' : 'Add some products to your cart to continue.'}</p>
         </header>
         <div className="checkout-empty">
-          <Link to="/marketplace">Browse the marketplace</Link>
+          <Link to="/marketplace">{isBuyNowMode ? 'Return to marketplace' : 'Browse the marketplace'}</Link>
         </div>
       </div>
     );
@@ -301,19 +405,18 @@ const CheckoutPage = () => {
               onChange={handleChange}
             >
               <option value="Cash on Delivery">Cash on Delivery</option>
-              <option value="UPI">UPI</option>
               <option value="Credit / Debit Card">Credit / Debit Card</option>
             </select>
           </label>
           <button type="submit" disabled={isLoading || !user}>
-            {isLoading ? 'Placing order...' : 'Place order'}
+            {isLoading ? (isCardPayment ? 'Connecting to payment...' : 'Processing...') : (isCardPayment ? 'Continue to payment' : 'Place order')}
           </button>
         </form>
 
         <aside className="checkout-summary">
           <h2>Order summary</h2>
           <ul>
-            {items.map((item) => (
+            {checkoutItems.map((item) => (
               <li key={item.id}>
                 <span>
                   {item.name}

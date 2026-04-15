@@ -231,7 +231,7 @@ export const approveTrainerRequest = asyncHandler(async (req, res) => {
       type: 'trainer-request-approved',
       title: 'Trainer request approved',
       message: `Your trainer access request for ${assignment.gym?.name ?? 'the gym'} was approved.`,
-      link: '/dashboards/trainer',
+      link: '/dashboard/trainer',
       metadata: { gymId: assignment.gym._id, assignmentId: assignment._id },
     }]),
     recordAuditLog({

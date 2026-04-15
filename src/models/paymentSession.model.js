@@ -4,6 +4,7 @@ const orderSnapshotSchema = new mongoose.Schema(
     {
         items: [
             {
+                seller: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
                 product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
                 name: String,
                 quantity: Number,
@@ -90,6 +91,10 @@ const paymentSessionSchema = new mongoose.Schema(
                 enum: ["open", "completed", "expired", "canceled"],
                 default: "open"
             }
+        },
+        orderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Order"
         },
         processed: {
             type: Boolean,

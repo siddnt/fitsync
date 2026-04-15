@@ -5,6 +5,7 @@ import { cartActions } from '../../features/cart/cartSlice.js';
 import { useGetMarketplaceProductQuery } from '../../services/marketplaceApi.js';
 import { formatCurrency, formatDate, formatNumber } from '../../utils/format.js';
 import { deriveProductPricing, formatRatingLabel, formatSoldCopy } from './utils.js';
+import { saveBuyNowCheckoutItem } from './checkoutState.js';
 import './MarketplaceProductPage.css';
 
 const MarketplaceProductPage = () => {
@@ -60,8 +61,26 @@ const MarketplaceProductPage = () => {
     if (!product?.id) {
       return;
     }
-    addProductToCart();
-    navigate('/checkout');
+
+    const checkoutItem = saveBuyNowCheckoutItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      seller: product.seller ?? null,
+      quantity: 1,
+    });
+
+    if (!checkoutItem) {
+      return;
+    }
+
+    navigate('/checkout?mode=buy-now', {
+      state: {
+        checkoutMode: 'buy-now',
+        checkoutItem,
+      },
+    });
   };
 
   const handleBack = () => {

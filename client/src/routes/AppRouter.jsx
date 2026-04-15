@@ -10,6 +10,8 @@ const MarketplacePage = lazy(() => import('../pages/marketplace/MarketplacePage.
 const MarketplaceProductPage = lazy(() => import('../pages/marketplace/MarketplaceProductPage.jsx'));
 const CartPage = lazy(() => import('../pages/marketplace/CartPage.jsx'));
 const CheckoutPage = lazy(() => import('../pages/marketplace/CheckoutPage.jsx'));
+const CheckoutSuccessPage = lazy(() => import('../pages/marketplace/CheckoutSuccessPage.jsx'));
+const CheckoutCancelPage = lazy(() => import('../pages/marketplace/CheckoutCancelPage.jsx'));
 const ProfilePage = lazy(() => import('../pages/profile/ProfilePage.jsx'));
 const TraineeDashboard = lazy(() => import('../pages/dashboards/TraineeDashboard.jsx'));
 const GymOwnerDashboard = lazy(() => import('../pages/dashboards/GymOwnerDashboard.jsx'));
@@ -66,6 +68,8 @@ const AppRouter = () => (
           <Route path="marketplace/products/:productId" element={<MarketplaceProductPage />} />
           <Route path="cart" element={<CartPage />} />
           <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="marketplace/checkout/success" element={<CheckoutSuccessPage />} />
+          <Route path="marketplace/checkout/cancel" element={<CheckoutCancelPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="auth/*" element={<AuthRoutes />} />
         </Route>

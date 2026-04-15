@@ -401,7 +401,7 @@ export const joinGym = asyncHandler(async (req, res) => {
         type: 'new-trainee',
         title: 'New trainee assigned',
         message: `${user.name ?? 'A trainee'} joined ${gym.name} under your guidance.`,
-        link: '/dashboards/trainer',
+        link: '/dashboard/trainer',
         metadata: { gymId: gym._id, traineeId: user._id },
       },
     ]),

@@ -3,10 +3,12 @@ import Product from '../../models/product.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import ProductReview from '../../models/productReview.model.js';
+import PaymentSession from '../../models/paymentSession.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
+import stripe from '../../services/stripe.service.js';
 import {
   buildCacheKey,
   getOrSetCache,
@@ -688,6 +690,152 @@ const generateOrderNumber = async () => {
   return `${ORDER_NUMBER_PREFIX}-${Date.now()}`;
 };
 
+const buildMarketplaceOrderItemsFromSnapshot = (orderSnapshot = {}, initialStatusTimestamp = new Date()) => (
+  (orderSnapshot.items ?? []).map((item) => ({
+    seller: item.seller ?? undefined,
+    product: item.product,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+    image: item.image,
+    status: 'processing',
+    lastStatusAt: initialStatusTimestamp,
+    statusHistory: [{
+      status: 'processing',
+      note: null,
+      updatedBy: null,
+      updatedAt: initialStatusTimestamp,
+    }],
+  }))
+);
+
+const BUYER_ORDER_NOTIFICATION_LINK = '/dashboard/trainee/orders';
+const SELLER_ORDER_NOTIFICATION_LINK = '/dashboard/seller/orders';
+
+const buildMarketplaceOrderNotifications = (order) => {
+  if (!order?._id) {
+    return [];
+  }
+
+  const notifications = [];
+  const buyerId = order.user?._id ?? order.user;
+  const orderNumber = order.orderNumber ?? order._id;
+  const orderItems = Array.isArray(order.orderItems) ? order.orderItems : [];
+
+  if (buyerId) {
+    notifications.push({
+      user: buyerId,
+      type: 'order-placed',
+      title: 'Order placed successfully',
+      message: `Your order ${orderNumber} has been placed successfully.`,
+      link: BUYER_ORDER_NOTIFICATION_LINK,
+      metadata: {
+        orderId: order._id,
+        orderNumber,
+        lineItems: orderItems.length,
+        total: order.total ?? 0,
+      },
+    });
+  }
+
+  const sellerSummaries = orderItems.reduce((acc, item) => {
+    const sellerId = item?.seller?._id ?? item?.seller;
+    if (!sellerId) {
+      return acc;
+    }
+
+    const key = String(sellerId);
+    const existing = acc.get(key) ?? {
+      sellerId,
+      lineItems: 0,
+      units: 0,
+    };
+
+    existing.lineItems += 1;
+    existing.units += Number(item?.quantity ?? 0) || 0;
+    acc.set(key, existing);
+    return acc;
+  }, new Map());
+
+  sellerSummaries.forEach((summary) => {
+    notifications.push({
+      user: summary.sellerId,
+      type: 'new-order',
+      title: 'New marketplace order',
+      message: `Order ${orderNumber} includes ${summary.lineItems} listing${summary.lineItems === 1 ? '' : 's'} and ${summary.units} unit${summary.units === 1 ? '' : 's'} from your catalogue.`,
+      link: SELLER_ORDER_NOTIFICATION_LINK,
+      metadata: {
+        orderId: order._id,
+        orderNumber,
+        sellerId: summary.sellerId,
+        lineItems: summary.lineItems,
+        units: summary.units,
+      },
+    });
+  });
+
+  return notifications;
+};
+
+const finalizeMarketplacePaymentSession = async ({
+  paymentSessionId,
+  stripeSessionId,
+  paymentIntentId,
+  session,
+}) => {
+  const paymentSession = await PaymentSession.findById(paymentSessionId).session(session);
+
+  if (!paymentSession) {
+    throw new ApiError(404, 'Payment session not found.');
+  }
+
+  if (paymentSession.orderId) {
+    return paymentSession.orderId;
+  }
+
+  if (paymentSession.stripe?.status === 'expired') {
+    throw new ApiError(400, 'This checkout session has expired.');
+  }
+
+  const orderSnapshot = paymentSession.orderSnapshot;
+  const snapshotItems = Array.isArray(orderSnapshot?.items) ? orderSnapshot.items : [];
+
+  if (!snapshotItems.length) {
+    throw new ApiError(400, 'Unable to finalize an empty payment session.');
+  }
+
+  const initialStatusTimestamp = new Date();
+  const orderItems = buildMarketplaceOrderItemsFromSnapshot(orderSnapshot, initialStatusTimestamp);
+
+  paymentSession.stripe.checkoutSessionId = stripeSessionId || paymentSession.stripe.checkoutSessionId;
+  paymentSession.stripe.paymentIntentId = paymentIntentId || paymentSession.stripe.paymentIntentId;
+  paymentSession.stripe.status = 'completed';
+  paymentSession.processed = true;
+  await paymentSession.save({ session });
+
+  const orderNumber = await generateOrderNumber();
+  const [createdOrder] = await Order.create([{
+    user: paymentSession.user,
+    orderItems,
+    shippingAddress: orderSnapshot.shippingAddress,
+    paymentMethod: 'Credit / Debit Card',
+    subtotal: orderSnapshot.subtotal,
+    tax: orderSnapshot.tax,
+    shippingCost: orderSnapshot.shippingCost,
+    total: orderSnapshot.total,
+    orderNumber,
+  }], { session });
+
+  await createNotifications(buildMarketplaceOrderNotifications(createdOrder), { session });
+  paymentSession.orderId = createdOrder._id;
+  await paymentSession.save({ session });
+
+  const productIds = orderItems.map((item) => item.product);
+  await enqueueOutboxEvents(buildMarketplaceOutboxEvents({ productIds }), { session });
+
+  return createdOrder._id;
+};
+
 export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
   const {
     search,
@@ -982,9 +1130,304 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     })
     .lean();
 
+  await createNotifications(buildMarketplaceOrderNotifications(populated));
+
   return res
     .status(201)
     .json(new ApiResponse(201, { order: mapBuyerOrder(populated) }, 'Order placed successfully'));
+});
+
+export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) => {
+  ensureMarketplaceBuyerEligible(req.user);
+
+  const userId = req.user?._id;
+  const { items, shippingAddress } = req.body ?? {};
+
+  if (!userId) {
+    throw new ApiError(401, 'You must be signed in to create a checkout session.');
+  }
+
+  if (!Array.isArray(items) || !items.length) {
+    throw new ApiError(400, 'Select at least one product to checkout.');
+  }
+
+  const preparedItems = prepareMarketplaceOrderItems(items);
+
+  const requiredAddressFields = ['firstName', 'lastName', 'email', 'phone', 'address', 'city', 'state', 'zipCode'];
+
+  if (!shippingAddress || requiredAddressFields.some((field) => !shippingAddress[field])) {
+    throw new ApiError(400, 'Please provide a complete shipping address.');
+  }
+
+  const tax = 0;
+  const shippingCost = 0;
+  const session = await mongoose.startSession();
+  let paymentSessionId;
+  let stripeSession;
+
+  try {
+    await session.withTransaction(async () => {
+      // Validate products and calculate totals
+      const reservations = await reserveInventoryForMarketplaceOrder(preparedItems, { session });
+      
+      const orderItems = reservations.map(({ product, quantity }) => ({
+        seller: product.seller ?? undefined,
+        product: product._id,
+        name: product.name,
+        quantity,
+        price: product.price,
+        image: product.image,
+      }));
+
+      const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
+      const total = subtotal + tax + shippingCost;
+
+      // Create payment session record
+      const paymentSession = await PaymentSession.create([{
+        user: userId,
+        type: 'shop',
+        orderSnapshot: {
+          items: orderItems,
+          subtotal,
+          tax,
+          shippingCost,
+          total,
+          shippingAddress,
+        },
+        currency: 'inr',
+        amount: total,
+        metadata: {
+          items: items.map(item => ({ productId: item.productId, quantity: item.quantity })),
+        },
+      }], { session });
+
+      paymentSessionId = paymentSession[0]._id;
+
+      // Create Stripe Checkout Session
+      const lineItems = orderItems.map((item) => ({
+        price_data: {
+          currency: 'inr',
+          product_data: {
+            name: item.name,
+            images: item.image ? [item.image] : [],
+          },
+          unit_amount: Math.round(item.price * 100), // Convert to paise/cents
+        },
+        quantity: item.quantity,
+      }));
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+
+      stripeSession = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: lineItems,
+        mode: 'payment',
+        customer_email: shippingAddress.email,
+        metadata: {
+          paymentSessionId: String(paymentSessionId),
+          userId: String(userId),
+          type: 'marketplace-order',
+        },
+        success_url: `${frontendUrl}/marketplace/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${frontendUrl}/marketplace/checkout/cancel`,
+        shipping_address_collection: {
+          allowed_countries: ['IN'],
+        },
+      });
+
+      // Update payment session with Stripe session ID
+      await PaymentSession.findByIdAndUpdate(
+        paymentSessionId,
+        {
+          'stripe.checkoutSessionId': stripeSession.id,
+          'stripe.status': 'open',
+        },
+        { session }
+      );
+    });
+  } catch (error) {
+    throw new ApiError(500, error.message || 'Failed to create checkout session');
+  } finally {
+    await session.endSession();
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { 
+      checkoutUrl: stripeSession.url,
+      sessionId: stripeSession.id,
+    }, 'Checkout session created'));
+});
+
+export const getOrderByStripeSession = asyncHandler(async (req, res) => {
+  const { sessionId } = req.params;
+
+  if (!sessionId) {
+    throw new ApiError(400, 'Session ID is required.');
+  }
+
+  // Find payment session by Stripe checkout session ID
+  let paymentSession = await PaymentSession.findOne({
+    'stripe.checkoutSessionId': sessionId,
+  }).lean();
+
+  if (!paymentSession) {
+    throw new ApiError(404, 'Payment session not found.');
+  }
+
+  if (!paymentSession.orderId) {
+    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+    const isPaid = stripeSession?.payment_status === 'paid';
+    const isComplete = stripeSession?.status === 'complete';
+
+    if (!isPaid || !isComplete) {
+      throw new ApiError(202, 'Order is still being processed. Please wait a moment.');
+    }
+
+    const finalizeSession = await mongoose.startSession();
+
+    try {
+      await finalizeSession.withTransaction(async () => {
+        await finalizeMarketplacePaymentSession({
+          paymentSessionId: paymentSession._id,
+          stripeSessionId: stripeSession.id,
+          paymentIntentId: stripeSession.payment_intent,
+          session: finalizeSession,
+        });
+      });
+    } finally {
+      await finalizeSession.endSession();
+    }
+
+    paymentSession = await PaymentSession.findOne({
+      'stripe.checkoutSessionId': sessionId,
+    }).lean();
+
+    if (!paymentSession?.orderId) {
+      throw new ApiError(202, 'Order is still being processed. Please wait a moment.');
+    }
+  }
+
+  const order = await Order.findById(paymentSession.orderId)
+    .populate({
+      path: 'orderItems.product',
+      select: 'name image',
+    })
+    .lean();
+
+  if (!order) {
+    throw new ApiError(404, 'Order not found.');
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { order: mapBuyerOrder(order) }, 'Order retrieved successfully'));
+});
+
+export const handleStripeWebhook = asyncHandler(async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const rawBody = req.rawBody || req.body;
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      rawBody,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object;
+      
+      // Only process marketplace order sessions
+      if (session.metadata?.type !== 'marketplace-order') {
+        return res.json({ received: true });
+      }
+
+      const paymentSessionId = session.metadata.paymentSessionId;
+      const userId = session.metadata.userId;
+
+      if (!paymentSessionId || !userId) {
+        console.error('Missing metadata in Stripe session');
+        return res.status(400).json({ error: 'Missing metadata' });
+      }
+
+      const session_db = await mongoose.startSession();
+
+      try {
+        await session_db.withTransaction(async () => {
+          await finalizeMarketplacePaymentSession({
+            paymentSessionId,
+            stripeSessionId: session.id,
+            paymentIntentId: session.payment_intent,
+            session: session_db,
+          });
+        });
+      } catch (error) {
+        console.error('Error processing webhook:', error);
+        throw error;
+      } finally {
+        await session_db.endSession();
+      }
+
+      break;
+    }
+
+    case 'checkout.session.expired': {
+      const session = event.data.object;
+      
+      if (session.metadata?.type === 'marketplace-order') {
+        const paymentSessionId = session.metadata.paymentSessionId;
+        
+        if (paymentSessionId) {
+          const paymentSession = await PaymentSession.findById(paymentSessionId).lean();
+
+          if (paymentSession && !paymentSession.processed) {
+            const reservations = (paymentSession.orderSnapshot?.items ?? [])
+              .map((item) => ({
+                product: item?.product ? { _id: item.product } : null,
+                quantity: Number(item?.quantity) || 0,
+              }))
+              .filter((entry) => entry.product?._id && entry.quantity > 0);
+
+            const expirySession = await mongoose.startSession();
+
+            try {
+              await expirySession.withTransaction(async () => {
+                await PaymentSession.findByIdAndUpdate(
+                  paymentSessionId,
+                  {
+                    'stripe.status': 'expired',
+                    processed: true,
+                  },
+                  { session: expirySession },
+                );
+
+                await releaseMarketplaceInventoryReservations(reservations, {
+                  session: expirySession,
+                });
+              });
+            } finally {
+              await expirySession.endSession();
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({ received: true });
 });
 
 export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
@@ -1660,7 +2103,7 @@ export const updateSellerOrderStatus = asyncHandler(async (req, res) => {
       type: 'order-status',
       title: 'Order status updated',
       message: `Your order ${refreshed.orderNumber ?? refreshed._id} was updated to ${nextStatus}.`,
-      link: '/dashboards/trainee/orders',
+      link: BUYER_ORDER_NOTIFICATION_LINK,
       metadata: { orderId: refreshed._id, status: nextStatus },
     }]),
     recordAuditLog({
@@ -1739,7 +2182,7 @@ export const updateSellerOrderTracking = asyncHandler(async (req, res) => {
       type: 'order-tracking',
       title: 'Order tracking updated',
       message: `Tracking details were updated for ${item.name}.`,
-      link: '/dashboards/trainee/orders',
+      link: BUYER_ORDER_NOTIFICATION_LINK,
       metadata: {
         orderId: order._id,
         itemId: item._id,
@@ -1800,7 +2243,7 @@ export const requestMarketplaceReturn = asyncHandler(async (req, res) => {
       type: 'return-request',
       title: 'Return requested',
       message: `A buyer requested a return for ${item.name}.`,
-      link: '/dashboards/seller/orders',
+      link: SELLER_ORDER_NOTIFICATION_LINK,
       metadata: { orderId: order._id, itemId: item._id, reason },
     }]),
     recordAuditLog({
@@ -1867,7 +2310,7 @@ export const reviewMarketplaceReturn = asyncHandler(async (req, res) => {
       type: 'return-update',
       title: 'Return request updated',
       message: `Your return request for ${item.name} was ${decision}.`,
-      link: '/dashboards/trainee/orders',
+      link: BUYER_ORDER_NOTIFICATION_LINK,
       metadata: { orderId: order._id, itemId: item._id, decision },
     }]),
     recordAuditLog({

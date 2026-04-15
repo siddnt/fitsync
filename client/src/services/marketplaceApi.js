@@ -38,6 +38,16 @@ export const marketplaceApi = apiSlice.injectEndpoints({
         'Dashboard',
       ],
     }),
+    createMarketplaceCheckoutSession: builder.mutation({
+      query: (payload) => ({
+        url: '/marketplace/checkout/create-session',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
+    getOrderByStripeSession: builder.query({
+      query: (sessionId) => `/marketplace/checkout/order/${sessionId}`,
+    }),
     submitProductReview: builder.mutation({
       query: ({ productId, ...payload }) => ({
         url: `/marketplace/products/${productId}/reviews`,
@@ -66,6 +76,8 @@ export const {
   useGetMarketplaceCatalogQuery,
   useGetMarketplaceProductQuery,
   useCreateMarketplaceOrderMutation,
+  useCreateMarketplaceCheckoutSessionMutation,
+  useGetOrderByStripeSessionQuery,
   useSubmitProductReviewMutation,
   useRequestOrderItemReturnMutation,
 } = marketplaceApi;

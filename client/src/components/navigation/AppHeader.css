@@ -188,6 +188,18 @@
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.app-header__notification-action {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
 .app-header__notification-item-meta {
   align-items: center;
   color: var(--muted-text-color);
@@ -202,6 +214,13 @@
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.app-header__notification-title {
+  color: var(--light-text-color);
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
 }
 
 .app-header__notification-item p {

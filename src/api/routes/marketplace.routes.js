@@ -4,6 +4,9 @@ import {
   listMarketplaceCatalogue,
   getMarketplaceProduct,
   createMarketplaceOrder,
+  createMarketplaceCheckoutSession,
+  getOrderByStripeSession,
+  handleStripeWebhook,
   createMarketplaceProductReview,
   requestMarketplaceReturn,
   listSellerProducts,
@@ -23,6 +26,10 @@ const router = Router();
 router.get('/products', listMarketplaceCatalogue);
 router.get('/products/:productId', getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
+router.post('/checkout/create-session', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceCheckoutSession);
+router.get('/checkout/order/:sessionId', verifyJWT, authorizeRoles('user', 'trainee'), getOrderByStripeSession);
+// Webhook endpoint - must use raw body for Stripe signature verification
+router.post('/webhook/stripe', handleStripeWebhook);
 router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
 router.post('/orders/:orderId/items/:itemId/return', verifyJWT, authorizeRoles('user', 'trainee'), requestMarketplaceReturn);
 
