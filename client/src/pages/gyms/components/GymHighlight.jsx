@@ -5,21 +5,26 @@ import GymMembershipActions from './GymMembershipActions.jsx';
 import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
 import { formatDate } from '../../../utils/format.js';
 
+const parseAmount = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
 const GymHighlight = ({
-  gym,
-  isLoading,
-  membership,
-  isMembershipLoading,
-  canManageMembership,
-  isAuthenticated,
-  onJoin,
-  onLeave,
-  isJoining,
-  isLeaving,
-  actionError,
-  userRole,
-  trainers,
-  userId,
+  gym = null,
+  isLoading = false,
+  membership = null,
+  isMembershipLoading = false,
+  canManageMembership = false,
+  isAuthenticated = false,
+  onJoin = undefined,
+  onLeave = undefined,
+  isJoining = false,
+  isLeaving = false,
+  actionError = null,
+  userRole = null,
+  trainers = [],
+  userId = null,
 }) => {
   const gymId = gym?.id ?? null;
   const [reviewRating, setReviewRating] = useState(5);
@@ -41,8 +46,8 @@ const GymHighlight = ({
         ? gym.reviews
         : [];
     return [...reviewList].sort((a, b) => {
-      const parseDate = (entry) => new Date(entry?.updatedAt ?? entry?.createdAt ?? 0).getTime();
-      return parseDate(b) - parseDate(a);
+      const parseEntryDate = (entry) => new Date(entry?.updatedAt ?? entry?.createdAt ?? 0).getTime();
+      return parseEntryDate(b) - parseEntryDate(a);
     });
   }, [reviewsResponse?.data?.reviews, gym?.reviews]);
 
@@ -129,6 +134,14 @@ const GymHighlight = ({
   }
 
   const isSponsored = gym.sponsorship?.status === 'active' && gym.sponsorship?.tier !== 'none';
+  const currencyPrefix = gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? 'Rs ' : `${gym.pricing.currency} `;
+  const headlinePrice = parseAmount(gym.pricing?.startingAt ?? gym.pricing?.discounted ?? gym.pricing?.mrp);
+  const headlineMrp = parseAmount(
+    gym.pricing?.startingAt !== undefined && gym.pricing?.startingAt !== null
+      ? gym.pricing?.startingAtMrp
+      : gym.pricing?.mrp,
+  );
+  const headlinePlanLabel = gym.pricing?.startingPlanLabel ?? gym.pricing?.defaultPlanLabel ?? null;
 
   return (
     <article className="gym-highlight">
@@ -145,10 +158,17 @@ const GymHighlight = ({
           <p>{gym.location?.address}</p>
         </div>
         <div className="gym-highlight__pricing">
-          <span className="price">₹{gym.pricing?.discounted ?? gym.pricing?.mrp ?? 'N/A'}</span>
-          {gym.pricing?.mrp && gym.pricing?.discounted && (
-            <span className="price--mrp">₹{gym.pricing.mrp}</span>
-          )}
+          <span className="price">
+            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'N/A'}
+          </span>
+          {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
+            <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
+          ) : null}
+          {headlinePlanLabel ? (
+            <small style={{ display: 'block', marginTop: '0.35rem', color: 'var(--muted-text-color)' }}>
+              Starting with {headlinePlanLabel}
+            </small>
+          ) : null}
         </div>
       </header>
 
@@ -164,8 +184,8 @@ const GymHighlight = ({
         error={actionError}
         userRole={userRole}
         trainers={trainers}
-        monthlyFee={gym.pricing?.discounted ?? gym.pricing?.mrp ?? null}
-        currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}
+        pricingPlans={gym.pricing?.plans ?? []}
+        currency={currencyPrefix}
       />
 
       <section className="gym-highlight__meta">
@@ -208,7 +228,7 @@ const GymHighlight = ({
           <h2>Member reviews</h2>
           {gym.analytics?.ratingCount ? (
             <span>
-              {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} · {gym.analytics.ratingCount} ratings
+              {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from {gym.analytics.ratingCount} ratings
             </span>
           ) : (
             <span>Be the first to review this gym</span>
@@ -216,7 +236,7 @@ const GymHighlight = ({
         </div>
 
         <div className="gym-highlight__reviews-list">
-          {isReviewsFetching && !reviews.length ? <p>Loading reviews…</p> : null}
+          {isReviewsFetching && !reviews.length ? <p>Loading reviews...</p> : null}
           {reviews.length ? (
             reviews.slice(0, 3).map((review) => {
               const starCount = Math.round(Number(review.rating) || 0);
@@ -231,7 +251,7 @@ const GymHighlight = ({
                           : null}
                       </small>
                     </div>
-                    <span>{starCount ? '★'.repeat(starCount) : '—'}</span>
+                    <span>{starCount ? `${starCount} / 5` : '-'}</span>
                   </header>
                   <p>{review.comment}</p>
                 </article>
@@ -295,6 +315,19 @@ GymHighlight.propTypes = {
     pricing: PropTypes.shape({
       mrp: PropTypes.number,
       discounted: PropTypes.number,
+      startingAt: PropTypes.number,
+      startingAtMrp: PropTypes.number,
+      startingPlanLabel: PropTypes.string,
+      defaultPlanLabel: PropTypes.string,
+      plans: PropTypes.arrayOf(
+        PropTypes.shape({
+          code: PropTypes.string,
+          label: PropTypes.string,
+          durationMonths: PropTypes.number,
+          mrp: PropTypes.number,
+          price: PropTypes.number,
+        }),
+      ),
     }),
     owner: PropTypes.shape({
       name: PropTypes.string,
@@ -350,23 +383,6 @@ GymHighlight.propTypes = {
     }),
   ),
   userId: PropTypes.string,
-};
-
-GymHighlight.defaultProps = {
-  gym: null,
-  isLoading: false,
-  membership: null,
-  isMembershipLoading: false,
-  canManageMembership: false,
-  isAuthenticated: false,
-  onJoin: undefined,
-  onLeave: undefined,
-  isJoining: false,
-  isLeaving: false,
-  actionError: null,
-  userRole: null,
-  trainers: [],
-  userId: null,
 };
 
 export default GymHighlight;

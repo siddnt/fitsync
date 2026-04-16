@@ -1,0 +1,634 @@
+.admin-gym-details {
+  --gym-accent: #f97316;
+  --gym-accent-soft: rgba(249, 115, 22, 0.16);
+  --gym-accent-secondary: #2dd4bf;
+  --gym-accent-secondary-soft: rgba(45, 212, 191, 0.15);
+  --gym-accent-tertiary: #38bdf8;
+  --gym-surface: rgba(255, 255, 255, 0.035);
+  gap: 1.25rem;
+}
+
+.admin-gym-details__section {
+  background:
+    linear-gradient(180deg, rgba(16, 18, 24, 0.98), rgba(9, 11, 16, 0.98)),
+    var(--surface-elevated-color, var(--bg-secondary));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+  position: relative;
+}
+
+.admin-gym-details__section::after {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent 36%);
+  content: '';
+  height: 1px;
+  left: 2rem;
+  position: absolute;
+  right: 2rem;
+  top: 4.95rem;
+}
+
+.admin-gym-details__section::before {
+  border-radius: 999px;
+  content: '';
+  height: 18rem;
+  opacity: 0.9;
+  pointer-events: none;
+  position: absolute;
+  width: 18rem;
+  z-index: 0;
+}
+
+.admin-gym-details__overview-section::before {
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.22), transparent 70%);
+  right: -5rem;
+  top: -7rem;
+}
+
+.admin-gym-details__revenue-section::before {
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.18), transparent 70%);
+  right: -4rem;
+  top: -7rem;
+}
+
+.admin-gym-details__history-section::before {
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.12), transparent 70%);
+  left: -5rem;
+  top: -7rem;
+}
+
+.admin-gym-details__media-section::before {
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.13), transparent 70%);
+  left: -4rem;
+  top: -7rem;
+}
+
+.admin-gym-details__explorer-section::before {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+  left: -5rem;
+  top: -7rem;
+}
+
+.admin-gym-details__section > header,
+.admin-gym-details__section > .dashboard-section__body {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-gym-details__section > header {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+.admin-gym-details__section > header h2 {
+  color: var(--muted-text-color);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.admin-gym-details__header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.admin-gym-details__timestamp {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--muted-text-color);
+  display: inline-flex;
+  font-size: 0.78rem;
+  padding: 0.6rem 0.9rem;
+}
+
+.admin-gym-details__action-button {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: var(--text-color);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.92rem;
+  font-weight: 600;
+  justify-content: center;
+  padding: 0.7rem 1.1rem;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-gym-details__action-button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+
+.admin-gym-details__action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.admin-gym-details__action-button--secondary {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-gym-details__action-button--danger {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.12));
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #fecaca;
+}
+
+.admin-gym-details__notice {
+  margin-bottom: 1.1rem;
+}
+
+.admin-gym-details__hero {
+  display: grid;
+  gap: 1.15rem;
+  grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 0.9fr);
+  margin-bottom: 1.5rem;
+}
+
+.admin-gym-details__hero-main,
+.admin-gym-details__hero-aside,
+.admin-gym-details__explorer-toolbar,
+.admin-gym-details__table-wrap,
+.admin-gym-details__chart-shell {
+  backdrop-filter: blur(12px);
+}
+
+.admin-gym-details__hero-main,
+.admin-gym-details__hero-aside {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+}
+
+.admin-gym-details__hero-main {
+  align-items: flex-start;
+  display: flex;
+  gap: 1.1rem;
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.admin-gym-details__hero-copy {
+  min-width: 0;
+}
+
+.admin-gym-details__avatar {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.28), transparent 45%),
+    linear-gradient(135deg, rgba(249, 115, 22, 0.92), rgba(45, 212, 191, 0.78));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 26px;
+  box-shadow: 0 20px 45px rgba(249, 115, 22, 0.2);
+  color: #fff;
+  flex-shrink: 0;
+  font-size: 2rem;
+  height: 5.5rem;
+  width: 5.5rem;
+}
+
+.admin-gym-details__eyebrow {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.admin-gym-details__title {
+  color: var(--text-color);
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.05;
+  margin: 0;
+}
+
+.admin-gym-details__location {
+  color: #cbd5e1;
+  font-size: 0.96rem;
+  margin: 0.45rem 0 0;
+}
+
+.admin-gym-details__description {
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.7;
+  margin: 1rem 0 1.15rem;
+  max-width: 64ch;
+}
+
+.admin-gym-details__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.admin-gym-details__status-row .status-pill {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-gym-details__hero-aside,
+.admin-gym-details__explorer-summary {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.admin-gym-details__hero-aside {
+  padding: 1rem;
+}
+
+.admin-gym-details__info-tile {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  min-width: 0;
+  padding: 1rem 1.05rem;
+}
+
+.admin-gym-details__info-label {
+  color: var(--muted-text-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+}
+
+.admin-gym-details__info-value {
+  color: var(--text-color);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.admin-gym-details__info-meta {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin-top: 0.3rem;
+}
+
+.admin-gym-details__mono-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  opacity: 0.82;
+}
+
+.admin-gym-details__metric-grid {
+  margin-bottom: 1.5rem;
+}
+
+.admin-gym-details__metric-grid .stat-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  border-color: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+.admin-gym-details__metric-grid .stat-card::before {
+  content: '';
+  height: 3px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.admin-gym-details__metric-grid .stat-card:nth-child(4n + 1)::before {
+  background: linear-gradient(90deg, #f97316, #fb7185);
+}
+
+.admin-gym-details__metric-grid .stat-card:nth-child(4n + 2)::before {
+  background: linear-gradient(90deg, #2dd4bf, #38bdf8);
+}
+
+.admin-gym-details__metric-grid .stat-card:nth-child(4n + 3)::before {
+  background: linear-gradient(90deg, #22c55e, #14b8a6);
+}
+
+.admin-gym-details__metric-grid .stat-card:nth-child(4n + 4)::before {
+  background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.admin-gym-details__metric-grid--compact .stat-card strong {
+  font-size: 1.45rem;
+}
+
+.admin-gym-details__details-grid {
+  margin-bottom: 0;
+  margin-top: 0;
+}
+
+.admin-gym-details__details-grid--tight {
+  margin-bottom: 1.35rem;
+}
+
+.admin-gym-details .detail-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.admin-gym-details .detail-card h4 {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.admin-gym-details .detail-row {
+  gap: 1rem;
+}
+
+.admin-gym-details .detail-label {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-gym-details .detail-value {
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 62%;
+}
+
+.admin-gym-details__detail-card--wide {
+  grid-column: span 2;
+}
+
+.admin-gym-details__attribute-stack {
+  display: grid;
+  gap: 0.95rem;
+  margin-top: 1.2rem;
+}
+
+.admin-gym-details__attribute-group {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.admin-gym-details__attribute-label {
+  color: var(--muted-text-color);
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-gym-details__attribute-values {
+  margin-bottom: 0;
+}
+
+.admin-gym-details__attribute-values .pill {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.admin-gym-details__attribute-empty,
+.admin-gym-details__section-note,
+.admin-gym-details__section-heading p,
+.admin-gym-details__media-card-url {
+  color: var(--muted-text-color);
+}
+
+.admin-gym-details__discovery-copy {
+  color: rgba(255, 255, 255, 0.83);
+  line-height: 1.7;
+}
+
+.admin-gym-details__section-heading {
+  margin: 1.8rem 0 0.9rem;
+}
+
+.admin-gym-details__section-heading h4 {
+  color: var(--text-color);
+  margin: 0 0 0.35rem;
+}
+
+.admin-gym-details__section-heading p,
+.admin-gym-details__section-note {
+  line-height: 1.65;
+  margin: 0;
+}
+
+.admin-gym-details__table-block + .admin-gym-details__table-block {
+  margin-top: 0.5rem;
+}
+
+.admin-gym-details__table-wrap {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  margin-top: 0.9rem;
+  overflow-x: auto;
+}
+
+.admin-gym-details__table-wrap .dashboard-table {
+  min-width: 760px;
+}
+
+.admin-gym-details__table-wrap .dashboard-table th {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.admin-gym-details__table-wrap .dashboard-table td {
+  vertical-align: top;
+}
+
+.admin-gym-details__chart-shell {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  margin-top: 0.3rem;
+  padding: 1.1rem 1.2rem 0.6rem;
+}
+
+.admin-gym-details__media-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-gym-details__media-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  color: inherit;
+  display: block;
+  overflow: hidden;
+  text-decoration: none;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.admin-gym-details__media-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.2);
+  transform: translateY(-4px);
+}
+
+.admin-gym-details__media-card img {
+  aspect-ratio: 4 / 3;
+  background: rgba(255, 255, 255, 0.04);
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.admin-gym-details__media-card-body {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem 1.1rem;
+}
+
+.admin-gym-details__media-card-title {
+  color: var(--text-color);
+  display: block;
+}
+
+.admin-gym-details__media-card-url {
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.admin-gym-details__explorer-header {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.9fr);
+  margin-bottom: 1rem;
+}
+
+.admin-gym-details__explorer-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-gym-details__explorer-toolbar {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.admin-gym-details__explorer-filters {
+  flex-wrap: wrap;
+}
+
+.admin-gym-details__explorer-search {
+  flex: 1 1 320px;
+  max-width: 420px;
+  min-width: 260px;
+}
+
+.admin-gym-details a {
+  color: #7dd3fc;
+}
+
+.admin-gym-details a:hover {
+  color: #bae6fd;
+}
+
+@media (max-width: 1100px) {
+  .admin-gym-details__hero,
+  .admin-gym-details__explorer-header {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-gym-details__detail-card--wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-gym-details__section {
+    padding: 1.35rem;
+  }
+
+  .admin-gym-details__section::after {
+    left: 1.35rem;
+    right: 1.35rem;
+    top: 4.4rem;
+  }
+
+  .admin-gym-details__hero-main {
+    flex-direction: column;
+  }
+
+  .admin-gym-details__avatar {
+    height: 4.8rem;
+    width: 4.8rem;
+  }
+
+  .admin-gym-details__header-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-gym-details__action-button {
+    flex: 1 1 10rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .admin-gym-details .detail-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-gym-details .detail-value {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .admin-gym-details__explorer-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-gym-details__explorer-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-gym-details__explorer-search {
+    max-width: none;
+    min-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-gym-details__section {
+    padding: 1.1rem;
+  }
+
+  .admin-gym-details__section::after {
+    left: 1.1rem;
+    right: 1.1rem;
+  }
+
+  .admin-gym-details__title {
+    font-size: 1.55rem;
+  }
+
+  .admin-gym-details__explorer-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-gym-details__table-wrap .dashboard-table {
+    min-width: 640px;
+  }
+}

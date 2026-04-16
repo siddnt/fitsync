@@ -15,7 +15,7 @@ import {
   shouldBypassCache,
 } from '../../services/cache.service.js';
 import { syncGymAnalyticsSnapshot } from '../../services/gymMetrics.service.js';
-import { queueGymImpression } from '../../services/gymImpression.service.js';
+import { registerGymImpression, registerGymOpen } from '../../services/gymImpression.service.js';
 import { enqueueOutboxEvents } from '../../services/outbox.service.js';
 import {
   searchGymIndex,
@@ -26,6 +26,11 @@ import {
   buildCursorSortStage,
   encodeCursorToken,
 } from '../../utils/cursorPagination.js';
+import {
+  buildGymPricingSnapshot,
+  getDefaultDisplayMembershipPlan,
+  getLowestPricedMembershipPlan,
+} from '../../utils/membershipPlans.js';
 
 const GYM_PUBLIC_SELECT = [
   'name',
@@ -186,6 +191,48 @@ const mapReview = (review) => ({
   updatedAt: review.updatedAt,
 });
 
+const buildInternalReference = ({ prefix, gymId, ownerId, planCode }) => {
+  const normalizedPrefix = String(prefix || 'PAY').trim().toUpperCase();
+  const normalizedPlan = String(planCode || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const timeToken = Date.now().toString().slice(-8);
+  const shortGymId = String(gymId || '').slice(-4).toUpperCase();
+  const shortOwnerId = String(ownerId || '').slice(-4).toUpperCase();
+
+  return [normalizedPrefix, normalizedPlan || 'PLAN', timeToken, shortGymId, shortOwnerId]
+    .filter(Boolean)
+    .join('-');
+};
+
+const mapGymPricing = (pricing = {}) => {
+  const snapshot = buildGymPricingSnapshot(pricing);
+  const membershipPlans = snapshot.membershipPlans ?? [];
+  const defaultPlan = getDefaultDisplayMembershipPlan(membershipPlans);
+  const startingPlan = getLowestPricedMembershipPlan(membershipPlans) || defaultPlan;
+
+  return {
+    mrp: defaultPlan?.mrp ?? snapshot.monthlyMrp,
+    discounted: defaultPlan?.price ?? snapshot.monthlyPrice,
+    monthlyMrp: snapshot.monthlyMrp,
+    monthlyPrice: snapshot.monthlyPrice,
+    currency: snapshot.currency ?? 'INR',
+    plans: membershipPlans.map((plan) => ({
+      code: plan.code,
+      label: plan.label,
+      durationMonths: plan.durationMonths,
+      mrp: plan.mrp,
+      price: plan.price,
+      currency: plan.currency,
+      isActive: plan.isActive !== false,
+    })),
+    defaultPlanCode: defaultPlan?.code ?? null,
+    defaultPlanLabel: defaultPlan?.label ?? null,
+    startingAt: startingPlan?.price ?? null,
+    startingAtMrp: startingPlan?.mrp ?? null,
+    startingPlanCode: startingPlan?.code ?? null,
+    startingPlanLabel: startingPlan?.label ?? null,
+  };
+};
+
 const fetchGymReviews = async (gymId, limit = 12) => {
   const reviews = await Review.find({ gym: gymId })
     .select('rating comment user createdAt updatedAt')
@@ -217,13 +264,7 @@ const mapGym = (gym) => ({
     city: gym.location?.city,
     state: gym.location?.state,
   },
-  pricing: {
-    mrp: gym.pricing?.monthlyMrp,
-    discounted: gym.pricing?.monthlyPrice,
-    monthlyMrp: gym.pricing?.monthlyMrp,
-    monthlyPrice: gym.pricing?.monthlyPrice,
-    currency: gym.pricing?.currency ?? 'INR',
-  },
+  pricing: mapGymPricing(gym.pricing),
   contact: gym.contact,
   schedule: {
     open: gym.schedule?.openTime,
@@ -639,7 +680,24 @@ export const recordImpression = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Gym not found');
   }
 
-  await queueGymImpression(gymId);
+  await registerGymImpression({ gymId, req });
+
+  return res.status(204).send();
+});
+
+export const recordGymOpen = asyncHandler(async (req, res) => {
+  const { gymId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(gymId)) {
+    throw new ApiError(400, 'Invalid gym id');
+  }
+
+  const gymExists = await Gym.exists({ _id: gymId });
+  if (!gymExists) {
+    throw new ApiError(404, 'Gym not found');
+  }
+
+  await registerGymOpen({ gymId, req });
 
   return res.status(204).send();
 });
@@ -663,17 +721,16 @@ export const createGym = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Gym name and city are required');
   }
 
+  const normalizedPricing = buildGymPricingSnapshot(pricing ?? {});
+  if (!normalizedPricing.membershipPlans.length) {
+    throw new ApiError(400, 'Configure at least one membership plan before creating a gym.');
+  }
+
   const planCode = subscription?.planCode ?? req.body?.planCode;
-  const paymentReference = subscription?.paymentReference ?? req.body?.paymentReference;
-  const autoRenew = subscription?.autoRenew ?? req.body?.autoRenew ?? false;
   const plan = resolveListingPlan(planCode);
 
   if (!plan) {
     throw new ApiError(400, 'Select a valid listing plan to register your gym.');
-  }
-
-  if (!paymentReference) {
-    throw new ApiError(400, 'Payment reference is required to activate the listing.');
   }
 
   const sanitizedLocation = normalizeLocationInput(location) ?? {};
@@ -694,7 +751,7 @@ export const createGym = asyncHandler(async (req, res) => {
           keyFeatures,
           amenities,
           location: sanitizedLocation,
-          pricing,
+          pricing: normalizedPricing,
           contact,
           schedule,
           gallery,
@@ -706,6 +763,13 @@ export const createGym = asyncHandler(async (req, res) => {
         },
       ], { session });
 
+      const paymentReference = buildInternalReference({
+        prefix: 'SUB',
+        gymId: gym._id,
+        ownerId: req.user._id,
+        planCode: plan.planCode,
+      });
+
       await GymListingSubscription.create([
         {
           gym: gym._id,
@@ -716,7 +780,7 @@ export const createGym = asyncHandler(async (req, res) => {
           periodStart: now,
           periodEnd,
           status: 'active',
-          autoRenew: Boolean(autoRenew),
+          autoRenew: false,
           invoices: [
             {
               amount: plan.amount,
@@ -729,6 +793,7 @@ export const createGym = asyncHandler(async (req, res) => {
           metadata: new Map([
             ['planLabel', plan.label],
             ['durationMonths', String(plan.durationMonths)],
+            ['paymentReference', paymentReference],
           ]),
           createdBy: req.user._id,
         },
@@ -796,7 +861,13 @@ export const updateGym = asyncHandler(async (req, res) => {
   if (description !== undefined) gym.description = description;
   if (keyFeatures !== undefined) gym.keyFeatures = keyFeatures;
   if (amenities !== undefined) gym.amenities = amenities;
-  if (pricing !== undefined) gym.pricing = pricing;
+  if (pricing !== undefined) {
+    const normalizedPricing = buildGymPricingSnapshot(pricing ?? {});
+    if (!normalizedPricing.membershipPlans.length) {
+      throw new ApiError(400, 'Configure at least one membership plan before saving the gym.');
+    }
+    gym.pricing = normalizedPricing;
+  }
   if (contact !== undefined) gym.contact = contact;
   if (schedule !== undefined) gym.schedule = schedule;
   if (gallery !== undefined) gym.gallery = gallery;

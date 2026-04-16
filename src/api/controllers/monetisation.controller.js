@@ -54,8 +54,20 @@ const recordRevenue = async ({ amount, user, type, description, metadata }) => {
   });
 };
 
+const buildInternalReference = ({ prefix, gymId, ownerId, planCode }) => {
+  const normalizedPrefix = String(prefix || 'PAY').trim().toUpperCase();
+  const normalizedPlan = String(planCode || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+  const timeToken = Date.now().toString().slice(-8);
+  const shortGymId = String(gymId || '').slice(-4).toUpperCase();
+  const shortOwnerId = String(ownerId || '').slice(-4).toUpperCase();
+
+  return [normalizedPrefix, normalizedPlan || 'PLAN', timeToken, shortGymId, shortOwnerId]
+    .filter(Boolean)
+    .join('-');
+};
+
 export const checkoutListingSubscription = asyncHandler(async (req, res) => {
-  const { gymId: gymIdRaw, planCode, autoRenew = true, paymentReference } = req.body ?? {};
+  const { gymId: gymIdRaw, planCode } = req.body ?? {};
 
   const plan = resolveListingPlan(planCode);
   if (!plan) {
@@ -70,6 +82,12 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
   const now = new Date();
   const periodEnd = new Date(now);
   periodEnd.setMonth(periodEnd.getMonth() + plan.durationMonths);
+  const paymentReference = buildInternalReference({
+    prefix: 'SUB',
+    gymId,
+    ownerId: gym.owner,
+    planCode: plan.planCode,
+  });
 
   const subscription = await GymListingSubscription.create({
     gym: gymId,
@@ -80,7 +98,7 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
     periodStart: now,
     periodEnd,
     status: 'active',
-    autoRenew,
+    autoRenew: false,
     invoices: [
       {
         amount: plan.amount,
@@ -105,6 +123,7 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
     metadata: new Map([
       ['gymId', String(gymId)],
       ['planCode', plan.planCode],
+      ['paymentReference', paymentReference],
     ]),
   });
 
@@ -118,7 +137,7 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
 });
 
 export const purchaseSponsorship = asyncHandler(async (req, res) => {
-  const { gymId: gymIdRaw, tier, paymentReference } = req.body ?? {};
+  const { gymId: gymIdRaw, tier } = req.body ?? {};
   const packageDetails = resolveSponsorshipPackage(tier);
 
   if (!packageDetails) {
@@ -131,14 +150,24 @@ export const purchaseSponsorship = asyncHandler(async (req, res) => {
   const now = new Date();
   const endDate = new Date(now);
   endDate.setMonth(endDate.getMonth() + packageDetails.durationMonths);
+  const paymentReference = buildInternalReference({
+    prefix: 'SPN',
+    gymId,
+    ownerId: gym.owner,
+    planCode: packageDetails.tier,
+  });
 
   gym.sponsorship = {
     tier: packageDetails.tier,
+    package: packageDetails.label,
+    label: packageDetails.label,
     status: 'active',
     startDate: now,
     endDate,
+    expiresAt: endDate,
     amount: packageDetails.amount,
     monthlyBudget: packageDetails.monthlyBudget,
+    reach: packageDetails.reach,
   };
 
   gym.lastUpdatedBy = req.user._id;
@@ -171,6 +200,7 @@ export const purchaseSponsorship = asyncHandler(async (req, res) => {
             amount: packageDetails.amount,
             monthlyBudget: packageDetails.monthlyBudget,
             reach: packageDetails.reach,
+            paymentReference,
           },
         },
         'Sponsorship activated successfully.',

@@ -65,15 +65,15 @@ const renderImageField = ({
 
 const SellerProductFormComponent = ({
   handleSubmit,
-  submitting,
+  submitting = false,
   onCancel,
-  isEditing,
-  error,
-  submitSucceeded,
-  initialValues,
+  isEditing = false,
+  error = null,
+  submitSucceeded = false,
+  initialValues = null,
   onImageSelect,
-  selectedFile,
-  previewUrl,
+  selectedFile = null,
+  previewUrl = null,
 }) => (
   <form className="dashboard-form" onSubmit={handleSubmit}>
     <div className="form-grid">
@@ -208,16 +208,6 @@ SellerProductFormComponent.propTypes = {
   onImageSelect: PropTypes.func.isRequired,
   selectedFile: filePropType,
   previewUrl: PropTypes.string,
-};
-
-SellerProductFormComponent.defaultProps = {
-  submitting: false,
-  isEditing: false,
-  error: null,
-  submitSucceeded: false,
-  initialValues: null,
-  selectedFile: null,
-  previewUrl: null,
 };
 
 const SellerProductForm = reduxForm({

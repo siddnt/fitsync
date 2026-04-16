@@ -14,7 +14,10 @@ import {
 } from '../../../services/ownerApi.js';
 import GymEditForm from '../../../features/gyms/GymEditForm.jsx';
 import GymCreateForm from '../../../features/gyms/GymCreateForm.jsx';
-import { transformGymPayload } from '../../../features/gyms/helpers.js';
+import {
+  buildMembershipPlanFormValues,
+  transformGymPayload,
+} from '../../../features/gyms/helpers.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
@@ -108,8 +111,7 @@ const GymOwnerGymsPage = () => {
         state: details.location?.state ?? '',
       },
       pricing: {
-        mrp: details.pricing?.monthlyMrp ?? details.pricing?.mrp ?? '',
-        discounted: details.pricing?.monthlyPrice ?? details.pricing?.discounted ?? '',
+        plans: buildMembershipPlanFormValues(details.pricing),
       },
       contact: {
         phone: details.contact?.phone ?? '',
@@ -241,15 +243,11 @@ const GymOwnerGymsPage = () => {
     try {
       const payload = transformGymPayload(values);
       const planCode = values.planCode;
-      const paymentReference = values.paymentReference;
-      const autoRenew = Boolean(values.autoRenew);
 
       const response = await createGym({
         ...payload,
         subscription: {
           planCode,
-          paymentReference,
-          autoRenew,
         },
       }).unwrap();
 

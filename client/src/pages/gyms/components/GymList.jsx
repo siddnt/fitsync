@@ -1,7 +1,12 @@
 import PropTypes from 'prop-types';
 import SkeletonList from '../../../ui/SkeletonList.jsx';
 
-const GymList = ({ gyms, isLoading, selectedGymId, onSelect }) => {
+const GymList = ({
+  gyms = [],
+  isLoading = false,
+  selectedGymId = null,
+  onSelect,
+}) => {
   if (isLoading) {
     return <SkeletonList rows={6} />;
   }
@@ -58,12 +63,6 @@ GymList.propTypes = {
   isLoading: PropTypes.bool,
   selectedGymId: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
-};
-
-GymList.defaultProps = {
-  gyms: [],
-  isLoading: false,
-  selectedGymId: null,
 };
 
 export default GymList;

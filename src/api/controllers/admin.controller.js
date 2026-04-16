@@ -5,6 +5,7 @@ import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
+import Booking from '../../models/booking.model.js';
 import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import {
@@ -62,6 +63,7 @@ const deactivateGymsForOwner = async (ownerId) => {
       { gym: { $in: gymIds }, status: { $in: ['active', 'grace'] } },
       { $set: { status: 'cancelled', autoRenew: false } },
     ),
+    Booking.deleteMany({ gym: { $in: gymIds } }),
     TrainerAssignment.deleteMany({ gym: { $in: gymIds } }),
     TrainerProgress.deleteMany({ gym: { $in: gymIds } }),
     GymMembership.updateMany({ gym: { $in: gymIds } }, { $set: { status: 'cancelled' } }),
@@ -93,6 +95,7 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
   const cleanupTasks = [
     cancelMembershipsForUser(targetUserId),
     cleanOrdersForUser(targetUserId),
+    Booking.deleteMany({ $or: [{ user: targetUserId }, { trainer: targetUserId }] }),
     TrainerAssignment.updateMany({}, { $pull: { trainees: { trainee: targetUserId } } }),
     TrainerProgress.deleteMany({ trainee: targetUserId }),
   ];
@@ -108,7 +111,12 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
     const affectedGymIds = await deactivateGymsForOwner(targetUserId);
     if (affectedGymIds.length) {
       cleanupTasks.push(
-        Revenue.deleteMany({ 'metadata.gym': { $in: affectedGymIds.map((id) => id.toString()) } }),
+        Revenue.deleteMany({
+          $or: [
+            { 'metadata.gym': { $in: affectedGymIds.map((id) => id.toString()) } },
+            { 'metadata.gymId': { $in: affectedGymIds.map((id) => id.toString()) } },
+          ],
+        }),
       );
       cleanupTasks.push(invalidateGymReadCaches(affectedGymIds));
     }
@@ -186,8 +194,14 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
     TrainerAssignment.deleteMany({ gym: gymId }),
     TrainerProgress.deleteMany({ gym: gymId }),
     GymMembership.updateMany({ gym: gymId }, { $set: { status: 'cancelled' } }),
+    Booking.deleteMany({ gym: gymId }),
     GymListingSubscription.deleteMany({ gym: gymId }),
-    Revenue.deleteMany({ 'metadata.gym': gymId.toString() }),
+    Revenue.deleteMany({
+      $or: [
+        { 'metadata.gym': gymId.toString() },
+        { 'metadata.gymId': gymId.toString() },
+      ],
+    }),
   ];
 
   await Promise.all(cleanupTasks);
@@ -236,12 +250,13 @@ export const updateAdminToggles = asyncHandler(async (req, res) => {
 });
 
 export const getAuditHistory = asyncHandler(async (req, res) => {
-  const { entityType, entityId, actor, action, limit } = req.query ?? {};
+  const { entityType, entityId, actor, action, search, limit } = req.query ?? {};
   const logs = await listAuditLogs({
     entityType,
     entityId,
     actor,
     action,
+    search,
     limit: Math.min(Math.max(Number(limit) || 50, 1), 200),
   });
 

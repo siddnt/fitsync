@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import './DashboardSection.css';
 
-const DashboardSection = ({ title, action, children, className }) => {
+const DashboardSection = ({ title, action = null, children = null, className = '' }) => {
   const sectionClassName = className ? `dashboard-section ${className}` : 'dashboard-section';
 
   return (
@@ -20,12 +20,6 @@ DashboardSection.propTypes = {
   action: PropTypes.node,
   children: PropTypes.node,
   className: PropTypes.string,
-};
-
-DashboardSection.defaultProps = {
-  action: null,
-  children: null,
-  className: '',
 };
 
 export default DashboardSection;

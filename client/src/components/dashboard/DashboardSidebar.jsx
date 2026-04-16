@@ -5,6 +5,7 @@ import './DashboardSidebar.css';
 const dashboardLinksByRole = {
   trainee: [
     { to: '/dashboard/trainee', label: 'Overview' },
+    { to: '/dashboard/trainee/sessions', label: 'Sessions' },
     { to: '/dashboard/trainee/progress', label: 'Progress' },
     { to: '/dashboard/trainee/diet', label: 'Diet Plan' },
     { to: '/dashboard/trainee/orders', label: 'Orders' },

@@ -1,5 +1,43 @@
 import mongoose from "mongoose";
 
+const membershipPlanSchema = new mongoose.Schema(
+    {
+        code: {
+            type: String,
+            enum: ["monthly", "quarterly", "half-yearly", "yearly"],
+            required: true,
+            trim: true
+        },
+        label: {
+            type: String,
+            trim: true
+        },
+        durationMonths: {
+            type: Number,
+            min: 1
+        },
+        mrp: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        price: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        currency: {
+            type: String,
+            default: "INR"
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        }
+    },
+    { _id: false }
+);
+
 const pricingSchema = new mongoose.Schema(
     {
         monthlyMrp: {
@@ -15,6 +53,10 @@ const pricingSchema = new mongoose.Schema(
         currency: {
             type: String,
             default: "INR"
+        },
+        membershipPlans: {
+            type: [membershipPlanSchema],
+            default: []
         }
     },
     { _id: false }
@@ -69,6 +111,11 @@ const analyticsSchema = new mongoose.Schema(
             type: Number,
             default: 0
         },
+        opens: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         memberships: {
             type: Number,
             default: 0,
@@ -88,6 +135,7 @@ const analyticsSchema = new mongoose.Schema(
             default: 0
         },
         lastImpressionAt: Date,
+        lastOpenAt: Date,
         lastReviewAt: Date
     },
     { _id: false }
@@ -95,13 +143,41 @@ const analyticsSchema = new mongoose.Schema(
 
 const sponsorshipSchema = new mongoose.Schema(
     {
+        tier: {
+            type: String,
+            enum: ["none", "silver", "gold", "platinum"],
+            default: "none"
+        },
         status: {
             type: String,
             enum: ["none", "active", "expired"],
             default: "none"
         },
+        startDate: Date,
+        endDate: Date,
         expiresAt: Date,
-        package: String
+        package: String,
+        label: String,
+        amount: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        monthlyBudget: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        reach: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        notes: {
+            type: String,
+            trim: true,
+            default: ""
+        }
     },
     { _id: false }
 );
@@ -155,12 +231,6 @@ const gymSchema = new mongoose.Schema(
             required: true
         },
         trainers: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "User"
-            }
-        ],
-        managers: [
             {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: "User"

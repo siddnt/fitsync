@@ -4,7 +4,9 @@ import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import DistributionPieChart from '../components/DistributionPieChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import { useAppSelector } from '../../../app/hooks.js';
 import { useGetAdminRevenueQuery, useGetAdminOverviewQuery } from '../../../services/dashboardApi.js';
+import { downloadReport } from '../../../utils/reportDownload.js';
 import { formatCurrency, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
@@ -21,6 +23,11 @@ const AdminRevenuePage = () => {
     sponsorship: true,
     marketplace: true,
   });
+  const [reportFormat, setReportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
+  const [reportNotice, setReportNotice] = useState(null);
+  const [reportError, setReportError] = useState(null);
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   const { data: revenueResponse, isLoading, isError, refetch } = useGetAdminRevenueQuery();
   const { data: overviewResponse } = useGetAdminOverviewQuery();
@@ -106,6 +113,26 @@ const AdminRevenuePage = () => {
 
   const totalRevenueValue = totals.listing + totals.sponsorship + totals.marketplace;
 
+  const handleExportRevenue = async () => {
+    setReportNotice(null);
+    setReportError(null);
+    setIsExporting(true);
+
+    try {
+      await downloadReport({
+        path: '/dashboards/admin/revenue/export',
+        token: accessToken,
+        format: reportFormat,
+        fallbackFilename: `admin-revenue-report.${reportFormat}`,
+      });
+      setReportNotice(`Revenue report exported as ${reportFormat.toUpperCase()}.`);
+    } catch (error) {
+      setReportError(error.message || 'Unable to export revenue report.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--admin">
@@ -143,6 +170,8 @@ const AdminRevenuePage = () => {
         title="Revenue Overview" 
         className="dashboard-section--span-12"
       >
+        {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
+        {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
         <div className="stat-grid">
           <div className="stat-card">
             <small>Total revenue</small>
@@ -196,6 +225,23 @@ const AdminRevenuePage = () => {
                 </label>
               ))}
             </div>
+            <select
+              className="dashboard-select"
+              value={reportFormat}
+              onChange={(event) => setReportFormat(event.target.value)}
+              aria-label="Revenue report format"
+            >
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button
+              type="button"
+              className="users-toolbar__refresh"
+              disabled={isExporting}
+              onClick={handleExportRevenue}
+            >
+              {isExporting ? 'Exporting...' : 'Export report'}
+            </button>
           </div>
         )}
       >

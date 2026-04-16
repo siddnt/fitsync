@@ -44,7 +44,7 @@ const gymListingSubscriptionSchema = new mongoose.Schema(
       enum: ['active', 'grace', 'expired', 'cancelled'],
       default: 'active',
     },
-    autoRenew: { type: Boolean, default: true },
+    autoRenew: { type: Boolean, default: false },
     invoices: [invoiceSchema],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -3,9 +3,16 @@ import { Field, reduxForm } from 'redux-form';
 import FormField from '../../components/forms/FormField.jsx';
 import ChipMultiSelect from '../../components/forms/ChipMultiSelect.jsx';
 import { AMENITY_OPTIONS } from '../../constants/amenities.js';
+import { validateMembershipPricingValues } from './helpers.js';
+import MembershipPricingSection from './MembershipPricingSection.jsx';
 import './GymForms.css';
 
-const GymEditFormComponent = ({ handleSubmit, submitting, onCancel, error }) => (
+const GymEditFormComponent = ({
+  handleSubmit,
+  submitting = false,
+  onCancel,
+  error = null,
+}) => (
   <form className="gym-form" onSubmit={handleSubmit}>
     <section className="gym-form__section">
       <div className="gym-form__section-header">
@@ -21,25 +28,10 @@ const GymEditFormComponent = ({ handleSubmit, submitting, onCancel, error }) => 
       </div>
     </section>
 
-    <section className="gym-form__section">
-      <div className="gym-form__section-header">
-        <div>
-          <p className="gym-form__section-title">Pricing</p>
-          <p className="gym-form__section-hint">Keep memberships transparent for members.</p>
-        </div>
-      </div>
-      <div className="gym-form__section-fields">
-        <Field name="pricing.mrp" component={FormField} label="MRP (₹)" type="number" min="0" step="1" />
-        <Field
-          name="pricing.discounted"
-          component={FormField}
-          label="Discounted price (₹)"
-          type="number"
-          min="0"
-          step="1"
-        />
-      </div>
-    </section>
+    <MembershipPricingSection
+      hint="Keep memberships transparent with the exact plans buyers can choose."
+      note="At least one membership plan must stay active."
+    />
 
     <section className="gym-form__section">
       <div className="gym-form__section-header">
@@ -110,7 +102,7 @@ const GymEditFormComponent = ({ handleSubmit, submitting, onCancel, error }) => 
         Cancel
       </button>
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Saving…' : 'Save changes'}
+        {submitting ? 'Saving...' : 'Save changes'}
       </button>
     </div>
   </form>
@@ -123,32 +115,12 @@ GymEditFormComponent.propTypes = {
   error: PropTypes.string,
 };
 
-GymEditFormComponent.defaultProps = {
-  submitting: false,
-  error: null,
-};
-
 const validate = (values) => {
   const errors = {};
+  const pricingErrors = validateMembershipPricingValues(values.pricing, { requireAtLeastOne: true });
 
-  const mrpInput = values.pricing?.mrp;
-  const mrpProvided = mrpInput !== undefined && mrpInput !== null && mrpInput !== '';
-  const mrpValue = mrpProvided ? Number(mrpInput) : undefined;
-  if (mrpProvided) {
-    if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
-      errors.pricing = { ...(errors.pricing ?? {}), mrp: 'Enter a valid monthly price' };
-    }
-  }
-
-  const discountedInput = values.pricing?.discounted;
-  const discountedProvided = discountedInput !== undefined && discountedInput !== null && discountedInput !== '';
-  if (discountedProvided) {
-    const discountedValue = Number(discountedInput);
-    if (!Number.isFinite(discountedValue) || discountedValue < 0) {
-      errors.pricing = { ...(errors.pricing ?? {}), discounted: 'Enter a valid discounted price' };
-    } else if (mrpProvided && Number.isFinite(mrpValue) && discountedValue > mrpValue) {
-      errors.pricing = { ...(errors.pricing ?? {}), discounted: 'Discounted price cannot exceed the MRP' };
-    }
+  if (pricingErrors) {
+    errors.pricing = pricingErrors;
   }
 
   return errors;

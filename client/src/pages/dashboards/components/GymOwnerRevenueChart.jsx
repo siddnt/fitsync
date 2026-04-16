@@ -31,7 +31,7 @@ const compactCurrencyFormatter = new Intl.NumberFormat('en-IN', {
 const formatFullCurrency = (value) => fullCurrencyFormatter.format(Math.round(Number(value) || 0));
 const formatCompactCurrency = (value) => compactCurrencyFormatter.format(Math.round(Number(value) || 0));
 
-const RevenueTooltip = ({ active, payload }) => {
+const RevenueTooltip = ({ active = false, payload = null }) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -54,11 +54,6 @@ const RevenueTooltip = ({ active, payload }) => {
 RevenueTooltip.propTypes = {
   active: PropTypes.bool,
   payload: PropTypes.arrayOf(PropTypes.object),
-};
-
-RevenueTooltip.defaultProps = {
-  active: false,
-  payload: null,
 };
 
 const computeSummary = (data = []) => {
@@ -137,7 +132,7 @@ const computeProjection = (data = []) => {
   };
 };
 
-const GymOwnerRevenueChart = ({ data, timeframe, onTimeframeChange, summary }) => {
+const GymOwnerRevenueChart = ({ data = [], timeframe, onTimeframeChange, summary = null }) => {
   const resolvedData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const resolvedSummary = useMemo(() => summary ?? computeSummary(resolvedData), [summary, resolvedData]);
   const projection = useMemo(() => computeProjection(resolvedData), [resolvedData]);
@@ -270,11 +265,6 @@ GymOwnerRevenueChart.propTypes = {
       profit: PropTypes.number,
     }),
   }),
-};
-
-GymOwnerRevenueChart.defaultProps = {
-  data: [],
-  summary: null,
 };
 
 export default GymOwnerRevenueChart;

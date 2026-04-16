@@ -14,6 +14,7 @@ const MEMORY_CACHE_MAX_ENTRIES = Number(process.env.MEMORY_CACHE_MAX_ENTRIES ?? 
 const memoryCache = new Map();
 const memoryTags = new Map();
 const memoryCounters = new Map();
+const memoryTransientFlags = new Map();
 const inFlightLoads = new Map();
 
 let redisClient = null;
@@ -24,6 +25,7 @@ let lastRedisError = null;
 const getScopedKey = (key) => `${CACHE_PREFIX}:cache:${key}`;
 const getScopedTagKey = (tag) => `${CACHE_PREFIX}:tag:${tag}`;
 const getScopedCounterKey = (bucket) => `${CACHE_PREFIX}:counter:${bucket}`;
+const getScopedTransientKey = (key) => `${CACHE_PREFIX}:transient:${key}`;
 
 const stableSort = (value) => {
   if (Array.isArray(value)) {
@@ -158,6 +160,29 @@ const incrementCounterInMemory = (bucket, field, amount) => {
   scopedBucket.set(field, nextValue);
   memoryCounters.set(bucket, scopedBucket);
   return nextValue;
+};
+
+const pruneTransientFlagsInMemory = (now = Date.now()) => {
+  for (const [key, expiresAt] of memoryTransientFlags.entries()) {
+    if (Number(expiresAt) <= now) {
+      memoryTransientFlags.delete(key);
+    }
+  }
+};
+
+const acquireTransientFlagInMemory = (key, ttlSeconds) => {
+  const now = Date.now();
+  if (memoryTransientFlags.size >= 5000) {
+    pruneTransientFlagsInMemory(now);
+  }
+  const existingExpiry = Number(memoryTransientFlags.get(key) ?? 0);
+
+  if (existingExpiry > now) {
+    return false;
+  }
+
+  memoryTransientFlags.set(key, now + ttlSeconds * 1000);
+  return true;
 };
 
 const consumeCountersFromMemory = (bucket) => {
@@ -547,10 +572,38 @@ export const consumeBufferedCounters = async (bucket) => {
   return consumeCountersFromMemory(normalizedBucket);
 };
 
+export const acquireTransientFlag = async (key, ttlSeconds = 60) => {
+  await initializeCache();
+
+  const normalizedKey = String(key ?? '').trim();
+  const normalizedTtl = Math.max(Number(ttlSeconds) || 0, 1);
+
+  if (!normalizedKey) {
+    return false;
+  }
+
+  if (redisReady) {
+    try {
+      const client = await connectRedis();
+      const result = await client.set(getScopedTransientKey(normalizedKey), '1', {
+        NX: true,
+        EX: normalizedTtl,
+      });
+      return result === 'OK';
+    } catch (error) {
+      lastRedisError = error;
+      redisReady = false;
+    }
+  }
+
+  return acquireTransientFlagInMemory(normalizedKey, normalizedTtl);
+};
+
 export const clearAllCache = async () => {
   memoryCache.clear();
   memoryTags.clear();
   memoryCounters.clear();
+  memoryTransientFlags.clear();
   inFlightLoads.clear();
 
   if (redisReady) {

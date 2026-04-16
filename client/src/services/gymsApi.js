@@ -88,10 +88,28 @@ export const gymsApi = apiSlice.injectEndpoints({
       ],
     }),
     recordImpression: builder.mutation({
-      query: (id) => ({
-        url: `/gyms/${id}/impressions`,
+      query: (payload) => {
+        const impressionPayload = typeof payload === 'string' ? { id: payload } : (payload ?? {});
+        const viewerId = String(impressionPayload.viewerId ?? '').trim();
+
+        return {
+          url: `/gyms/${impressionPayload.id}/impressions`,
         method: 'POST',
-      }),
+          body: viewerId ? { viewerId } : undefined,
+        };
+      },
+    }),
+    recordGymOpen: builder.mutation({
+      query: (payload) => {
+        const openPayload = typeof payload === 'string' ? { id: payload } : (payload ?? {});
+        const viewerId = String(openPayload.viewerId ?? '').trim();
+
+        return {
+          url: `/gyms/${openPayload.id}/opens`,
+          method: 'POST',
+          body: viewerId ? { viewerId } : undefined,
+        };
+      },
     }),
     updateGym: builder.mutation({
       query: ({ id, ...payload }) => ({
@@ -120,5 +138,6 @@ export const {
   useGetGymReviewsQuery,
   useSubmitGymReviewMutation,
   useRecordImpressionMutation,
+  useRecordGymOpenMutation,
   useUpdateGymMutation,
 } = gymsApi;

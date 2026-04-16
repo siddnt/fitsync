@@ -247,11 +247,8 @@ export const getContactMessages = asyncHandler(async (req, res) => {
     .populate({ path: 'assignedTo', select: 'name email role' })
     .populate({
       path: 'gym',
-      select: 'name owner managers',
-      populate: [
-        { path: 'owner', select: 'name email role' },
-        { path: 'managers', select: 'name email role' },
-      ],
+      select: 'name owner',
+      populate: { path: 'owner', select: 'name email role' },
     });
 
   return res
@@ -310,11 +307,8 @@ export const assignMessage = asyncHandler(async (req, res) => {
     .populate({ path: 'assignedTo', select: 'name email role' })
     .populate({
       path: 'gym',
-      select: 'name owner managers',
-      populate: [
-        { path: 'owner', select: 'name email role' },
-        { path: 'managers', select: 'name email role' },
-      ],
+      select: 'name owner',
+      populate: { path: 'owner', select: 'name email role' },
     });
 
   if (!message) {

@@ -1,0 +1,179 @@
+.session-membership-card {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.session-membership-card > div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 1rem 1.1rem;
+}
+
+.session-membership-card small,
+.session-booking-form label,
+.session-slot-group header small,
+.session-slot-card small,
+.session-history-list small {
+  color: var(--muted-text-color);
+}
+
+.session-membership-card strong,
+.session-booking-form strong,
+.session-slot-card strong,
+.session-history-list strong {
+  color: var(--text-color);
+  display: block;
+}
+
+.session-membership-card p,
+.session-booking-form p {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.session-slot-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.session-slot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.session-slot-group header {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.session-slot-group header h3 {
+  margin: 0;
+}
+
+.session-slot-list {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.session-slot-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.session-slot-card:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.session-slot-card.is-selected {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.session-slot-card.is-disabled,
+.session-slot-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.session-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.session-booking-form textarea {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: var(--text-color);
+  font: inherit;
+  min-height: 160px;
+  padding: 0.9rem 1rem;
+  resize: vertical;
+}
+
+.session-booking-form button,
+.session-inline-action {
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  color: #dcfce7;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.7rem 1.1rem;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.session-booking-form button:hover:not(:disabled),
+.session-inline-action:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.28);
+  border-color: rgba(34, 197, 94, 0.42);
+}
+
+.session-booking-form button:disabled,
+.session-inline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.session-booking-table-wrap {
+  overflow-x: auto;
+}
+
+.session-inline-action {
+  padding: 0.5rem 0.9rem;
+}
+
+.session-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.session-history-list li {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.95rem 1rem;
+}
+
+.session-history-list span {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.session-notice {
+  margin: 0.9rem 0 0;
+}
+
+.session-notice--success {
+  color: #4ade80;
+}
+
+.session-notice--error {
+  color: #f87171;
+}

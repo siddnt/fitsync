@@ -25,6 +25,11 @@ import {
   submitTrainerFeedback,
   getManagerOverview,
 } from '../controllers/dashboard.controller.js';
+import {
+  exportAdminRevenueReport,
+  exportGymOwnerMembershipsReport,
+  exportGymOwnerSponsorshipsReport,
+} from '../controllers/report.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
@@ -41,7 +46,9 @@ router.get('/gym-owner/overview', authorizeRoles('gym-owner'), getGymOwnerOvervi
 router.get('/gym-owner/gyms', authorizeRoles('gym-owner'), getGymOwnerGyms);
 router.get('/gym-owner/subscriptions', authorizeRoles('gym-owner'), getGymOwnerSubscriptions);
 router.get('/gym-owner/sponsorships', authorizeRoles('gym-owner'), getGymOwnerSponsorship);
+router.get('/gym-owner/sponsorships/export', authorizeRoles('gym-owner'), exportGymOwnerSponsorshipsReport);
 router.get('/gym-owner/analytics', authorizeRoles('gym-owner'), getGymOwnerAnalytics);
+router.get('/gym-owner/memberships/export', authorizeRoles('gym-owner'), exportGymOwnerMembershipsReport);
 router.get('/gym-owner/roster', authorizeRoles('gym-owner'), getGymOwnerRoster);
 
 router.get('/trainer/overview', authorizeRoles('trainer'), getTrainerOverview);
@@ -55,6 +62,7 @@ router.get('/admin/users/:userId', authorizeRoles('admin'), getAdminUserDetails)
 router.get('/admin/gyms', authorizeRoles('admin'), getAdminGyms);
 router.get('/admin/gyms/:gymId', authorizeRoles('admin'), getAdminGymDetails);
 router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
+router.get('/admin/revenue/export', authorizeRoles('admin'), exportAdminRevenueReport);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
 

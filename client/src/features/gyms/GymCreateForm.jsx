@@ -3,15 +3,17 @@ import { Field, reduxForm } from 'redux-form';
 import FormField from '../../components/forms/FormField.jsx';
 import ChipMultiSelect from '../../components/forms/ChipMultiSelect.jsx';
 import { AMENITY_OPTIONS } from '../../constants/amenities.js';
+import { validateMembershipPricingValues } from './helpers.js';
+import MembershipPricingSection from './MembershipPricingSection.jsx';
 import './GymForms.css';
 
 const GymCreateFormComponent = ({
   handleSubmit,
-  submitting,
+  submitting = false,
   onCancel,
-  error,
-  plans,
-  isPlansLoading,
+  error = null,
+  plans = [],
+  isPlansLoading = false,
 }) => (
   <form className="gym-form" onSubmit={handleSubmit}>
     <section className="gym-form__section">
@@ -28,25 +30,10 @@ const GymCreateFormComponent = ({
       </div>
     </section>
 
-    <section className="gym-form__section">
-      <div className="gym-form__section-header">
-        <div>
-          <p className="gym-form__section-title">Pricing</p>
-          <p className="gym-form__section-hint">Set the plan members will pay for.</p>
-        </div>
-      </div>
-      <div className="gym-form__section-fields">
-        <Field name="pricing.mrp" component={FormField} label="MRP (₹)" type="number" min="0" step="1" />
-        <Field
-          name="pricing.discounted"
-          component={FormField}
-          label="Discounted price (₹)"
-          type="number"
-          min="0"
-          step="1"
-        />
-      </div>
-    </section>
+    <MembershipPricingSection
+      hint="Set the membership plans members can actually buy."
+      note="Configure one or more plans. Leave unused plans blank."
+    />
 
     <section className="gym-form__section">
       <div className="gym-form__section-header">
@@ -130,26 +117,11 @@ const GymCreateFormComponent = ({
           <option value="">Select a plan</option>
           {plans.map((plan) => (
             <option key={plan.planCode} value={plan.planCode}>
-              {`${plan.label} • ₹${plan.amount.toLocaleString('en-IN')} / ${plan.durationMonths} mo`}
+              {`${plan.label} / Rs${plan.amount.toLocaleString('en-IN')} / ${plan.durationMonths} mo`}
             </option>
           ))}
         </Field>
-
-        <Field
-          name="paymentReference"
-          component={FormField}
-          label="Payment reference"
-          placeholder="Txn-123456"
-        />
       </div>
-
-      <Field
-        name="autoRenew"
-        component={FormField}
-        as="checkbox"
-        label="Enable auto-renew"
-        type="checkbox"
-      />
     </section>
 
     {error ? <div className="form-error">{error}</div> : null}
@@ -159,7 +131,7 @@ const GymCreateFormComponent = ({
         Cancel
       </button>
       <button type="submit" className="cta-button" disabled={submitting || isPlansLoading}>
-        {submitting ? 'Creating…' : 'Create gym'}
+        {submitting ? 'Creating...' : 'Create gym'}
       </button>
     </div>
   </form>
@@ -181,13 +153,6 @@ GymCreateFormComponent.propTypes = {
   isPlansLoading: PropTypes.bool,
 };
 
-GymCreateFormComponent.defaultProps = {
-  submitting: false,
-  error: null,
-  plans: [],
-  isPlansLoading: false,
-};
-
 const validate = (values) => {
   const errors = {};
 
@@ -201,30 +166,13 @@ const validate = (values) => {
     errors.location = { ...(errors.location ?? {}), city: 'City is required' };
   }
 
-  const mrpInput = values.pricing?.mrp;
-  const mrpValue = Number(mrpInput);
-  if (mrpInput === undefined || mrpInput === null || mrpInput === '') {
-    errors.pricing = { ...(errors.pricing ?? {}), mrp: 'Provide the monthly price' };
-  } else if (!Number.isFinite(mrpValue) || mrpValue <= 0) {
-    errors.pricing = { ...(errors.pricing ?? {}), mrp: 'Enter a valid monthly price' };
-  }
-
-  const discountedInput = values.pricing?.discounted;
-  if (discountedInput !== undefined && discountedInput !== null && discountedInput !== '') {
-    const discountedValue = Number(discountedInput);
-    if (!Number.isFinite(discountedValue) || discountedValue < 0) {
-      errors.pricing = { ...(errors.pricing ?? {}), discounted: 'Enter a valid discounted price' };
-    } else if (Number.isFinite(mrpValue) && mrpValue > 0 && discountedValue > mrpValue) {
-      errors.pricing = { ...(errors.pricing ?? {}), discounted: 'Discounted price cannot exceed the MRP' };
-    }
+  const pricingErrors = validateMembershipPricingValues(values.pricing, { requireAtLeastOne: true });
+  if (pricingErrors) {
+    errors.pricing = pricingErrors;
   }
 
   if (!values.planCode) {
     errors.planCode = 'Choose a listing plan';
-  }
-
-  if (!values.paymentReference?.trim()) {
-    errors.paymentReference = 'Enter the payment reference used for this activation';
   }
 
   return errors;
@@ -235,8 +183,10 @@ const GymCreateForm = reduxForm({
   validate,
   enableReinitialize: false,
   initialValues: {
-    autoRenew: true,
     keyFeatures: [],
+    pricing: {
+      plans: {},
+    },
   },
 })(GymCreateFormComponent);
 

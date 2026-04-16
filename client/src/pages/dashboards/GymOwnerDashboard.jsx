@@ -42,7 +42,7 @@ const GymOwnerDashboard = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
-  {['Business snapshot', 'Expiring subscriptions', 'Active subscriptions', 'Recent joiners'].map((title) => (
+        {['Business snapshot', 'Expiring subscriptions', 'Active subscriptions', 'Recent joiners'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -86,7 +86,7 @@ const GymOwnerDashboard = () => {
             <div className="stat-card">
               <small>30-day owner earnings</small>
               <strong>{formatCurrency(overview.stats.revenue30d)}</strong>
-              <small>Owner share (50%) · {formatNumber(overview.stats.impressions30d)} impressions</small>
+              <small>Owner share (50%) | {formatNumber(overview.stats.impressions30d)} impressions in 30 days</small>
             </div>
             <div className="stat-card">
               <small>Pending gyms</small>
@@ -98,7 +98,6 @@ const GymOwnerDashboard = () => {
           <EmptyState message="Add your first gym to start tracking performance." />
         )}
       </DashboardSection>
-
 
       <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-6">
         {overview?.expiringSubscriptions?.length ? (
@@ -113,7 +112,7 @@ const GymOwnerDashboard = () => {
             <tbody>
               {overview.expiringSubscriptions.map((subscription) => (
                 <tr key={subscription.id}>
-                  <td>{subscription.gym?.name ?? '—'}</td>
+                  <td>{subscription.gym?.name ?? 'N/A'}</td>
                   <td>{formatStatus(subscription.planCode)}</td>
                   <td>{formatDate(subscription.periodEnd)}</td>
                 </tr>
@@ -133,13 +132,13 @@ const GymOwnerDashboard = () => {
                 <th>Gym</th>
                 <th>Status</th>
                 <th>Billing</th>
-                <th>Renewal</th>
+                <th>Ends</th>
               </tr>
             </thead>
             <tbody>
               {subscriptions.map((subscription) => (
                 <tr key={subscription.id}>
-                  <td>{subscription.gym?.name ?? '—'}</td>
+                  <td>{subscription.gym?.name ?? 'N/A'}</td>
                   <td>{formatStatus(subscription.status)}</td>
                   <td>{formatCurrency(subscription.amount)}</td>
                   <td>{formatDate(subscription.periodEnd)}</td>
@@ -178,7 +177,7 @@ const GymOwnerDashboard = () => {
                       <span>{member.user?.name ?? 'Unknown'}</span>
                     </div>
                   </td>
-                  <td>{member.gym?.name ?? '—'}</td>
+                  <td>{member.gym?.name ?? 'N/A'}</td>
                   <td>{formatStatus(member.planType)}</td>
                   <td>{formatDate(member.joinedAt)}</td>
                 </tr>

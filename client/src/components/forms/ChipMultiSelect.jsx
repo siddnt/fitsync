@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import './ChipMultiSelect.css';
 
-const ChipMultiSelect = ({ input, meta, options, helperText }) => {
+const ChipMultiSelect = ({ input, meta = null, options = [], helperText = null }) => {
   const currentValue = Array.isArray(input.value)
     ? input.value
     : typeof input.value === 'string' && input.value.trim().length
@@ -58,12 +58,6 @@ ChipMultiSelect.propTypes = {
   }),
   options: PropTypes.arrayOf(PropTypes.string),
   helperText: PropTypes.string,
-};
-
-ChipMultiSelect.defaultProps = {
-  meta: null,
-  options: [],
-  helperText: null,
 };
 
 export default ChipMultiSelect;

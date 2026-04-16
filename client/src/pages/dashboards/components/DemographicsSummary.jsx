@@ -3,7 +3,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import DistributionPieChart from './DistributionPieChart.jsx';
 import EmptyState from './EmptyState.jsx';
 
-const DemographicsSummary = ({ gender, ageBuckets }) => {
+const DemographicsSummary = ({ gender = [], ageBuckets = [] }) => {
   const genderHasData = Array.isArray(gender) && gender.some((entry) => entry.value > 0);
   const ageHasData = Array.isArray(ageBuckets) && ageBuckets.some((entry) => entry.value > 0);
 
@@ -29,7 +29,7 @@ const DemographicsSummary = ({ gender, ageBuckets }) => {
         <h4>Age distribution</h4>
         {ageHasData ? (
           <div className="chart-container">
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={240} minWidth={0}>
               <BarChart data={ageBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" vertical={false} />
                 <XAxis
@@ -76,11 +76,6 @@ DemographicsSummary.propTypes = {
       value: PropTypes.number,
     }),
   ),
-};
-
-DemographicsSummary.defaultProps = {
-  gender: [],
-  ageBuckets: [],
 };
 
 export default DemographicsSummary;

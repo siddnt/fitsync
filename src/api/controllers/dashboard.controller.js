@@ -14,9 +14,17 @@ import Contact from '../../models/contact.model.js';
 import {
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
+import { getGymImpressionCountsSince } from '../../services/gymImpression.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import {
+  buildGymPricingSnapshot,
+  getDefaultDisplayMembershipPlan,
+  getLowestPricedMembershipPlan,
+  getMembershipPlanDefinition,
+  sortMembershipPlans,
+} from '../../utils/membershipPlans.js';
 
 const toObjectId = (value) => {
   try {
@@ -44,6 +52,9 @@ const toDate = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
+
+const getImpressionCountFromMap = (counts, gymId) => counts.get(String(gymId))?.count ?? 0;
+const getOpenCountFromMap = (counts, gymId) => counts.get(String(gymId))?.openCount ?? 0;
 
 const OWNER_REVENUE_SHARE = 0.5;
 const TRAINER_REVENUE_SHARE = 0.5;
@@ -235,6 +246,160 @@ const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'deli
 
 const REVENUE_EARNING_TYPES = ['membership', 'enrollment', 'renewal'];
 const TRAINER_PLAN_CODES = ['trainer-access', 'trainerAccess', 'trainer'];
+const ACTIVE_GYM_MEMBERSHIP_STATUSES = ['active', 'pending', 'paused'];
+
+const isTrainerPlanCode = (planCode) => {
+  const normalised = String(planCode || '').trim().toLowerCase();
+  return TRAINER_PLAN_CODES.some(
+    (candidate) => String(candidate || '').trim().toLowerCase() === normalised,
+  );
+};
+
+const isPaidBillingStatus = (status) => String(status || '').trim().toLowerCase() === 'paid';
+
+const getMapLikeValue = (source, key) => {
+  if (!source || !key) {
+    return undefined;
+  }
+
+  if (source instanceof Map) {
+    return source.get(key);
+  }
+
+  if (typeof source.get === 'function') {
+    try {
+      return source.get(key);
+    } catch (_error) {
+      return undefined;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(source, key)) {
+    return source[key];
+  }
+
+  return undefined;
+};
+
+const getMetadataValue = (metadata, ...keys) => {
+  for (const key of keys) {
+    const value = getMapLikeValue(metadata, key);
+    if (value !== undefined && value !== null && value !== '') {
+      return String(value);
+    }
+  }
+
+  return '';
+};
+
+const buildListingRevenueEntries = (subscriptions = []) => {
+  const entries = [];
+
+  subscriptions.forEach((subscription) => {
+    const invoices = Array.isArray(subscription?.invoices) ? subscription.invoices : [];
+
+    if (invoices.length) {
+      invoices.forEach((invoice, index) => {
+        const amount = Number(invoice?.amount) || 0;
+        const date = toDate(invoice?.paidOn) || toDate(subscription?.periodStart) || toDate(subscription?.createdAt);
+
+        if (amount <= 0 || !date) {
+          return;
+        }
+
+        entries.push({
+          id: `${subscription?._id || 'listing'}-invoice-${index}`,
+          amount,
+          currency: invoice?.currency || subscription?.currency || 'INR',
+          date,
+          status: invoice?.status || 'paid',
+          source: 'listing',
+        });
+      });
+      return;
+    }
+
+    const amount = Number(subscription?.amount) || 0;
+    const date = toDate(subscription?.periodStart) || toDate(subscription?.createdAt);
+
+    if (amount <= 0 || !date) {
+      return;
+    }
+
+    entries.push({
+      id: `${subscription?._id || 'listing'}-fallback`,
+      amount,
+      currency: subscription?.currency || 'INR',
+      date,
+      status: subscription?.status || 'paid',
+      source: 'listing',
+    });
+  });
+
+  return entries;
+};
+
+const buildGymRevenueTrend = ({
+  memberships = [],
+  listingEntries = [],
+  sponsorshipEvents = [],
+  referenceDate = new Date(),
+} = {}) => {
+  const monthlyTimeline = createMonthlyTimeline(12, referenceDate).map((entry) => ({
+    ...entry,
+    total: 0,
+    membership: 0,
+    listing: 0,
+    sponsorship: 0,
+  }));
+
+  memberships.forEach((membership) => {
+    if (isTrainerPlanCode(membership?.plan) || !isPaidBillingStatus(membership?.billing?.status)) {
+      return;
+    }
+
+    const amount = Number(membership?.billing?.amount) || 0;
+    const date = toDate(membership?.startDate) || toDate(membership?.createdAt);
+
+    if (amount <= 0 || !date) {
+      return;
+    }
+
+    applyMonthlyAmount(monthlyTimeline, date, 'membership', amount);
+    applyMonthlyAmount(monthlyTimeline, date, 'total', amount);
+  });
+
+  listingEntries.forEach((entry) => {
+    if ((Number(entry?.amount) || 0) <= 0 || !entry?.date) {
+      return;
+    }
+
+    applyMonthlyAmount(monthlyTimeline, entry.date, 'listing', entry.amount);
+    applyMonthlyAmount(monthlyTimeline, entry.date, 'total', entry.amount);
+  });
+
+  sponsorshipEvents.forEach((event) => {
+    const amount = Number(event?.amount) || 0;
+    const date = toDate(event?.createdAt);
+
+    if (amount <= 0 || !date) {
+      return;
+    }
+
+    applyMonthlyAmount(monthlyTimeline, date, 'sponsorship', amount);
+    applyMonthlyAmount(monthlyTimeline, date, 'total', amount);
+  });
+
+  return monthlyTimeline.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    fullLabel: entry.fullLabel,
+    total: Number(entry.total) || 0,
+    membership: Number(entry.membership) || 0,
+    listing: Number(entry.listing) || 0,
+    sponsorship: Number(entry.sponsorship) || 0,
+  }));
+};
 
 const normaliseOrderItemStatus = (status) => {
   if (!status) {
@@ -931,6 +1096,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
 
   const gymIds = gyms.map((gym) => gym._id);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const impressionCounts30d = await getGymImpressionCountsSince(gymIds, thirtyDaysAgo);
 
   const [
     membershipAggregates,
@@ -992,7 +1158,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
 
   const enrichedGyms = gyms.map((gym) => {
     const members = membershipMap[gym._id.toString()] ?? 0;
-    const impressions30d = gym.analytics?.impressions ?? 0;
+    const impressions30d = getImpressionCountFromMap(impressionCounts30d, gym._id);
     return {
       id: gym._id,
       name: gym.name,
@@ -1001,6 +1167,7 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
       isPublished: gym.isPublished,
       members,
       impressions: impressions30d,
+      lifetimeImpressions: Number(gym.analytics?.impressions) || 0,
       sponsorship: gym.sponsorship,
       pricing: gym.pricing,
       updatedAt: gym.updatedAt,
@@ -1065,6 +1232,8 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
     .lean();
 
   const gymIds = gyms.map((gym) => gym._id);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const impressionCounts30d = await getGymImpressionCountsSince(gymIds, thirtyDaysAgo);
 
   const membershipAggregates = await GymMembership.aggregate([
     { $match: { gym: { $in: gymIds }, status: { $in: ['active', 'paused'] }, plan: { $nin: TRAINER_PLAN_CODES } } },
@@ -1106,7 +1275,10 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
       isPublished: gym.isPublished,
       tags: gym.tags,
       keyFeatures: gym.keyFeatures,
-      analytics: gym.analytics,
+      analytics: {
+        ...gym.analytics,
+        impressions30d: getImpressionCountFromMap(impressionCounts30d, gym._id),
+      },
       sponsorship: gym.sponsorship,
       pricing: gym.pricing,
       createdAt: gym.createdAt,
@@ -1260,6 +1432,9 @@ export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
   const gyms = await Gym.find({ owner: ownerId })
     .select('name sponsorship location analytics')
     .lean();
+  const gymIds = gyms.map((gym) => gym._id);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const impressionCounts30d = await getGymImpressionCountsSince(gymIds, thirtyDaysAgo);
 
   const data = gyms
     .filter((gym) => gym.sponsorship && gym.sponsorship.tier && gym.sponsorship.tier !== 'none')
@@ -1268,6 +1443,7 @@ export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
       name: gym.name,
       city: gym.location?.city,
       impressions: gym.analytics?.impressions ?? 0,
+      impressions30d: getImpressionCountFromMap(impressionCounts30d, gym._id),
       sponsorship: gym.sponsorship,
     }));
 
@@ -1284,10 +1460,12 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
   referenceDate.setHours(23, 59, 59, 999);
 
   const gyms = await Gym.find({ owner: ownerFilter })
-    .select('_id name analytics sponsorship createdAt')
+    .select('_id name analytics sponsorship createdAt location')
     .lean();
 
   const gymIds = gyms.map((gym) => gym._id);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const impressionCounts30d = await getGymImpressionCountsSince(gymIds, thirtyDaysAgo);
 
   const monthlyTimeline = createMonthlyTimeline(12, referenceDate);
   const weeklyTimeline = createWeeklyTimeline(12, referenceDate);
@@ -1296,7 +1474,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
   const earliestWeekly = weeklyTimeline[0]?.start ?? referenceDate;
   const earliestDate = earliestMonthly < earliestWeekly ? earliestMonthly : earliestWeekly;
 
-  const [membershipDocs, revenueEvents, subscriptions] = await Promise.all([
+  const [membershipDocs, membershipHistoryDocs, revenueEvents, subscriptions] = await Promise.all([
     GymMembership.find({
       gym: { $in: gymIds },
       status: { $in: ['active', 'paused'] },
@@ -1304,6 +1482,12 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       plan: { $nin: TRAINER_PLAN_CODES },
     })
       .select('startDate createdAt billing')
+      .lean(),
+    GymMembership.find({
+      gym: { $in: gymIds },
+      plan: { $nin: TRAINER_PLAN_CODES },
+    })
+      .select('gym trainee startDate createdAt billing plan status')
       .lean(),
     Revenue.find({
       user: ownerFilter,
@@ -1316,7 +1500,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       owner: ownerFilter,
       periodEnd: { $gte: earliestDate },
     })
-      .select('amount periodStart periodEnd createdAt invoices')
+      .select('gym amount periodStart periodEnd createdAt invoices')
       .lean(),
   ]);
 
@@ -1464,6 +1648,103 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
     };
   });
 
+  const membershipHistory = [...membershipHistoryDocs].sort(
+    (left, right) => new Date(left.startDate || left.createdAt || 0) - new Date(right.startDate || right.createdAt || 0),
+  );
+  const priorMembershipByKey = new Map();
+  const joinsByGym = {};
+  const renewalsByGym = {};
+  let joins30d = 0;
+  let renewals30d = 0;
+
+  membershipHistory.forEach((membership) => {
+    const when = toDate(membership.startDate) || toDate(membership.createdAt);
+    if (!when) {
+      return;
+    }
+
+    const memberKey = `${membership.trainee}-${membership.gym}`;
+    const gymKey = String(membership.gym);
+    const isRenewal = priorMembershipByKey.has(memberKey);
+    priorMembershipByKey.set(memberKey, when);
+
+    if (when < thirtyDaysAgo) {
+      return;
+    }
+
+    joins30d += 1;
+    joinsByGym[gymKey] = (joinsByGym[gymKey] || 0) + 1;
+
+    if (isRenewal) {
+      renewals30d += 1;
+      renewalsByGym[gymKey] = (renewalsByGym[gymKey] || 0) + 1;
+    }
+  });
+
+  const listingSpend30d = expenseEntries
+    .filter((entry) => entry.source === 'listing' && entry.date >= thirtyDaysAgo)
+    .reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+  const sponsorshipSpend30d = expenseEntries
+    .filter((entry) => entry.source === 'sponsorship' && entry.date >= thirtyDaysAgo)
+    .reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+  const totalSpend30d = listingSpend30d + sponsorshipSpend30d;
+  const totalImpressions30d = gyms.reduce(
+    (sum, gym) => sum + getImpressionCountFromMap(impressionCounts30d, gym._id),
+    0,
+  );
+  const totalOpens30d = gyms.reduce(
+    (sum, gym) => sum + getOpenCountFromMap(impressionCounts30d, gym._id),
+    0,
+  );
+
+  const toRate = (value, previous) => {
+    if (!previous) {
+      return 0;
+    }
+    return Number(((Number(value) / Number(previous)) * 100).toFixed(1));
+  };
+
+  const conversionFunnel = {
+    periodDays: 30,
+    totals: {
+      impressions: totalImpressions30d,
+      gymOpens: totalOpens30d,
+      joins: joins30d,
+      renewals: renewals30d,
+      listingSpend: listingSpend30d,
+      sponsorshipSpend: sponsorshipSpend30d,
+      totalSpend: totalSpend30d,
+      costPerJoin: joins30d ? Math.round(totalSpend30d / joins30d) : 0,
+      costPerRenewal: renewals30d ? Math.round(totalSpend30d / renewals30d) : 0,
+    },
+    steps: [
+      {
+        id: 'impressions',
+        label: 'Impressions',
+        value: totalImpressions30d,
+        conversionFromPrevious: null,
+      },
+      {
+        id: 'gym-opens',
+        label: 'Gym opens',
+        value: totalOpens30d,
+        conversionFromPrevious: toRate(totalOpens30d, totalImpressions30d),
+      },
+      {
+        id: 'joins',
+        label: 'Joins',
+        value: joins30d,
+        conversionFromPrevious: toRate(joins30d, totalOpens30d),
+      },
+      {
+        id: 'renewals',
+        label: 'Renewals',
+        value: renewals30d,
+        conversionFromPrevious: toRate(renewals30d, joins30d),
+      },
+    ],
+  };
+
   const analytics = {
     revenueTrend,
     revenueSummary: {
@@ -1472,11 +1753,22 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
     },
     membershipTrend,
     expenseBreakdown,
+    conversionFunnel,
     gyms: gyms.map((gym) => ({
       id: gym._id,
       name: gym.name,
+      city: gym.location?.city ?? '',
       impressions: gym.analytics?.impressions ?? 0,
+      impressions30d: getImpressionCountFromMap(impressionCounts30d, gym._id),
+      opens: gym.analytics?.opens ?? 0,
+      opens30d: getOpenCountFromMap(impressionCounts30d, gym._id),
       memberships: gym.analytics?.memberships ?? 0,
+      joins30d: joinsByGym[String(gym._id)] || 0,
+      renewals30d: renewalsByGym[String(gym._id)] || 0,
+      joinConversionRate30d: toRate(
+        joinsByGym[String(gym._id)] || 0,
+        getOpenCountFromMap(impressionCounts30d, gym._id),
+      ),
       trainers: gym.analytics?.trainers ?? 0,
     })),
   };
@@ -1788,7 +2080,6 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
   const isSellerRole = normalizedRole === 'seller';
   const isTrainerRole = normalizedRole === 'trainer';
   const isTraineeRole = ['trainee', 'user', 'member'].includes(normalizedRole);
-  const isManagerRole = normalizedRole === 'manager';
 
   const toUserSummary = (entity) => (entity?._id
     ? {
@@ -1835,7 +2126,6 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
     traineeProductReviewDocs,
     trainerProgressAsTrainerDocs,
     trainerProgressAsTraineeDocs,
-    managedGymDocs,
   ] = await Promise.all([
     GymMembership.countDocuments({
       trainee: parsedUserId,
@@ -1919,7 +2209,7 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
     isOwnerRole
       ? Revenue.find({
         user: parsedUserId,
-        type: { $in: ['membership', 'enrollment', 'renewal', 'listing', 'sponsorship'] },
+        type: { $in: REVENUE_EARNING_TYPES },
       })
         .sort({ createdAt: -1 })
         .limit(100)
@@ -1971,12 +2261,6 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
         .limit(100)
         .populate({ path: 'trainer', select: 'name email role status profilePicture' })
         .populate({ path: 'gym', select: 'name location' })
-        .lean()
-      : Promise.resolve([]),
-    isManagerRole
-      ? Gym.find({ managers: parsedUserId })
-        .select('name location status isPublished analytics createdAt')
-        .sort({ createdAt: -1 })
         .lean()
       : Promise.resolve([]),
   ]);
@@ -2327,18 +2611,6 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
     updatedAt: progress.updatedAt,
   }));
 
-  const managedGyms = (managedGymDocs ?? []).map((gym) => ({
-    id: gym._id,
-    name: gym.name,
-    city: gym.location?.city || '',
-    state: gym.location?.state || '',
-    status: gym.status,
-    isPublished: Boolean(gym.isPublished),
-    impressions: Number(gym.analytics?.impressions) || 0,
-    memberships: Number(gym.analytics?.memberships) || 0,
-    createdAt: gym.createdAt,
-  }));
-
   const ownerDerivedTotalRevenue = calculateRevenueShare(
     ownerMembershipRevenueAggregates?.[0]?.totalCollected,
     OWNER_REVENUE_SHARE,
@@ -2463,7 +2735,6 @@ export const getAdminUserDetails = asyncHandler(async (req, res) => {
       ownerMemberships: ownerMemberships || [],
       ownerSubscriptions,
       ownerRevenueEvents,
-      managedGyms,
     },
   };
 
@@ -2477,7 +2748,6 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
     .sort({ createdAt: -1 })
     .limit(25)
     .populate({ path: 'owner', select: 'name email role' })
-    .populate({ path: 'managers', select: 'name email role' })
     .lean();
 
   const [gyms, adminToggles] = await Promise.all([
@@ -2492,14 +2762,6 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
     isPublished: gym.isPublished,
     city: gym.location?.city,
     owner: gym.owner ? { id: gym.owner._id, name: gym.owner.name, email: gym.owner.email } : null,
-    managers: Array.isArray(gym.managers)
-      ? gym.managers.map((manager) => ({
-        id: manager._id,
-        name: manager.name,
-        email: manager.email,
-        role: manager.role,
-      }))
-      : [],
     sponsorship: gym.sponsorship,
     analytics: gym.analytics,
     createdAt: gym.createdAt,
@@ -2513,19 +2775,19 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
 export const getAdminGymDetails = asyncHandler(async (req, res) => {
   const { gymId } = req.params;
   const parsedGymId = toObjectId(gymId);
+  const gymIdString = String(parsedGymId || '');
 
   if (!parsedGymId) {
     throw new ApiError(400, 'Invalid gym id.');
   }
 
-  const [gym, latestListingSubscription, adminToggles] = await Promise.all([
+  const [gym, listingSubscriptionDocs, adminToggles] = await Promise.all([
     Gym.findById(parsedGymId)
       .populate({ path: 'owner', select: 'name email contactNumber role status profile' })
       .populate({ path: 'trainers', select: 'name email role status' })
-      .populate({ path: 'managers', select: 'name email role status profilePicture' })
       .populate({ path: 'lastUpdatedBy', select: 'name email role status' })
       .lean(),
-    GymListingSubscription.findOne({ gym: parsedGymId }).sort({ createdAt: -1 }).lean(),
+    GymListingSubscription.find({ gym: parsedGymId }).sort({ createdAt: -1 }).lean(),
     loadAdminToggles(),
   ]);
 
@@ -2533,11 +2795,8 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Gym not found.');
   }
 
-  const [membershipDocs, assignmentDocs, reviewCount] = await Promise.all([
-    GymMembership.find({
-      gym: parsedGymId,
-      status: { $in: ['active', 'pending', 'paused'] },
-    })
+  const [membershipDocs, assignmentDocs, reviewCount, revenueDocs] = await Promise.all([
+    GymMembership.find({ gym: parsedGymId })
       .sort({ createdAt: -1 })
       .populate({ path: 'trainee', select: 'name email role status profilePicture' })
       .populate({ path: 'trainer', select: 'name email role status profilePicture' })
@@ -2548,13 +2807,24 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
       .populate({ path: 'trainees.trainee', select: 'name email role status profilePicture' })
       .lean(),
     Review.countDocuments({ gym: parsedGymId }),
+    Revenue.find({
+      $or: [
+        { 'metadata.gymId': gymIdString },
+        { 'metadata.gym': gymIdString },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .lean(),
   ]);
 
   const toUserSummary = (entity) => (entity?._id
     ? { id: entity._id, name: entity.name, email: entity.email, role: entity.role, status: entity.status, profilePicture: entity.profilePicture || '' }
     : null);
 
-  const memberships = membershipDocs.map((m) => ({
+  const activeMembershipDocs = membershipDocs.filter((membership) =>
+    ACTIVE_GYM_MEMBERSHIP_STATUSES.includes(membership?.status));
+
+  const memberships = activeMembershipDocs.map((m) => ({
     id: m._id,
     trainee: toUserSummary(m.trainee),
     trainer: toUserSummary(m.trainer),
@@ -2563,6 +2833,9 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
     startDate: m.startDate,
     endDate: m.endDate,
     createdAt: m.createdAt,
+    billingAmount: Number(m?.billing?.amount) || 0,
+    billingCurrency: m?.billing?.currency || 'INR',
+    billingStatus: m?.billing?.status || 'pending',
   }));
 
   const isTraineeRole = (role) => {
@@ -2614,11 +2887,281 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
   Object.values(assignedTrainerMap).forEach((t) => { if (t?.id) trainerMap[String(t.id)] = t; });
 
   const analyticsRating = Number(gym.analytics?.rating ?? 0);
-  const managerSummaries = Array.isArray(gym.managers)
-    ? gym.managers.map((manager) => toUserSummary(manager)).filter(Boolean)
-    : [];
   const imageGallery = Array.isArray(gym.gallery) ? gym.gallery : [];
   const imageAssets = Array.isArray(gym.images) ? gym.images : [];
+  const pricingSnapshot = buildGymPricingSnapshot(gym.pricing || {});
+  const pricingPlans = pricingSnapshot.membershipPlans ?? [];
+  const pricingCurrency = pricingSnapshot.currency || gym.pricing?.currency || 'INR';
+  const defaultPricingPlan = getDefaultDisplayMembershipPlan(pricingPlans);
+  const startingPricingPlan = getLowestPricedMembershipPlan(pricingPlans) || defaultPricingPlan;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const impressionCounts30d = await getGymImpressionCountsSince([parsedGymId], thirtyDaysAgo);
+  const impressions30d = getImpressionCountFromMap(impressionCounts30d, parsedGymId);
+
+  const listingSubscriptions = (listingSubscriptionDocs ?? []).map((subscription) => {
+    const invoices = (subscription.invoices ?? []).map((invoice, index) => ({
+      id: `${subscription._id}-invoice-${index}`,
+      amount: Number(invoice?.amount) || 0,
+      currency: invoice?.currency || subscription.currency || pricingCurrency,
+      paidOn: invoice?.paidOn || null,
+      status: invoice?.status || 'paid',
+      paymentReference: invoice?.paymentReference || '',
+    }));
+    const collectedTotal = invoices.length
+      ? invoices.reduce((sum, invoice) => sum + (Number(invoice.amount) || 0), 0)
+      : Number(subscription.amount) || 0;
+
+    return {
+      id: subscription._id,
+      planCode: subscription.planCode,
+      amount: Number(subscription.amount) || 0,
+      currency: subscription.currency || pricingCurrency,
+      status: subscription.status,
+      periodStart: subscription.periodStart,
+      periodEnd: subscription.periodEnd,
+      autoRenew: Boolean(subscription.autoRenew),
+      createdAt: subscription.createdAt,
+      updatedAt: subscription.updatedAt,
+      invoiceCount: invoices.length,
+      collectedTotal,
+      invoices,
+      daysRemaining: subscription.periodEnd ? daysBetween(new Date(), subscription.periodEnd) : null,
+      latestInvoice: invoices
+        .slice()
+        .sort((left, right) => new Date(right.paidOn || 0) - new Date(left.paidOn || 0))[0] || null,
+    };
+  });
+  const latestListingSubscription = listingSubscriptions[0] ?? null;
+  const listingRevenueEntries = buildListingRevenueEntries(listingSubscriptionDocs ?? []);
+  const listingRevenueTotal = listingRevenueEntries.reduce(
+    (sum, entry) => sum + (Number(entry.amount) || 0),
+    0,
+  );
+  const listingRevenue30d = listingRevenueEntries.reduce((sum, entry) => {
+    const date = toDate(entry.date);
+    if (!date) {
+      return sum;
+    }
+    return date >= thirtyDaysAgo ? sum + (Number(entry.amount) || 0) : sum;
+  }, 0);
+
+  const paidMembershipDocs = membershipDocs.filter((membership) =>
+    !isTrainerPlanCode(membership?.plan)
+    && isPaidBillingStatus(membership?.billing?.status)
+    && (Number(membership?.billing?.amount) || 0) > 0);
+  const paidMembershipRevenueTotal = paidMembershipDocs.reduce(
+    (sum, membership) => sum + (Number(membership?.billing?.amount) || 0),
+    0,
+  );
+  const paidMembershipRevenue30d = paidMembershipDocs.reduce((sum, membership) => {
+    const date = toDate(membership?.startDate) || toDate(membership?.createdAt);
+    if (!date) {
+      return sum;
+    }
+    return date >= thirtyDaysAgo ? sum + (Number(membership?.billing?.amount) || 0) : sum;
+  }, 0);
+  const membershipStatusBreakdown = membershipDocs.reduce((acc, membership) => {
+    if (isTrainerPlanCode(membership?.plan)) {
+      return acc;
+    }
+
+    const status = membership?.status || 'unknown';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const membershipOfferingMap = pricingPlans.reduce((acc, plan) => {
+    acc[plan.code] = {
+      id: plan.code,
+      planCode: plan.code,
+      label: plan.label,
+      durationMonths: plan.durationMonths,
+      mrp: plan.mrp,
+      configuredPrice: plan.price,
+      currency: plan.currency || pricingCurrency,
+      activeCount: 0,
+      totalCount: 0,
+      paidCount: 0,
+      totalCollected: 0,
+      latestPurchasedAt: null,
+    };
+    return acc;
+  }, {});
+  membershipDocs.reduce((acc, membership) => {
+    if (isTrainerPlanCode(membership?.plan)) {
+      return acc;
+    }
+
+    const planCode = membership?.plan || 'monthly';
+    const key = String(planCode);
+    const amount = Number(membership?.billing?.amount) || 0;
+    const purchasedAt = membership?.startDate || membership?.createdAt || null;
+    const definition = getMembershipPlanDefinition(planCode);
+
+    if (!acc[key]) {
+      acc[key] = {
+        id: key,
+        planCode,
+        label: definition?.label || planCode,
+        durationMonths: definition?.durationMonths || 1,
+        mrp: 0,
+        configuredPrice: 0,
+        currency: membership?.billing?.currency || pricingCurrency,
+        activeCount: 0,
+        totalCount: 0,
+        paidCount: 0,
+        totalCollected: 0,
+        latestPurchasedAt: null,
+      };
+    }
+
+    acc[key].totalCount += 1;
+
+    if (ACTIVE_GYM_MEMBERSHIP_STATUSES.includes(membership?.status)) {
+      acc[key].activeCount += 1;
+    }
+
+    if (isPaidBillingStatus(membership?.billing?.status) && amount > 0) {
+      acc[key].paidCount += 1;
+      acc[key].totalCollected += amount;
+
+      if (!acc[key].latestPurchasedAt || new Date(purchasedAt) > new Date(acc[key].latestPurchasedAt)) {
+        acc[key].latestPurchasedAt = purchasedAt;
+      }
+    }
+
+    return acc;
+  }, membershipOfferingMap);
+  const membershipOfferings = sortMembershipPlans(Object.values(membershipOfferingMap)
+    .map((entry) => ({
+      ...entry,
+      discountPercent: Number(entry.mrp) > 0
+        ? Math.round(((Number(entry.mrp) - Number(entry.configuredPrice || 0)) / Number(entry.mrp)) * 100)
+        : 0,
+      averageTicketSize: entry.paidCount ? Math.round(entry.totalCollected / entry.paidCount) : 0,
+    }))
+  );
+
+  const revenueEvents = (revenueDocs ?? []).map((event) => ({
+    id: event._id,
+    type: event.type || 'other',
+    amount: Number(event.amount) || 0,
+    description: event.description || '',
+    createdAt: event.createdAt,
+    share: getMetadataValue(event.metadata, 'share'),
+    planCode: getMetadataValue(event.metadata, 'planCode', 'plan'),
+    tier: getMetadataValue(event.metadata, 'tier', 'package'),
+    paymentReference: getMetadataValue(event.metadata, 'paymentReference'),
+    memberId: getMetadataValue(event.metadata, 'memberId'),
+    trainerId: getMetadataValue(event.metadata, 'trainerId'),
+  }));
+  const sponsorshipEvents = revenueEvents.filter((event) => event.type === 'sponsorship');
+  const sponsorshipRevenueTotal = sponsorshipEvents.reduce(
+    (sum, event) => sum + (Number(event.amount) || 0),
+    0,
+  );
+  const sponsorshipRevenue30d = sponsorshipEvents.reduce((sum, event) => {
+    const date = toDate(event.createdAt);
+    if (!date) {
+      return sum;
+    }
+    return date >= thirtyDaysAgo ? sum + (Number(event.amount) || 0) : sum;
+  }, 0);
+  const membershipShareEvents = revenueEvents.filter((event) => REVENUE_EARNING_TYPES.includes(event.type));
+  const membershipGymShareTotal = membershipShareEvents.reduce((sum, event) => (
+    event.share === 'gym' ? sum + (Number(event.amount) || 0) : sum
+  ), 0);
+  const membershipTrainerShareTotal = membershipShareEvents.reduce((sum, event) => (
+    event.share === 'trainer' ? sum + (Number(event.amount) || 0) : sum
+  ), 0);
+  const revenueTrend = buildGymRevenueTrend({
+    memberships: membershipDocs,
+    listingEntries: listingRevenueEntries,
+    sponsorshipEvents,
+    referenceDate: new Date(),
+  });
+  const sponsorshipHistory = sponsorshipEvents.map((event) => ({
+    id: event.id,
+    amount: event.amount,
+    createdAt: event.createdAt,
+    description: event.description,
+    tier: event.tier || null,
+    paymentReference: event.paymentReference || '',
+  }));
+  const currentSponsorshipPackage = gym.sponsorship?.package || gym.sponsorship?.tier || sponsorshipHistory[0]?.tier || null;
+  const currentSponsorshipExpiry = gym.sponsorship?.expiresAt || gym.sponsorship?.endDate || gym.sponsorExpiresAt || null;
+  const membershipOfferSummary = {
+    monthlyMrp: Number(pricingSnapshot.monthlyMrp) || 0,
+    monthlyPrice: Number(pricingSnapshot.monthlyPrice) || 0,
+    currency: pricingCurrency,
+    discountPercent: Number(pricingSnapshot.monthlyMrp) > 0
+      ? Math.round(
+        ((Number(pricingSnapshot.monthlyMrp) - Number(pricingSnapshot.monthlyPrice || 0)) / Number(pricingSnapshot.monthlyMrp)) * 100,
+      )
+      : 0,
+    configuredPlanCount: pricingPlans.length,
+    configuredPlans: pricingPlans.map((plan) => ({
+      code: plan.code,
+      label: plan.label,
+      durationMonths: plan.durationMonths,
+      mrp: plan.mrp,
+      price: plan.price,
+      currency: plan.currency || pricingCurrency,
+      isActive: plan.isActive !== false,
+      discountPercent: Number(plan.mrp) > 0
+        ? Math.round(((Number(plan.mrp) - Number(plan.price || 0)) / Number(plan.mrp)) * 100)
+        : 0,
+    })),
+    defaultPlan: defaultPricingPlan
+      ? {
+        code: defaultPricingPlan.code,
+        label: defaultPricingPlan.label,
+        durationMonths: defaultPricingPlan.durationMonths,
+        mrp: defaultPricingPlan.mrp,
+        price: defaultPricingPlan.price,
+        currency: defaultPricingPlan.currency || pricingCurrency,
+      }
+      : null,
+    startingPlan: startingPricingPlan
+      ? {
+        code: startingPricingPlan.code,
+        label: startingPricingPlan.label,
+        durationMonths: startingPricingPlan.durationMonths,
+        mrp: startingPricingPlan.mrp,
+        price: startingPricingPlan.price,
+        currency: startingPricingPlan.currency || pricingCurrency,
+      }
+      : null,
+    activeCount: activeMembershipDocs.filter((membership) => !isTrainerPlanCode(membership?.plan)).length,
+    paidCount: paidMembershipDocs.length,
+    totalCollected: paidMembershipRevenueTotal,
+    collectedLast30Days: paidMembershipRevenue30d,
+    averageTicketSize: paidMembershipDocs.length ? Math.round(paidMembershipRevenueTotal / paidMembershipDocs.length) : 0,
+    latestPurchasedAt: paidMembershipDocs[0]?.startDate || paidMembershipDocs[0]?.createdAt || null,
+    statusBreakdown: membershipStatusBreakdown,
+    offerings: membershipOfferings,
+  };
+  const listingSummary = {
+    activeCount: listingSubscriptions.filter((subscription) => ['active', 'grace'].includes(subscription.status)).length,
+    totalCount: listingSubscriptions.length,
+    totalCollected: listingRevenueTotal,
+    collectedLast30Days: listingRevenue30d,
+    invoiceCount: listingSubscriptions.reduce((sum, subscription) => sum + (Number(subscription.invoiceCount) || 0), 0),
+    autoRenewEnabled: listingSubscriptions.filter((subscription) => subscription.autoRenew).length,
+    latestPlanCode: latestListingSubscription?.planCode || null,
+    latestPeriodEnd: latestListingSubscription?.periodEnd || null,
+  };
+  const sponsorshipSummary = {
+    status: gym.sponsorship?.status || 'none',
+    package: currentSponsorshipPackage,
+    amount: Number(gym.sponsorship?.amount ?? gym.sponsorship?.monthlyBudget) || 0,
+    expiresAt: currentSponsorshipExpiry,
+    totalCollected: sponsorshipRevenueTotal,
+    collectedLast30Days: sponsorshipRevenue30d,
+    purchases: sponsorshipHistory.length,
+    latestPurchasedAt: sponsorshipHistory[0]?.createdAt || null,
+  };
+  const totalTrackedValue = paidMembershipRevenueTotal + listingRevenueTotal + sponsorshipRevenueTotal;
 
   const details = {
     id: gym._id,
@@ -2641,7 +3184,6 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
       status: gym.owner.status,
       profile: gym.owner.profile || {},
     } : null,
-    managers: managerSummaries,
     trainers: Object.values(trainerMap),
     members: memberships,
     trainees: Object.values(traineeMap),
@@ -2650,7 +3192,24 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
     assignedTrainees: Object.values(assignedTraineeMap),
     location: { address: gym.location?.address || '', city: gym.location?.city || '', state: gym.location?.state || '', postalCode: gym.location?.postalCode || '', coordinates: gym.location?.coordinates || null },
     contact: { phone: gym.contact?.phone || '', email: gym.contact?.email || '', website: gym.contact?.website || '', whatsapp: gym.contact?.whatsapp || '' },
-    pricing: { monthlyMrp: Number(gym.pricing?.monthlyMrp) || 0, monthlyPrice: Number(gym.pricing?.monthlyPrice) || 0, currency: gym.pricing?.currency || 'INR' },
+    pricing: {
+      monthlyMrp: Number(pricingSnapshot.monthlyMrp) || 0,
+      monthlyPrice: Number(pricingSnapshot.monthlyPrice) || 0,
+      currency: pricingCurrency,
+      plans: pricingPlans.map((plan) => ({
+        code: plan.code,
+        label: plan.label,
+        durationMonths: plan.durationMonths,
+        mrp: plan.mrp,
+        price: plan.price,
+        currency: plan.currency || pricingCurrency,
+        isActive: plan.isActive !== false,
+      })),
+      defaultPlanCode: defaultPricingPlan?.code || null,
+      startingAt: startingPricingPlan?.price || 0,
+      startingAtMrp: startingPricingPlan?.mrp || 0,
+      startingPlanCode: startingPricingPlan?.code || null,
+    },
     schedule: { openTime: gym.schedule?.openTime || '', closeTime: gym.schedule?.closeTime || '', workingDays: Array.isArray(gym.schedule?.workingDays) ? gym.schedule.workingDays : [] },
     features: Array.isArray(gym.features) ? gym.features : [],
     amenities: Array.isArray(gym.amenities) ? gym.amenities : [],
@@ -2658,14 +3217,60 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
     tags: Array.isArray(gym.tags) ? gym.tags : [],
     images: imageAssets,
     gallery: imageGallery,
-    sponsorship: { status: gym.sponsorship?.status || 'none', package: gym.sponsorship?.package || null, amount: Number(gym.sponsorship?.amount ?? gym.sponsorship?.monthlyBudget) || 0, expiresAt: gym.sponsorship?.expiresAt || null },
+    sponsorship: {
+      status: gym.sponsorship?.status || 'none',
+      package: currentSponsorshipPackage,
+      amount: Number(gym.sponsorship?.amount ?? gym.sponsorship?.monthlyBudget) || 0,
+      expiresAt: currentSponsorshipExpiry,
+    },
     listingSubscription: latestListingSubscription ? {
-      id: latestListingSubscription._id, planCode: latestListingSubscription.planCode, amount: Number(latestListingSubscription.amount) || 0,
-      currency: latestListingSubscription.currency || 'INR', status: latestListingSubscription.status, periodStart: latestListingSubscription.periodStart,
+      id: latestListingSubscription.id, planCode: latestListingSubscription.planCode, amount: Number(latestListingSubscription.amount) || 0,
+      currency: latestListingSubscription.currency || pricingCurrency, status: latestListingSubscription.status, periodStart: latestListingSubscription.periodStart,
       periodEnd: latestListingSubscription.periodEnd, autoRenew: Boolean(latestListingSubscription.autoRenew),
-      invoiceCount: Array.isArray(latestListingSubscription.invoices) ? latestListingSubscription.invoices.length : 0,
+      invoiceCount: Number(latestListingSubscription.invoiceCount) || 0,
     } : null,
-    analytics: { impressions: Number(gym.analytics?.impressions) || 0, rating: Number(analyticsRating.toFixed(1)), ratingCount: Number(gym.analytics?.ratingCount) || Number(reviewCount) || 0, lastImpressionAt: gym.analytics?.lastImpressionAt || null, lastReviewAt: gym.analytics?.lastReviewAt || null },
+    listingSubscriptions,
+    sponsorshipHistory,
+    subscriptionInsights: {
+      memberships: membershipOfferSummary,
+      listings: listingSummary,
+      sponsorships: sponsorshipSummary,
+    },
+    revenue: {
+      totals: {
+        trackedValue: totalTrackedValue,
+        membershipSubscriptions: paidMembershipRevenueTotal,
+        listingSubscriptions: listingRevenueTotal,
+        sponsorships: sponsorshipRevenueTotal,
+        platformMonetisation: listingRevenueTotal + sponsorshipRevenueTotal,
+        gymShare: membershipGymShareTotal,
+        trainerShare: membershipTrainerShareTotal,
+      },
+      recent30Days: {
+        trackedValue: paidMembershipRevenue30d + listingRevenue30d + sponsorshipRevenue30d,
+        membershipSubscriptions: paidMembershipRevenue30d,
+        listingSubscriptions: listingRevenue30d,
+        sponsorships: sponsorshipRevenue30d,
+      },
+      counts: {
+        paidMemberships: paidMembershipDocs.length,
+        listingPurchases: listingSubscriptions.length,
+        sponsorshipPurchases: sponsorshipHistory.length,
+        revenueEvents: revenueEvents.length,
+      },
+      trend: {
+        monthly: revenueTrend,
+      },
+      events: revenueEvents,
+    },
+    analytics: {
+      impressions: Number(gym.analytics?.impressions) || 0,
+      impressions30d,
+      rating: Number(analyticsRating.toFixed(1)),
+      ratingCount: Number(gym.analytics?.ratingCount) || Number(reviewCount) || 0,
+      lastImpressionAt: gym.analytics?.lastImpressionAt || null,
+      lastReviewAt: gym.analytics?.lastReviewAt || null,
+    },
     metrics: {
       activeMembers: memberships.length,
       activeTrainers: Object.keys(trainerMap).length,
@@ -2673,15 +3278,21 @@ export const getAdminGymDetails = asyncHandler(async (req, res) => {
       activeAssignments: activeAssignments.length,
       assignedTrainers: Object.keys(assignedTrainerMap).length,
       activeTrainees: Object.keys(assignedTraineeMap).length,
-      managers: managerSummaries.length,
       imageAssets: imageAssets.length,
       galleryAssets: imageGallery.length,
       mediaAssets: imageAssets.length + imageGallery.length,
       reviewCount: Number(reviewCount) || 0,
+      paidMemberships: paidMembershipDocs.length,
+      listingSubscriptions: listingSubscriptions.length,
+      revenueEvents: revenueEvents.length,
     },
   };
 
-  return res.status(200).json(new ApiResponse(200, { gym: details, adminToggles }, 'Admin gym details fetched successfully'));
+  return res.status(200).json(new ApiResponse(200, {
+    gym: details,
+    adminToggles,
+    generatedAt: new Date(),
+  }, 'Admin gym details fetched successfully'));
 });
 
 export const getAdminRevenue = asyncHandler(async (_req, res) => {

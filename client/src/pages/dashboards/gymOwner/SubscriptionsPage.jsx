@@ -59,10 +59,19 @@ const GymOwnerSubscriptionsPage = () => {
 
   const [checkoutSubscription] = useCheckoutListingSubscriptionMutation();
 
-  const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
-  const invoices = mapInvoices(subscriptions);
-  const gymOptions = gymsResponse?.data?.gyms ?? [];
-  const plans = monetisationResponse?.data?.listingPlans ?? [];
+  const subscriptions = useMemo(
+    () => subscriptionsResponse?.data?.subscriptions ?? [],
+    [subscriptionsResponse?.data?.subscriptions],
+  );
+  const invoices = useMemo(() => mapInvoices(subscriptions), [subscriptions]);
+  const gymOptions = useMemo(
+    () => gymsResponse?.data?.gyms ?? [],
+    [gymsResponse?.data?.gyms],
+  );
+  const plans = useMemo(
+    () => monetisationResponse?.data?.listingPlans ?? [],
+    [monetisationResponse?.data?.listingPlans],
+  );
 
   const [subscriptionGymFilter, setSubscriptionGymFilter] = useState('all');
 
@@ -88,7 +97,6 @@ const GymOwnerSubscriptionsPage = () => {
   const initialValues = {
     gymId: gymOptions.length === 1 ? gymOptions[0].id : '',
     planCode: plans[0]?.planCode ?? '',
-    autoRenew: true,
   };
 
   const isLoading = isSubscriptionsLoading || isGymsLoading || isPlansLoading;
@@ -105,15 +113,12 @@ const GymOwnerSubscriptionsPage = () => {
       const payload = {
         gymId: values.gymId,
         planCode: values.planCode,
-        autoRenew: Boolean(values.autoRenew),
-        paymentReference: values.paymentReference?.trim() || undefined,
       };
 
       const response = await checkoutSubscription(payload).unwrap();
 
       const paymentReference =
         response?.data?.subscription?.invoices?.[0]?.paymentReference ||
-        payload.paymentReference ||
         response?.data?.subscription?._id;
 
       dispatch(setLastReceipt(paymentReference));
@@ -219,12 +224,8 @@ const GymOwnerSubscriptionsPage = () => {
                       <dd>{formatCurrency(subscription.amount)}</dd>
                     </div>
                     <div>
-                      <dt>Renews</dt>
+                      <dt>Ends</dt>
                       <dd>{formatDate(subscription.periodEnd)}</dd>
-                    </div>
-                    <div>
-                      <dt>Auto-renew</dt>
-                      <dd>{subscription.autoRenew ? 'On' : 'Off'}</dd>
                     </div>
                   </dl>
                   {latestInvoice ? (

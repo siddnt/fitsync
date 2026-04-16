@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
+import Booking from '../../models/booking.model.js';
 import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -367,6 +368,19 @@ export const removeTrainerFromGym = asyncHandler(async (req, res) => {
           : {}),
       },
     ),
+    Booking.updateMany(
+      {
+        trainer: assignment.trainer._id,
+        gym: assignment.gym._id,
+        status: { $in: ['pending', 'confirmed'] },
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          cancellationReason: 'Trainer removed from this gym.',
+        },
+      },
+    ),
   ];
 
   await Promise.all(updates);
@@ -432,6 +446,22 @@ export const removeGymMember = asyncHandler(async (req, res) => {
       ),
     );
   }
+
+  updates.push(
+    Booking.updateMany(
+      {
+        user: membership.trainee,
+        gym: membership.gym._id,
+        status: { $in: ['pending', 'confirmed'] },
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          cancellationReason: 'Member removed from the gym roster.',
+        },
+      },
+    ),
+  );
 
   await Promise.all(updates);
   await recordAuditLog({

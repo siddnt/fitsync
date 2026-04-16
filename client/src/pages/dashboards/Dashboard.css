@@ -157,6 +157,7 @@
 
 .chart-container {
   height: 260px;
+  min-width: 0;
 }
 
 .chart-container--tall {
@@ -213,6 +214,7 @@
 .pie-layout__chart {
   flex: 0 0 220px;
   height: 220px;
+  min-width: 0;
   position: relative;
   width: 220px;
 }
@@ -1612,6 +1614,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
   padding: 1.25rem;
 }
 
@@ -2193,6 +2196,49 @@
   accent-color: rgba(229, 9, 20, 0.9);
 }
 
+.conversion-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.conversion-funnel__steps,
+.conversion-funnel__meta {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.conversion-funnel__step,
+.conversion-funnel__metric {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+}
+
+.conversion-funnel__step small,
+.conversion-funnel__metric span {
+  color: var(--muted-text-color);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.conversion-funnel__step strong,
+.conversion-funnel__metric strong {
+  color: var(--text-color);
+  font-size: 1.6rem;
+}
+
+.conversion-funnel__step span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+
 .dashboard-section__hint {
   color: var(--muted-text-color);
   font-size: 0.85rem;
@@ -2692,6 +2738,10 @@
   flex-direction: column;
   gap: 1.25rem;
   flex: 1;
+}
+
+.record-form-card--full {
+  grid-column: 1 / -1;
 }
 
 .form-row {
@@ -3330,6 +3380,26 @@
   color: var(--muted-text-color);
 }
 
+.trainer-booking-table-wrap {
+  overflow-x: auto;
+}
+
+.trainer-booking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.trainer-booking-actions .dashboard-table__meta {
+  margin: 0;
+}
+
+.trainer-booking-note {
+  color: var(--muted-text-color);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 .meal-matrix {
   display: flex;
   flex-direction: column;
@@ -3467,5 +3537,192 @@
 @media (max-width: 1024px) {
   .forms-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Admin Gyms Page ─── */
+
+.admin-gyms__stats {
+  margin-bottom: 0.5rem;
+}
+
+.admin-gyms__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.admin-gyms__search {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: var(--text-color);
+  flex: 1 1 280px;
+  font-size: 0.95rem;
+  max-width: 420px;
+  padding: 0.65rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-gyms__search::placeholder {
+  color: var(--muted-text-color);
+  opacity: 0.7;
+}
+
+.admin-gyms__search:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+.admin-gyms__count {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.admin-gyms__table-wrap {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-gyms__table-wrap .dashboard-table th:first-child,
+.admin-gyms__table-wrap .dashboard-table td:first-child {
+  padding-left: 1.5rem;
+}
+
+.admin-gyms__table-wrap .dashboard-table th:last-child,
+.admin-gyms__table-wrap .dashboard-table td:last-child {
+  padding-right: 1.5rem;
+}
+
+.admin-gyms__row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.admin-gyms__row:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-gyms__gym-cell {
+  align-items: center;
+  display: flex;
+  gap: 0.85rem;
+  min-width: 200px;
+}
+
+.admin-gyms__avatar {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(132, 94, 247, 0.5), rgba(99, 102, 241, 0.45));
+  border-radius: 12px;
+  color: #fff;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.admin-gyms__gym-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-gyms__gym-info strong {
+  color: var(--text-color);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.admin-gyms__gym-info small {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+}
+
+.admin-gyms__owner-name {
+  color: var(--text-color);
+  font-size: 0.92rem;
+}
+
+.admin-gyms__muted {
+  color: var(--muted-text-color);
+  font-size: 0.88rem;
+}
+
+.admin-gyms__impressions {
+  color: var(--text-color);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-gyms__date {
+  color: var(--muted-text-color);
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.admin-gyms__delete-btn {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 8px;
+  color: #ff8787;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.4rem 0.85rem;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+
+.admin-gyms__delete-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.22);
+  border-color: rgba(255, 107, 107, 0.55);
+  transform: translateY(-1px);
+}
+
+.admin-gyms__delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-gyms__refresh-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.45rem 1.1rem;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-gyms__refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+@media (max-width: 768px) {
+  .admin-gyms__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-gyms__search {
+    max-width: 100%;
+  }
+
+  .admin-gyms__gym-cell {
+    min-width: 160px;
   }
 }

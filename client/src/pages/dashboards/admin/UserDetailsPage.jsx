@@ -318,7 +318,6 @@ const AdminUserDetailsPage = () => {
   const ownerMemberships = Array.isArray(relationships.ownerMemberships) ? relationships.ownerMemberships : [];
   const ownerSubscriptions = Array.isArray(relationships.ownerSubscriptions) ? relationships.ownerSubscriptions : [];
   const ownerRevenueEvents = Array.isArray(relationships.ownerRevenueEvents) ? relationships.ownerRevenueEvents : [];
-  const managedGyms = Array.isArray(relationships.managedGyms) ? relationships.managedGyms : [];
   const primaryGym = relationships.primaryGym ?? null;
 
   const normalizedRole = String(user?.role || '').toLowerCase();
@@ -363,9 +362,6 @@ const AdminUserDetailsPage = () => {
   const sellerAverageRating = sellerMetrics?.averageRating !== null && sellerMetrics?.averageRating !== undefined
     ? Number(sellerMetrics.averageRating).toFixed(1)
     : EMPTY_VALUE;
-  const managedPublishedGymsCount = managedGyms.filter((gym) => gym?.isPublished).length;
-  const managedMembersCount = managedGyms.reduce((sum, gym) => sum + (Number(gym?.memberships) || 0), 0);
-  const managedImpressionsCount = managedGyms.reduce((sum, gym) => sum + (Number(gym?.impressions) || 0), 0);
 
   const metricCards = useMemo(() => {
     if (isOwnerRole) {
@@ -403,10 +399,10 @@ const AdminUserDetailsPage = () => {
 
     if (isManagerRole) {
       return [
-        { label: 'Managed Gyms', value: formatNumber(managedGyms.length) },
-        { label: 'Published Gyms', value: formatNumber(managedPublishedGymsCount) },
-        { label: 'Managed Members', value: formatNumber(managedMembersCount) },
-        { label: 'Impressions', value: formatNumber(managedImpressionsCount) },
+        { label: 'Status', value: formatStatus(user?.status || 'unknown') },
+        { label: 'Company', value: displayValue(user?.profile?.company) },
+        { label: 'Headline', value: displayValue(user?.profile?.headline) },
+        { label: 'Joined', value: formatDate(user?.createdAt) },
       ];
     }
 
@@ -423,10 +419,6 @@ const AdminUserDetailsPage = () => {
     activeTrainerMemberships,
     associatedGymCountForTrainee,
     associatedTrainerCountForTrainee,
-    managedGyms.length,
-    managedImpressionsCount,
-    managedMembersCount,
-    managedPublishedGymsCount,
     isManagerRole,
     isOwnerRole,
     isSellerRole,
@@ -434,10 +426,10 @@ const AdminUserDetailsPage = () => {
     ownerGyms.length,
     ownerActiveListings,
     ownerActiveMembers,
-    ownerExpiringListings,
     ownerMetrics?.monthlyEarnings,
     ownerMetrics?.monthlyProfit,
     ownerMetrics?.totalGyms,
+    ownerPublishedGymCount,
     orderHistory.length,
     sellerActiveProducts,
     sellerFulfilledOrders,
@@ -459,7 +451,11 @@ const AdminUserDetailsPage = () => {
     trainerTrainees.length,
     user?.orders,
     user?.memberships,
+    user?.createdAt,
     user?.experienceYears,
+    user?.profile?.company,
+    user?.profile?.headline,
+    user?.status,
   ]);
 
   const profileNarrative = [user?.profile?.about, user?.bio].filter(Boolean).join('\n\n');
@@ -588,16 +584,6 @@ const AdminUserDetailsPage = () => {
     if (isManagerRole) {
       return [
         { title: 'Account Info', rows: sharedAccountRows },
-        {
-          title: 'Management Scope',
-          rows: [
-            { label: 'Managed gyms', value: formatNumber(managedGyms.length) },
-            { label: 'Published gyms', value: formatNumber(managedPublishedGymsCount) },
-            { label: 'Managed members', value: formatNumber(managedMembersCount) },
-            { label: 'Managed impressions', value: formatNumber(managedImpressionsCount) },
-            { label: 'Gym coverage', value: managedGyms.length ? formatLocation(...managedGyms.slice(0, 3).map((gym) => gym?.city).filter(Boolean)) : EMPTY_VALUE },
-          ],
-        },
         {
           title: 'Operations Profile',
           rows: [
@@ -1367,31 +1353,6 @@ const AdminUserDetailsPage = () => {
                 </table>
               ) : <EmptyState message="No seller revenue history found." />
             ) : null}
-          </>
-        ) : null}
-
-        {isManagerRole ? (
-          <>
-            <SectionHeading
-              title="Managed Gyms"
-              subtitle="Gyms this account can manage, including their current membership and impression totals."
-            />
-
-            <table className="dashboard-table">
-              <thead><tr><th>Gym</th><th>Location</th><th>Members</th><th>Impressions</th><th>Status</th><th>Created</th></tr></thead>
-              <tbody>
-                {managedGyms.map((gym) => (
-                  <tr key={gym.id}>
-                    <td>{renderGymLink(gym)}</td>
-                    <td>{formatLocation(gym?.city, gym?.state)}</td>
-                    <td>{formatNumber(gym?.memberships ?? 0)}</td>
-                    <td>{formatNumber(gym?.impressions ?? 0)}</td>
-                    <td><StatusChip value={gym?.isPublished ? gym?.status : 'unpublished'} /></td>
-                    <td>{formatDateTime(gym?.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </>
         ) : null}
       </DashboardSection>

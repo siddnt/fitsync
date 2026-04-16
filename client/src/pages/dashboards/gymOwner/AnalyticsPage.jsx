@@ -5,8 +5,10 @@ import DistributionPieChart from '../components/DistributionPieChart.jsx';
 import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import RevenueSummaryChart from '../components/RevenueSummaryChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import { useAppSelector } from '../../../app/hooks.js';
 import { useGetGymOwnerAnalyticsQuery } from '../../../services/dashboardApi.js';
-import { formatCurrency, formatNumber } from '../../../utils/format.js';
+import { downloadReport } from '../../../utils/reportDownload.js';
+import { formatCurrency, formatNumber, formatPercentage } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const TIMEFRAME_OPTIONS = [
@@ -44,6 +46,11 @@ const toCumulativeTrend = (trend, valueAccessor, valueKey) => {
 
 const GymOwnerAnalyticsPage = () => {
   const [timeframe, setTimeframe] = useState('monthly');
+  const [reportFormat, setReportFormat] = useState('csv');
+  const [isExportingMemberships, setIsExportingMemberships] = useState(false);
+  const [reportNotice, setReportNotice] = useState(null);
+  const [reportError, setReportError] = useState(null);
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
   const { data, isLoading, isError, refetch } = useGetGymOwnerAnalyticsQuery();
   const analytics = data?.data;
 
@@ -108,7 +115,7 @@ const GymOwnerAnalyticsPage = () => {
   const impressionsSplit = useMemo(
     () => analytics?.gyms?.map((gym) => ({
       name: gym.name,
-      value: gym.impressions ?? 0,
+      value: gym.impressions30d ?? 0,
     })),
     [analytics?.gyms],
   );
@@ -123,6 +130,29 @@ const GymOwnerAnalyticsPage = () => {
       value: entry.value,
     }));
   }, [analytics]);
+
+  const funnelSteps = analytics?.conversionFunnel?.steps ?? [];
+  const funnelTotals = analytics?.conversionFunnel?.totals ?? {};
+
+  const handleExportMemberships = async () => {
+    setReportNotice(null);
+    setReportError(null);
+    setIsExportingMemberships(true);
+
+    try {
+      await downloadReport({
+        path: '/dashboards/gym-owner/memberships/export',
+        token: accessToken,
+        format: reportFormat,
+        fallbackFilename: `gym-owner-memberships-report.${reportFormat}`,
+      });
+      setReportNotice(`Membership report exported as ${reportFormat.toUpperCase()}.`);
+    } catch (error) {
+      setReportError(error.message || 'Unable to export memberships report.');
+    } finally {
+      setIsExportingMemberships(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -234,12 +264,33 @@ const GymOwnerAnalyticsPage = () => {
       <DashboardSection
         title="Membership trend"
         action={(
-          <span className="dashboard-timeframe-label">
-            {timeframe === 'weekly' ? 'Weekly view' : 'Monthly view'}
-          </span>
+          <div className="dashboard-controls">
+            <span className="dashboard-timeframe-label">
+              {timeframe === 'weekly' ? 'Weekly view' : 'Monthly view'}
+            </span>
+            <select
+              className="dashboard-select"
+              value={reportFormat}
+              onChange={(event) => setReportFormat(event.target.value)}
+              aria-label="Membership report format"
+            >
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button
+              type="button"
+              className="users-toolbar__refresh"
+              disabled={isExportingMemberships}
+              onClick={handleExportMemberships}
+            >
+              {isExportingMemberships ? 'Exporting...' : 'Export memberships'}
+            </button>
+          </div>
         )}
         className="dashboard-section--span-12"
       >
+        {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
+        {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
         {membershipTrend?.length ? (
           <GrowthLineChart
             role="gym-owner"
@@ -253,24 +304,70 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
+      <DashboardSection title="30-day conversion funnel" className="dashboard-section--span-12">
+        {funnelSteps.length ? (
+          <div className="conversion-funnel">
+            <div className="conversion-funnel__steps">
+              {funnelSteps.map((step) => (
+                <article key={step.id} className="conversion-funnel__step">
+                  <small>{step.label}</small>
+                  <strong>{formatNumber(step.value ?? 0)}</strong>
+                  <span>
+                    {step.conversionFromPrevious === null
+                      ? 'Top of funnel'
+                      : `${formatPercentage(step.conversionFromPrevious)} from previous step`}
+                  </span>
+                </article>
+              ))}
+            </div>
+            <div className="conversion-funnel__meta">
+              <div className="conversion-funnel__metric">
+                <span>Listing spend</span>
+                <strong>{formatCurrency(funnelTotals.listingSpend ?? 0)}</strong>
+              </div>
+              <div className="conversion-funnel__metric">
+                <span>Sponsorship spend</span>
+                <strong>{formatCurrency(funnelTotals.sponsorshipSpend ?? 0)}</strong>
+              </div>
+              <div className="conversion-funnel__metric">
+                <span>Cost per join</span>
+                <strong>{formatCurrency(funnelTotals.costPerJoin ?? 0)}</strong>
+              </div>
+              <div className="conversion-funnel__metric">
+                <span>Cost per renewal</span>
+                <strong>{formatCurrency(funnelTotals.costPerRenewal ?? 0)}</strong>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <EmptyState message="We need traffic and membership activity before a funnel can be shown." />
+        )}
+      </DashboardSection>
+
       <DashboardSection title="Gym performance" className="dashboard-section--span-12">
         {analytics?.gyms?.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
                 <th>Gym</th>
-                <th>Impressions</th>
-                <th>Memberships</th>
-                <th>Trainers</th>
+                <th>City</th>
+                <th>Impressions (30d)</th>
+                <th>Opens (30d)</th>
+                <th>Joins (30d)</th>
+                <th>Renewals (30d)</th>
+                <th>Open to Join</th>
               </tr>
             </thead>
             <tbody>
               {analytics.gyms.map((gym) => (
                 <tr key={gym.id}>
                   <td>{gym.name}</td>
-                  <td>{formatNumber(gym.impressions ?? 0)}</td>
-                  <td>{formatNumber(gym.memberships ?? 0)}</td>
-                  <td>{formatNumber(gym.trainers ?? 0)}</td>
+                  <td>{gym.city || '-'}</td>
+                  <td>{formatNumber(gym.impressions30d ?? 0)}</td>
+                  <td>{formatNumber(gym.opens30d ?? 0)}</td>
+                  <td>{formatNumber(gym.joins30d ?? 0)}</td>
+                  <td>{formatNumber(gym.renewals30d ?? 0)}</td>
+                  <td>{formatPercentage(gym.joinConversionRate30d ?? 0)}</td>
                 </tr>
               ))}
             </tbody>
@@ -280,7 +377,7 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Impression share" className="dashboard-section--span-6">
+      <DashboardSection title="30-day impression share" className="dashboard-section--span-6">
         {impressionsSplit?.length ? (
           <DistributionPieChart
             role="gym-owner"

@@ -15,7 +15,7 @@ const PRICE_PRESETS = [
   { id: '2000-plus', label: '₹2,000+', min: 2000, max: null },
 ];
 
-const ProductFilters = ({ filters, onChange, onReset, onPricePreset, disabled }) => (
+const ProductFilters = ({ filters, onChange, onReset, onPricePreset, disabled = false }) => (
   <aside className="marketplace-sidebar" aria-label="Marketplace filters">
     <div className="marketplace-filter-group">
       <div className="marketplace-filter-group__header">
@@ -105,10 +105,6 @@ ProductFilters.propTypes = {
   onReset: PropTypes.func.isRequired,
   onPricePreset: PropTypes.func.isRequired,
   disabled: PropTypes.bool,
-};
-
-ProductFilters.defaultProps = {
-  disabled: false,
 };
 
 export default ProductFilters;

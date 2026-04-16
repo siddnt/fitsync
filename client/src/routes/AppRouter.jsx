@@ -14,6 +14,7 @@ const CheckoutSuccessPage = lazy(() => import('../pages/marketplace/CheckoutSucc
 const CheckoutCancelPage = lazy(() => import('../pages/marketplace/CheckoutCancelPage.jsx'));
 const ProfilePage = lazy(() => import('../pages/profile/ProfilePage.jsx'));
 const TraineeDashboard = lazy(() => import('../pages/dashboards/TraineeDashboard.jsx'));
+const TraineeSessionsPage = lazy(() => import('../pages/dashboards/trainee/SessionsPage.jsx'));
 const GymOwnerDashboard = lazy(() => import('../pages/dashboards/GymOwnerDashboard.jsx'));
 const TrainerDashboard = lazy(() => import('../pages/dashboards/TrainerDashboard.jsx'));
 const AdminDashboard = lazy(() => import('../pages/dashboards/AdminDashboard.jsx'));
@@ -77,6 +78,7 @@ const AppRouter = () => (
           <Route index element={<DashboardLanding />} />
           <Route path="trainee">
             <Route index element={<TraineeDashboard />} />
+            <Route path="sessions" element={<TraineeSessionsPage />} />
             <Route path="progress" element={<TraineeProgressPage />} />
             <Route path="diet" element={<TraineeDietPage />} />
             <Route path="orders" element={<TraineeOrdersPage />} />

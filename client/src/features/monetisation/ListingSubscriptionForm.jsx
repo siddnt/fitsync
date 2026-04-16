@@ -3,8 +3,8 @@ import { Field, reduxForm } from 'redux-form';
 import { useDispatch, useSelector } from 'react-redux';
 import FormField from '../../components/forms/FormField.jsx';
 import {
-  selectPlan,
   selectGym,
+  selectPlan,
 } from './monetisationSlice.js';
 import './MonetisationForms.css';
 
@@ -24,7 +24,7 @@ const PlanOptionField = ({ input, option, onSelected }) => {
       />
       <div className="plan-card__header">
         <h4>{option.label}</h4>
-        <span className="plan-card__price">₹{option.amount} / {option.durationMonths} mo</span>
+        <span className="plan-card__price">Rs {option.amount} / {option.durationMonths} mo</span>
       </div>
       <ul className="plan-card__features">
         {option.features?.map((feature) => (
@@ -47,7 +47,7 @@ PlanOptionField.propTypes = {
   onSelected: PropTypes.func.isRequired,
 };
 
-const GymSelectField = ({ input, options, meta, onSelected }) => (
+const GymSelectField = ({ input, options, meta = null, onSelected }) => (
   <FormField
     input={{
       ...input,
@@ -81,17 +81,13 @@ GymSelectField.propTypes = {
   onSelected: PropTypes.func.isRequired,
 };
 
-GymSelectField.defaultProps = {
-  meta: null,
-};
-
 const ListingSubscriptionFormComponent = ({
   handleSubmit,
-  gymOptions,
-  plans,
-  submitting,
-  error,
-  submitSucceeded,
+  gymOptions = [],
+  plans = [],
+  submitting = false,
+  error = null,
+  submitSucceeded = false,
 }) => {
   const dispatch = useDispatch();
   const lastReceipt = useSelector((state) => state.monetisation.lastReceipt);
@@ -117,30 +113,15 @@ const ListingSubscriptionFormComponent = ({
         ))}
       </div>
 
-      <Field
-        name="autoRenew"
-        component={FormField}
-        as="checkbox"
-        label="Enable auto-renew"
-        type="checkbox"
-      />
-
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-123456"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">
-          Subscription activated · Ref #{lastReceipt}
+          Subscription activated. Confirmation ID: {lastReceipt}
         </div>
       ) : null}
 
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Activating…' : 'Activate plan'}
+        {submitting ? 'Activating...' : 'Activate plan'}
       </button>
     </form>
   );
@@ -162,14 +143,6 @@ ListingSubscriptionFormComponent.propTypes = {
   submitSucceeded: PropTypes.bool,
 };
 
-ListingSubscriptionFormComponent.defaultProps = {
-  gymOptions: [],
-  plans: [],
-  submitting: false,
-  error: null,
-  submitSucceeded: false,
-};
-
 const validate = (values) => {
   const errors = {};
 
@@ -187,9 +160,6 @@ const ListingSubscriptionForm = reduxForm({
   form: 'listingSubscription',
   validate,
   enableReinitialize: true,
-  initialValues: {
-    autoRenew: true,
-  },
 })(ListingSubscriptionFormComponent);
 
 export default ListingSubscriptionForm;

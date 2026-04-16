@@ -1,7 +1,15 @@
 import PropTypes from 'prop-types';
 import './FormField.css';
 
-const FormField = ({ input, label, type, as, meta, children, ...rest }) => {
+const FormField = ({
+  input,
+  label = null,
+  type = 'text',
+  as = 'input',
+  meta = null,
+  children = null,
+  ...rest
+}) => {
   const fieldType = as ?? 'input';
   const showError = Boolean(meta?.touched && meta?.error);
   const isFileField = type === 'file';
@@ -83,14 +91,6 @@ FormField.propTypes = {
     error: PropTypes.string,
   }),
   children: PropTypes.node,
-};
-
-FormField.defaultProps = {
-  label: null,
-  type: 'text',
-  as: 'input',
-  meta: null,
-  children: null,
 };
 
 export default FormField;

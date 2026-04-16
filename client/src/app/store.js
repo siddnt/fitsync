@@ -3,6 +3,7 @@ import { persistReducer, persistStore } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 import { reducer as formReducer } from 'redux-form';
 import { apiSlice } from '../services/apiSlice.js';
+import '../services/registerApiEndpoints.js';
 import authReducer from '../features/auth/authSlice.js';
 import uiReducer from '../features/ui/uiSlice.js';
 import monetisationReducer from '../features/monetisation/monetisationSlice.js';
@@ -15,6 +16,19 @@ const persistConfig = {
   whitelist: ['auth', 'cart'],
 };
 
+const safeApiReducer = (state, action) => {
+  const endpointName = action?.meta?.arg?.endpointName;
+
+  if (
+    typeof endpointName === 'string'
+    && !Object.prototype.hasOwnProperty.call(apiSlice.endpoints, endpointName)
+  ) {
+    return state ?? apiSlice.reducer(undefined, { type: '@@INIT' });
+  }
+
+  return apiSlice.reducer(state, action);
+};
+
 const rootReducer = combineReducers({
   auth: authReducer,
   ui: uiReducer,
@@ -22,7 +36,7 @@ const rootReducer = combineReducers({
   seller: sellerReducer,
   cart: cartReducer,
   form: formReducer,
-  [apiSlice.reducerPath]: apiSlice.reducer,
+  [apiSlice.reducerPath]: safeApiReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

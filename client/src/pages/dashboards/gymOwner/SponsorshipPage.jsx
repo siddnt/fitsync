@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { SubmissionError, reset as resetForm } from 'redux-form';
 import { useDispatch } from 'react-redux';
+import { useAppSelector } from '../../../app/hooks.js';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -14,11 +15,13 @@ import {
 } from '../../../services/ownerApi.js';
 import SponsorshipForm from '../../../features/monetisation/SponsorshipForm.jsx';
 import { setLastReceipt, selectGym, selectSponsorshipTier } from '../../../features/monetisation/monetisationSlice.js';
+import { downloadReport } from '../../../utils/reportDownload.js';
 import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const GymOwnerSponsorshipPage = () => {
   const dispatch = useDispatch();
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   const {
     data: sponsorshipResponse,
@@ -43,11 +46,24 @@ const GymOwnerSponsorshipPage = () => {
 
   const [purchaseSponsorship] = usePurchaseSponsorshipMutation();
 
-  const sponsorships = sponsorshipResponse?.data?.sponsorships ?? [];
-  const gymOptions = gymsResponse?.data?.gyms ?? [];
-  const packages = monetisationResponse?.data?.sponsorshipPackages ?? [];
+  const sponsorships = useMemo(
+    () => sponsorshipResponse?.data?.sponsorships ?? [],
+    [sponsorshipResponse?.data?.sponsorships],
+  );
+  const gymOptions = useMemo(
+    () => gymsResponse?.data?.gyms ?? [],
+    [gymsResponse?.data?.gyms],
+  );
+  const packages = useMemo(
+    () => monetisationResponse?.data?.sponsorshipPackages ?? [],
+    [monetisationResponse?.data?.sponsorshipPackages],
+  );
 
   const [sponsorshipGymFilter, setSponsorshipGymFilter] = useState('all');
+  const [reportFormat, setReportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
+  const [reportNotice, setReportNotice] = useState(null);
+  const [reportError, setReportError] = useState(null);
 
   const sponsorshipGymOptions = useMemo(() => {
     const visibleGyms = gymOptions.map((gym) => ({ value: gym.id, label: gym.name ?? 'Unnamed gym' }));
@@ -74,14 +90,12 @@ const GymOwnerSponsorshipPage = () => {
       const payload = {
         gymId: values.gymId,
         tier: values.tier,
-        paymentReference: values.paymentReference?.trim() || undefined,
       };
 
       const response = await purchaseSponsorship(payload).unwrap();
 
       const paymentReference =
         response?.data?.sponsorship?.paymentReference ||
-        payload.paymentReference ||
         `${payload.tier}-${payload.gymId}`;
 
       dispatch(setLastReceipt(paymentReference));
@@ -100,6 +114,27 @@ const GymOwnerSponsorshipPage = () => {
     refetchSponsorships();
     refetchGyms();
     refetchPackages();
+  };
+
+  const handleExportSponsorships = async () => {
+    setReportNotice(null);
+    setReportError(null);
+    setIsExporting(true);
+
+    try {
+      await downloadReport({
+        path: '/dashboards/gym-owner/sponsorships/export',
+        token: accessToken,
+        format: reportFormat,
+        params: sponsorshipGymFilter === 'all' ? {} : { gymId: sponsorshipGymFilter },
+        fallbackFilename: `gym-owner-sponsorships-report.${reportFormat}`,
+      });
+      setReportNotice(`Sponsorship report exported as ${reportFormat.toUpperCase()}.`);
+    } catch (error) {
+      setReportError(error.message || 'Unable to export sponsorship report.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (isLoading) {
@@ -146,20 +181,41 @@ const GymOwnerSponsorshipPage = () => {
         title="Active sponsorships"
         className="dashboard-section--span-6"
         action={(
-          <select
-            className="dashboard-select"
-            value={sponsorshipGymFilter}
-            onChange={(event) => setSponsorshipGymFilter(event.target.value)}
-            aria-label="Filter sponsorships by gym"
-          >
-            {sponsorshipGymOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="dashboard-controls">
+            <select
+              className="dashboard-select"
+              value={sponsorshipGymFilter}
+              onChange={(event) => setSponsorshipGymFilter(event.target.value)}
+              aria-label="Filter sponsorships by gym"
+            >
+              {sponsorshipGymOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="dashboard-select"
+              value={reportFormat}
+              onChange={(event) => setReportFormat(event.target.value)}
+              aria-label="Sponsorship report format"
+            >
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button
+              type="button"
+              className="users-toolbar__refresh"
+              disabled={isExporting}
+              onClick={handleExportSponsorships}
+            >
+              {isExporting ? 'Exporting...' : 'Export report'}
+            </button>
+          </div>
         )}
       >
+        {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
+        {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
         {filteredSponsorships.length ? (
           <div className="owner-plan-grid">
             {filteredSponsorships.map((item) => (
@@ -176,8 +232,8 @@ const GymOwnerSponsorshipPage = () => {
                 </header>
                 <dl className="owner-plan-card__metrics">
                   <div>
-                    <dt>Impressions</dt>
-                    <dd>{formatNumber(item.impressions ?? 0)}</dd>
+                    <dt>Impressions (30d)</dt>
+                    <dd>{formatNumber(item.impressions30d ?? item.impressions ?? 0)}</dd>
                   </div>
                   <div>
                     <dt>Started</dt>
@@ -219,7 +275,7 @@ const GymOwnerSponsorshipPage = () => {
               const recommendedTier = packages.find((pkg) => pkg.tier === 'gold') ?? packages[0];
               return (
                 <li key={`${gym.id}-recommendation`}>
-                  Upgrade {gym.name} with the {recommendedTier?.label ?? 'recommended'} package to convert {formatNumber(gym.analytics?.impressions ?? 0)} weekly impressions.
+                  Upgrade {gym.name} with the {recommendedTier?.label ?? 'recommended'} package to convert {formatNumber(gym.analytics?.impressions30d ?? gym.analytics?.impressions ?? 0)} recent impressions.
                 </li>
               );
             })}

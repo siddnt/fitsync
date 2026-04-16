@@ -24,11 +24,11 @@ const TierOptionField = ({ input, option, onSelected }) => {
       />
       <div className="plan-card__header">
         <h4>{option.label}</h4>
-        <span className="plan-card__price">₹{option.amount} / {option.durationMonths} mo</span>
+        <span className="plan-card__price">Rs {option.amount} / {option.durationMonths} mo</span>
       </div>
       <ul className="plan-card__features">
-        <li>Monthly budget · ₹{option.monthlyBudget}</li>
-        <li>Estimated reach · {option.reach.toLocaleString()}</li>
+        <li>Monthly budget: Rs {option.monthlyBudget}</li>
+        <li>Estimated reach: {option.reach.toLocaleString()}</li>
       </ul>
     </label>
   );
@@ -49,11 +49,11 @@ TierOptionField.propTypes = {
 
 const SponsorshipFormComponent = ({
   handleSubmit,
-  gymOptions,
-  packages,
-  submitting,
-  error,
-  submitSucceeded,
+  gymOptions = [],
+  packages = [],
+  submitting = false,
+  error = null,
+  submitSucceeded = false,
 }) => {
   const dispatch = useDispatch();
   const lastReceipt = useSelector((state) => state.monetisation.lastReceipt);
@@ -97,22 +97,15 @@ const SponsorshipFormComponent = ({
         ))}
       </div>
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-987654"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">
-          Sponsorship activated · Ref #{lastReceipt}
+          Sponsorship activated. Confirmation ID: {lastReceipt}
         </div>
       ) : null}
 
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Processing…' : 'Activate sponsorship'}
+        {submitting ? 'Processing...' : 'Activate sponsorship'}
       </button>
     </form>
   );
@@ -132,14 +125,6 @@ SponsorshipFormComponent.propTypes = {
   submitting: PropTypes.bool,
   error: PropTypes.string,
   submitSucceeded: PropTypes.bool,
-};
-
-SponsorshipFormComponent.defaultProps = {
-  gymOptions: [],
-  packages: [],
-  submitting: false,
-  error: null,
-  submitSucceeded: false,
 };
 
 const validate = (values) => {

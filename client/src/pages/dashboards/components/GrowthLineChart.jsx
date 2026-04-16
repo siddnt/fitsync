@@ -16,7 +16,7 @@ const sampleGrowth = {
   ],
 };
 
-const GrowthLineChart = ({ role, data, series }) => {
+const GrowthLineChart = ({ role = 'gym-owner', data = null, series = null }) => {
   const fallbackData = sampleGrowth[role] ?? sampleGrowth['gym-owner'];
   const resolvedData = data?.length ? data : fallbackData;
 
@@ -36,7 +36,7 @@ const GrowthLineChart = ({ role, data, series }) => {
 
   return (
     <div className="chart-container">
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={260} minWidth={0}>
         <LineChart data={resolvedData} margin={{ top: 12, right: 16, bottom: 4, left: -8 }}>
           <XAxis dataKey="label" stroke="rgba(255,255,255,0.55)" />
           <YAxis stroke="rgba(255,255,255,0.55)" />
@@ -69,12 +69,6 @@ GrowthLineChart.propTypes = {
       label: PropTypes.string,
     }),
   ),
-};
-
-GrowthLineChart.defaultProps = {
-  role: 'gym-owner',
-  data: null,
-  series: null,
 };
 
 export default GrowthLineChart;

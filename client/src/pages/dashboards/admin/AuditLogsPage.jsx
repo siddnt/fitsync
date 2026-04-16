@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
+import { useAppSelector } from '../../../app/hooks.js';
 import { useGetAuditLogsQuery } from '../../../services/adminApi.js';
+import { downloadReport } from '../../../utils/reportDownload.js';
 import { formatDateTime, formatStatus } from '../../../utils/format.js';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
@@ -15,12 +17,18 @@ const AuditLogsPage = () => {
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [reportFormat, setReportFormat] = useState('csv');
+  const [isExporting, setIsExporting] = useState(false);
+  const [reportNotice, setReportNotice] = useState(null);
+  const [reportError, setReportError] = useState(null);
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   const queryParams = useMemo(() => ({
     action: actionFilter || undefined,
     entityType: entityTypeFilter || undefined,
+    search: searchTerm.trim() || undefined,
     limit,
-  }), [actionFilter, entityTypeFilter, limit]);
+  }), [actionFilter, entityTypeFilter, searchTerm, limit]);
 
   const { data, isLoading, isError, refetch } = useGetAuditLogsQuery(queryParams);
   const logs = data?.data?.logs ?? [];
@@ -108,6 +116,32 @@ const AuditLogsPage = () => {
     setEntityTypeFilter('');
     setSearchTerm('');
     setLimit(DEFAULT_LIMIT);
+  };
+
+  const handleExportAuditLogs = async () => {
+    setReportNotice(null);
+    setReportError(null);
+    setIsExporting(true);
+
+    try {
+      await downloadReport({
+        path: '/admin/audit-logs/export',
+        token: accessToken,
+        format: reportFormat,
+        params: {
+          action: actionFilter || undefined,
+          entityType: entityTypeFilter || undefined,
+          search: searchTerm.trim() || undefined,
+          limit,
+        },
+        fallbackFilename: `audit-log-report.${reportFormat}`,
+      });
+      setReportNotice(`Audit log report exported as ${reportFormat.toUpperCase()}.`);
+    } catch (error) {
+      setReportError(error.message || 'Unable to export audit log report.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (isLoading) {
@@ -198,9 +232,28 @@ const AuditLogsPage = () => {
             <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>
               Refresh
             </button>
+            <select
+              className="inventory-toolbar__input inventory-toolbar__input--select"
+              value={reportFormat}
+              onChange={(event) => setReportFormat(event.target.value)}
+              aria-label="Audit export format"
+            >
+              <option value="csv">CSV</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button
+              type="button"
+              className="users-toolbar__refresh"
+              disabled={isExporting}
+              onClick={handleExportAuditLogs}
+            >
+              {isExporting ? 'Exporting...' : 'Export'}
+            </button>
           </div>
         )}
       >
+        {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
+        {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
         {filteredLogs.length ? (
           <table className="dashboard-table">
             <thead>

@@ -12,6 +12,7 @@ import GymList from './components/GymList.jsx';
 import GymFilters from './components/GymFilters.jsx';
 import GymHighlight from './components/GymHighlight.jsx';
 import { matchesPrefix } from '../../utils/search.js';
+import { getGymImpressionViewerId } from '../../utils/impressionViewer.js';
 import './GymExplorerPage.css';
 
 const buildSuggestionList = (items, query, noResults = []) => {
@@ -58,6 +59,7 @@ const GymExplorerPage = () => {
   const [joinGym, { isLoading: isJoining }] = useJoinGymMutation();
   const [leaveGym, { isLoading: isLeaving }] = useLeaveGymMutation();
   const [actionError, setActionError] = useState(null);
+  const viewerId = useMemo(() => getGymImpressionViewerId(), []);
 
   const user = useSelector((state) => state.auth.user);
   const userRole = user?.role ?? null;
@@ -121,12 +123,11 @@ const GymExplorerPage = () => {
     filters.city,
   ), [gyms, filters.city]);
 
-  // Track impressions when a gym is viewed
   useEffect(() => {
-    if (selectedGym?.id) {
-      recordImpression(selectedGym.id);
+    if (selectedGymId && selectedGym?.id === selectedGymId) {
+      recordImpression({ id: selectedGym.id, viewerId });
     }
-  }, [selectedGym?.id, recordImpression]);
+  }, [selectedGym?.id, selectedGymId, viewerId, recordImpression]);
 
   useEffect(() => {
     setActionError(null);

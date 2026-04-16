@@ -31,6 +31,7 @@ export const listAuditLogs = async ({
   entityId,
   actor,
   action,
+  search,
   limit = 50,
 } = {}) => {
   const filter = {};
@@ -39,9 +40,27 @@ export const listAuditLogs = async ({
   if (actor) filter.actor = actor;
   if (action) filter.action = action;
 
-  return AuditLog.find(filter)
+  const logs = await AuditLog.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate({ path: 'actor', select: 'name email role' })
     .lean();
+
+  const query = String(search || '').trim().toLowerCase();
+  if (!query) {
+    return logs;
+  }
+
+  return logs.filter((log) => (
+    [
+      log.summary,
+      log.action,
+      log.entityType,
+      log.entityId,
+      log.actor?.name,
+      log.actor?.email,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+  ));
 };

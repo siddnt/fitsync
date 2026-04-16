@@ -51,7 +51,13 @@ const formatAxisTick = (value) => {
   return value.toString();
 };
 
-const RevenueSummaryChart = ({ role, data, valueKey, labelKey, series }) => {
+const RevenueSummaryChart = ({
+  role = 'gym-owner',
+  data = null,
+  valueKey = null,
+  labelKey = null,
+  series = null,
+}) => {
   const fallbackData = sampleData[role] ?? sampleData.trainee;
   const resolvedData = data?.length ? data : fallbackData;
   const resolvedValueKey = valueKey || (role === 'gym-owner' ? 'earnings' : 'listing');
@@ -126,14 +132,6 @@ RevenueSummaryChart.propTypes = {
     type: PropTypes.string,
     name: PropTypes.string,
   })),
-};
-
-RevenueSummaryChart.defaultProps = {
-  role: 'gym-owner',
-  data: null,
-  valueKey: null,
-  labelKey: null,
-  series: null,
 };
 
 export default RevenueSummaryChart;

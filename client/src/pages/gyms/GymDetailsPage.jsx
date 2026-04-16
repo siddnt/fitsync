@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import {
   useGetGymByIdQuery,
   useRecordImpressionMutation,
+  useRecordGymOpenMutation,
   useGetMyGymMembershipQuery,
   useJoinGymMutation,
   useLeaveGymMutation,
@@ -12,18 +13,26 @@ import {
   useSubmitGymReviewMutation,
 } from '../../services/gymsApi.js';
 import { formatDate } from '../../utils/format.js';
+import { getGymImpressionViewerId } from '../../utils/impressionViewer.js';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './components/GymMembershipActions.jsx';
 import './GymDetailsPage.css';
+
+const parseAmount = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
 
 const GymDetailsPage = () => {
   const { gymId } = useParams();
   const { data, isLoading, refetch } = useGetGymByIdQuery(gymId, { skip: !gymId });
   const [recordImpression] = useRecordImpressionMutation();
+  const [recordGymOpen] = useRecordGymOpenMutation();
   const [joinGym, { isLoading: isJoining }] = useJoinGymMutation();
   const [leaveGym, { isLoading: isLeaving }] = useLeaveGymMutation();
   const [submitGymReview, { isLoading: isSubmittingReview }] = useSubmitGymReviewMutation();
   const [actionError, setActionError] = useState(null);
+  const viewerId = useMemo(() => getGymImpressionViewerId(), []);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState({ error: null, success: null });
@@ -70,8 +79,8 @@ const GymDetailsPage = () => {
         ? gym.reviews
         : [];
     return [...reviewList].sort((a, b) => {
-      const parseDate = (entry) => new Date(entry?.updatedAt ?? entry?.createdAt ?? 0).getTime();
-      return parseDate(b) - parseDate(a);
+      const parseEntryDate = (entry) => new Date(entry?.updatedAt ?? entry?.createdAt ?? 0).getTime();
+      return parseEntryDate(b) - parseEntryDate(a);
     });
   }, [reviewsResponse?.data?.reviews, gym?.reviews]);
 
@@ -85,9 +94,10 @@ const GymDetailsPage = () => {
 
   useEffect(() => {
     if (gymId) {
-      recordImpression(gymId);
+      recordImpression({ id: gymId, viewerId });
+      recordGymOpen({ id: gymId, viewerId });
     }
-  }, [gymId, recordImpression]);
+  }, [gymId, viewerId, recordImpression, recordGymOpen]);
 
   useEffect(() => {
     setActionError(null);
@@ -213,6 +223,15 @@ const GymDetailsPage = () => {
     );
   }
 
+  const currencyPrefix = gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? 'Rs ' : `${gym.pricing.currency} `;
+  const headlinePrice = parseAmount(gym.pricing?.startingAt ?? gym.pricing?.discounted ?? gym.pricing?.mrp);
+  const headlineMrp = parseAmount(
+    gym.pricing?.startingAt !== undefined && gym.pricing?.startingAt !== null
+      ? gym.pricing?.startingAtMrp
+      : gym.pricing?.mrp,
+  );
+  const headlinePlanLabel = gym.pricing?.startingPlanLabel ?? gym.pricing?.defaultPlanLabel ?? null;
+
   return (
     <div className="gym-details">
       <header className="gym-details__header">
@@ -221,10 +240,17 @@ const GymDetailsPage = () => {
           <p>{gym.location?.address}</p>
         </div>
         <div className="gym-details__pricing">
-          <span className="price">₹{gym.pricing?.discounted ?? gym.pricing?.mrp ?? 'N/A'}</span>
-          {gym.pricing?.mrp && gym.pricing?.discounted && (
-            <span className="price--mrp">₹{gym.pricing.mrp}</span>
-          )}
+          <span className="price">
+            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'N/A'}
+          </span>
+          {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
+            <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
+          ) : null}
+          {headlinePlanLabel ? (
+            <small style={{ display: 'block', marginTop: '0.35rem', color: 'var(--muted-text-color)' }}>
+              Starting with {headlinePlanLabel}
+            </small>
+          ) : null}
         </div>
       </header>
 
@@ -240,8 +266,8 @@ const GymDetailsPage = () => {
         error={actionError}
         userRole={userRole}
         trainers={trainers}
-        monthlyFee={gym.pricing?.discounted ?? gym.pricing?.mrp ?? null}
-        currency={gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? '₹' : `${gym.pricing.currency} `}
+        pricingPlans={gym.pricing?.plans ?? []}
+        currency={currencyPrefix}
       />
 
       <section className="gym-details__gallery">
@@ -285,7 +311,7 @@ const GymDetailsPage = () => {
           <h2>Member reviews</h2>
           {gym.analytics?.ratingCount ? (
             <span>
-              {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} · {gym.analytics.ratingCount} ratings
+              {(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from {gym.analytics.ratingCount} ratings
             </span>
           ) : (
             <span>Be the first to review this gym</span>
@@ -293,7 +319,7 @@ const GymDetailsPage = () => {
         </div>
 
         <div className="gym-details__reviews-list">
-          {isReviewsFetching && !reviews.length ? <p>Loading reviews…</p> : null}
+          {isReviewsFetching && !reviews.length ? <p>Loading reviews...</p> : null}
           {reviews.length ? (
             reviews.map((review) => {
               const starCount = Math.round(Number(review.rating) || 0);
@@ -304,7 +330,7 @@ const GymDetailsPage = () => {
                       <strong>{review.authorName ?? 'Member'}</strong>
                       <small>{review.updatedAt || review.createdAt ? formatDate(review.updatedAt ?? review.createdAt) : null}</small>
                     </div>
-                    <span>{starCount ? '★'.repeat(starCount) : '—'}</span>
+                    <span>{starCount ? `${starCount} / 5` : '-'}</span>
                   </header>
                   <p>{review.comment}</p>
                 </article>

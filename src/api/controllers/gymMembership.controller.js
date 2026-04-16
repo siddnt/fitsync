@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
+import Booking from '../../models/booking.model.js';
 import Revenue from '../../models/revenue.model.js';
 import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -11,6 +12,10 @@ import { invalidateCacheByTags } from '../../services/cache.service.js';
 import { recordAuditLog } from '../../services/audit.service.js';
 import { createNotifications } from '../../services/notification.service.js';
 import { syncGymAnalyticsSnapshot } from '../../services/gymMetrics.service.js';
+import {
+  getMembershipPlanDurationMonths,
+  resolveGymMembershipPlan,
+} from '../../utils/membershipPlans.js';
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -135,9 +140,22 @@ export const getMyGymMembership = asyncHandler(async (req, res) => {
     );
 });
 
-const resolveGymPrice = (gym) => {
-  const price = Number(gym?.pricing?.monthlyPrice ?? gym?.pricing?.monthlyMrp);
-  return Number.isFinite(price) && price > 0 ? price : null;
+const resolveGymPlanForPurchase = (gym, requestedPlanCode) =>
+  resolveGymMembershipPlan(gym?.pricing, requestedPlanCode);
+
+const buildAutoPaymentReference = ({ userId, gymId, planCode }) => {
+  const normalizedPlan = String(planCode || 'membership')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+
+  const shortUserId = String(userId || '').slice(-4).toUpperCase();
+  const shortGymId = String(gymId || '').slice(-4).toUpperCase();
+  const timeToken = Date.now().toString().slice(-8);
+
+  return ['AUTO', normalizedPlan || 'MEMBERSHIP', timeToken, shortUserId, shortGymId]
+    .filter(Boolean)
+    .join('-');
 };
 
 export const joinGym = asyncHandler(async (req, res) => {
@@ -276,17 +294,19 @@ export const joinGym = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Trainer is not active at the moment.');
   }
 
-  const monthlyFee = resolveGymPrice(gym);
+  const selectedPlan = resolveGymPlanForPurchase(gym, req.body?.planCode);
+  const selectedPlanAmount = Number(selectedPlan?.price ?? selectedPlan?.mrp);
 
-  if (!monthlyFee) {
-    throw new ApiError(400, 'This gym does not have a valid monthly price configured.');
+  if (!selectedPlan || !selectedPlanAmount) {
+    throw new ApiError(400, 'Select a valid membership plan to continue.');
   }
 
-  const paymentReference = req.body?.paymentReference;
-
-  if (!paymentReference) {
-    throw new ApiError(400, 'Payment reference is required to activate the membership.');
-  }
+  const paymentReference = String(req.body?.paymentReference || '').trim()
+    || buildAutoPaymentReference({
+      userId: user._id,
+      gymId: gym._id,
+      planCode: selectedPlan.code,
+    });
 
   const autoRenew = req.body?.autoRenew ?? true;
   const benefits = Array.isArray(req.body?.benefits) ? req.body.benefits : undefined;
@@ -295,7 +315,7 @@ export const joinGym = asyncHandler(async (req, res) => {
   const startDate = new Date();
   const endDate = (() => {
     const result = new Date(startDate);
-    result.setMonth(result.getMonth() + 1);
+    result.setMonth(result.getMonth() + getMembershipPlanDurationMonths(selectedPlan.code, 1));
     return result;
   })();
 
@@ -306,7 +326,7 @@ export const joinGym = asyncHandler(async (req, res) => {
   const membershipPayload = {
     trainee: user._id,
     gym: gym._id,
-    plan: 'monthly',
+    plan: selectedPlan.code,
     startDate,
     endDate,
     status: 'active',
@@ -318,9 +338,9 @@ export const joinGym = asyncHandler(async (req, res) => {
 
   const billingSource = req.body?.billing ?? {};
   const billingDetails = {
-    amount: monthlyFee,
-    currency: billingSource.currency ?? 'INR',
-    paymentGateway: billingSource.paymentGateway,
+    amount: selectedPlanAmount,
+    currency: billingSource.currency ?? selectedPlan.currency ?? 'INR',
+    paymentGateway: billingSource.paymentGateway ?? 'internal',
     paymentReference,
     status: 'paid',
   };
@@ -335,8 +355,8 @@ export const joinGym = asyncHandler(async (req, res) => {
 
   const membership = await GymMembership.create(membershipPayload);
 
-  const trainerShare = Math.round(monthlyFee * 0.5);
-  const ownerShare = Math.max(Math.round(monthlyFee - trainerShare), 0);
+  const trainerShare = Math.round(selectedPlanAmount * 0.5);
+  const ownerShare = Math.max(Math.round(selectedPlanAmount - trainerShare), 0);
 
   const updates = [
     Gym.updateOne(
@@ -456,7 +476,7 @@ export const joinGym = asyncHandler(async (req, res) => {
     ['memberId', String(user._id)],
     ['membershipId', String(membership._id)],
     ['paymentReference', paymentReference],
-    ['plan', 'monthly'],
+    ['plan', selectedPlan.code],
   ];
 
   await Promise.all([
@@ -596,6 +616,24 @@ export const leaveGym = asyncHandler(async (req, res) => {
       ),
     );
   }
+
+  updates.push(
+    Booking.updateMany(
+      {
+        user: membership.trainee,
+        gym: gymId,
+        status: { $in: ['pending', 'confirmed'] },
+      },
+      {
+        $set: {
+          status: 'cancelled',
+          cancellationReason: isTrainerMembership
+            ? 'Trainer access removed for this gym.'
+            : 'Membership ended for this gym.',
+        },
+      },
+    ),
+  );
 
   if (isTrainerMembership && trainerAccountId) {
     updates.push(

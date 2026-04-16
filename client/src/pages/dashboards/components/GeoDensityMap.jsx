@@ -5,7 +5,11 @@ import { formatNumber } from '../../../utils/format.js';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-const GeoDensityMap = ({ points, totals, topLocations }) => {
+const GeoDensityMap = ({
+  points = [],
+  totals = { totalGyms: 0, totalImpressions: 0 },
+  topLocations = [],
+}) => {
   const markers = useMemo(() => {
     if (!Array.isArray(points)) {
       return [];
@@ -141,12 +145,6 @@ GeoDensityMap.propTypes = {
       impressions: PropTypes.number,
     }),
   ),
-};
-
-GeoDensityMap.defaultProps = {
-  points: [],
-  totals: { totalGyms: 0, totalImpressions: 0 },
-  topLocations: [],
 };
 
 export default memo(GeoDensityMap);

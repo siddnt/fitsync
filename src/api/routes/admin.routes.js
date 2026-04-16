@@ -8,6 +8,7 @@ import {
 	updateAdminToggles,
 	updateUserStatus,
 } from '../controllers/admin.controller.js';
+import { exportAuditLogsReport } from '../controllers/report.controller.js';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.delete('/users/:userId', deleteUserAccount);
 router.patch('/users/:userId/status', updateUserStatus);
 router.delete('/gyms/:gymId', deleteGymListing);
 router.get('/audit-logs', getAuditHistory);
+router.get('/audit-logs/export', exportAuditLogsReport);
 router.get('/settings/toggles', getAdminToggles);
 router.patch('/settings/toggles', updateAdminToggles);
 

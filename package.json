@@ -16,10 +16,12 @@
     "cache:benchmark": "node src/scripts/benchmarkCache.js",
     "load:test": "node src/scripts/loadTestPerformance.js",
     "db:analyze": "node src/scripts/analyzeQueryPlans.js",
+    "db:backfill:gym-plans": "node src/scripts/backfillGymMembershipPlans.js",
     "search:sync": "node src/scripts/syncSearchIndexes.js",
     "docs:uml": "node src/scripts/renderUmlDiagrams.mjs",
     "docs:pdf": "python src/scripts/exportDddPdf.py",
-    "seed:analytics": "node src/scripts/seedAdminAnalytics.js"
+    "seed:analytics": "node src/scripts/seedDemoData.js --analytics-only",
+    "seed:demo": "node src/scripts/seedDemoData.js"
   },
   "author": "Sid",
   "license": "ISC",

@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import {
+  formatMembershipPlanDuration,
+  getMembershipPlanDefinition,
+} from '../../../constants/membershipPlans.js';
 import './GymMembershipActions.css';
 
 const statusCopy = {
@@ -9,23 +13,50 @@ const statusCopy = {
   expired: 'Membership expired',
 };
 
+const normalizePlanCode = (value) => String(value || '').trim().toLowerCase();
+
+const parseAmount = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
+const formatPlanAmount = (amount, currencyPrefix) => {
+  const numeric = parseAmount(amount);
+  if (numeric === null) {
+    return null;
+  }
+
+  return `${currencyPrefix}${numeric.toLocaleString('en-IN')}`;
+};
+
+const resolvePlanLabel = (plan) =>
+  plan?.label
+  || getMembershipPlanDefinition(plan?.code)?.label
+  || String(plan?.code || '').trim()
+  || 'Membership plan';
+
+const resolvePlanDuration = (plan) =>
+  Number(plan?.durationMonths)
+  || getMembershipPlanDefinition(plan?.code)?.durationMonths
+  || 0;
+
 const GymMembershipActions = ({
-  membership,
-  isLoading,
-  canManage,
-  isAuthenticated,
-  onJoin,
-  onLeave,
-  isJoining,
-  isLeaving,
-  error,
-  userRole,
-  trainers,
-  monthlyFee,
-  currency,
+  membership = null,
+  isLoading = false,
+  canManage = false,
+  isAuthenticated = false,
+  onJoin = undefined,
+  onLeave = undefined,
+  isJoining = false,
+  isLeaving = false,
+  error = null,
+  userRole = null,
+  trainers = [],
+  pricingPlans = [],
+  currency = 'Rs ',
 }) => {
+  const [selectedPlanCode, setSelectedPlanCode] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
   const [autoRenew, setAutoRenew] = useState(true);
   const [localError, setLocalError] = useState(null);
 
@@ -33,6 +64,35 @@ const GymMembershipActions = ({
   const isTrainerMembership = isTrainerAccount && membership?.plan === 'trainer-access';
   const trainerMembershipStatus = isTrainerMembership ? membership?.status ?? null : null;
   const isTrainerPending = trainerMembershipStatus === 'pending';
+
+  const availablePlans = useMemo(
+    () => (
+      Array.isArray(pricingPlans)
+        ? pricingPlans.filter((plan) => plan?.isActive !== false && parseAmount(plan?.price ?? plan?.mrp) !== null)
+        : []
+    ),
+    [pricingPlans],
+  );
+
+  const selectedPlan = useMemo(() => {
+    const selectedCode = normalizePlanCode(selectedPlanCode);
+    return availablePlans.find((plan) => normalizePlanCode(plan.code) === selectedCode) || null;
+  }, [availablePlans, selectedPlanCode]);
+
+  const selectedPlanLabel = resolvePlanLabel(selectedPlan);
+  const selectedPlanDurationMonths = resolvePlanDuration(selectedPlan);
+  const selectedPlanAmount = parseAmount(selectedPlan?.price ?? selectedPlan?.mrp);
+  const selectedPlanMrp = parseAmount(selectedPlan?.mrp);
+  const selectedPlanDiscount = selectedPlanAmount !== null
+    && selectedPlanMrp !== null
+    && selectedPlanMrp > selectedPlanAmount
+    ? Math.round(((selectedPlanMrp - selectedPlanAmount) / selectedPlanMrp) * 100)
+    : 0;
+  const currentPlanLabel = resolvePlanLabel({ code: membership?.plan });
+  const availablePlanLabels = useMemo(
+    () => availablePlans.map((plan) => resolvePlanLabel(plan)),
+    [availablePlans],
+  );
 
   const selectedTrainerDetails = useMemo(
     () => trainers.find((trainer) => trainer.id === selectedTrainer),
@@ -55,13 +115,24 @@ const GymMembershipActions = ({
       .join(' ');
   }, [selectedTrainerDetails?.gender]);
 
-  const numericMonthlyFee = (() => {
-    if (typeof monthlyFee === 'number' && Number.isFinite(monthlyFee)) {
-      return monthlyFee;
-    }
-    const parsed = Number(monthlyFee);
-    return Number.isFinite(parsed) ? parsed : null;
-  })();
+  useEffect(() => {
+    setSelectedPlanCode((currentValue) => {
+      const preferredMembershipPlan = normalizePlanCode(membership?.plan);
+      const matchingMembershipPlan = availablePlans.find(
+        (plan) => normalizePlanCode(plan.code) === preferredMembershipPlan,
+      );
+
+      if (matchingMembershipPlan) {
+        return matchingMembershipPlan.code;
+      }
+
+      const hasCurrentSelection = availablePlans.some(
+        (plan) => normalizePlanCode(plan.code) === normalizePlanCode(currentValue),
+      );
+
+      return hasCurrentSelection ? currentValue : '';
+    });
+  }, [availablePlans, membership?.plan]);
 
   useEffect(() => {
     if (membership?.trainer?.id) {
@@ -74,7 +145,7 @@ const GymMembershipActions = ({
 
   useEffect(() => {
     setLocalError(null);
-  }, [selectedTrainer, paymentReference, isTrainerAccount]);
+  }, [selectedPlanCode, selectedTrainer, isTrainerAccount]);
 
   if (!isAuthenticated) {
     return (
@@ -97,7 +168,7 @@ const GymMembershipActions = ({
   if (isLoading) {
     return (
       <div className="gym-membership-actions">
-        <p className="gym-membership-actions__hint">Checking membership status…</p>
+        <p className="gym-membership-actions__hint">Checking membership status...</p>
       </div>
     );
   }
@@ -105,7 +176,11 @@ const GymMembershipActions = ({
   const status = membership?.status;
   const hasActiveMembership = status === 'active' || status === 'paused';
   const canRejoin = !status || status === 'cancelled' || status === 'expired';
-  const showTrainerLeaveButton = isTrainerMembership && Boolean(membership?.id) && status && status !== 'cancelled' && status !== 'expired';
+  const showTrainerLeaveButton = isTrainerMembership
+    && Boolean(membership?.id)
+    && status
+    && status !== 'cancelled'
+    && status !== 'expired';
 
   const handleJoinClick = async () => {
     setLocalError(null);
@@ -119,23 +194,22 @@ const GymMembershipActions = ({
       return;
     }
 
+    if (!selectedPlan?.code || selectedPlanAmount === null) {
+      setLocalError('Select a membership plan to continue.');
+      return;
+    }
+
     if (!selectedTrainer) {
       setLocalError('Select a trainer to continue.');
       return;
     }
 
-    if (!paymentReference.trim()) {
-      setLocalError('Enter the payment reference received after payment.');
-      return;
-    }
-
     try {
       await onJoin?.({
+        planCode: selectedPlan.code,
         trainerId: selectedTrainer,
-        paymentReference: paymentReference.trim(),
         autoRenew,
       });
-      setPaymentReference('');
     } catch (joinError) {
       setLocalError(joinError?.message ?? 'Unable to join the gym. Please try again.');
     }
@@ -183,6 +257,8 @@ const GymMembershipActions = ({
                 ? 'Trainees can now select you when joining this gym.'
                 : 'Link yourself to this gym to appear as an available trainer. Earnings split 50/50 with the gym owner once trainees select you.'}
           </span>
+        ) : membership?.plan ? (
+          <span className="gym-membership-actions__hint">Current plan: {currentPlanLabel}</span>
         ) : null}
       </div>
 
@@ -207,8 +283,8 @@ const GymMembershipActions = ({
               >
                 {isLeaving
                   ? isTrainerPending
-                    ? 'Withdrawing…'
-                    : 'Leaving…'
+                    ? 'Withdrawing...'
+                    : 'Leaving...'
                   : isTrainerPending
                     ? 'Withdraw request'
                     : 'Leave trainer roster'}
@@ -224,17 +300,37 @@ const GymMembershipActions = ({
                 onClick={handleJoinClick}
                 disabled={isJoining}
               >
-                {isJoining ? 'Joining…' : 'Join as trainer'}
+                {isJoining ? 'Joining...' : 'Join as trainer'}
               </button>
             </div>
           ) : null}
         </>
       ) : (
         <>
-          {numericMonthlyFee !== null ? (
-            <p className="gym-membership-actions__price">
-              Monthly fee: <strong>{currency}{numericMonthlyFee.toLocaleString('en-IN')}</strong>
-            </p>
+          {selectedPlanAmount !== null ? (
+            <>
+              <p className="gym-membership-actions__price">
+                Selected plan: <strong>{selectedPlanLabel}</strong> for{' '}
+                <strong>{formatPlanAmount(selectedPlanAmount, currency)}</strong>
+              </p>
+              <p className="gym-membership-actions__hint">
+                {selectedPlanDurationMonths
+                  ? formatMembershipPlanDuration(selectedPlanDurationMonths)
+                  : 'Membership duration unavailable'}
+                {selectedPlanMrp !== null && selectedPlanMrp > selectedPlanAmount
+                  ? ` / MRP ${formatPlanAmount(selectedPlanMrp, currency)} / ${selectedPlanDiscount}% off`
+                  : ''}
+              </p>
+            </>
+          ) : availablePlans.length ? (
+            <>
+              <p className="gym-membership-actions__price">
+                Available plans: <strong>{availablePlans.length}</strong>
+              </p>
+              <p className="gym-membership-actions__hint">
+                {availablePlanLabels.join(', ')}. Select a plan to continue.
+              </p>
+            </>
           ) : (
             <p className="gym-membership-actions__hint">Gym pricing unavailable.</p>
           )}
@@ -247,13 +343,58 @@ const GymMembershipActions = ({
                 onClick={onLeave}
                 disabled={isLeaving}
               >
-                {isLeaving ? 'Leaving…' : 'Leave gym'}
+                {isLeaving ? 'Leaving...' : 'Leave gym'}
               </button>
             </div>
           ) : null}
 
           {canRejoin ? (
             <div className="gym-membership-actions__form">
+              <div className="gym-membership-actions__label">
+                <span>Available plans</span>
+                {availablePlans.length ? (
+                  <div className="gym-membership-actions__plan-grid" role="radiogroup" aria-label="Select membership plan">
+                    {availablePlans.map((plan) => {
+                      const amount = formatPlanAmount(plan.price ?? plan.mrp, currency);
+                      const durationMonths = resolvePlanDuration(plan);
+                      const durationLabel = formatMembershipPlanDuration(durationMonths);
+                      const mrp = parseAmount(plan.mrp);
+                      const price = parseAmount(plan.price ?? plan.mrp);
+                      const discount = price !== null && mrp !== null && mrp > price
+                        ? Math.round(((mrp - price) / mrp) * 100)
+                        : 0;
+                      const isSelected = normalizePlanCode(selectedPlan?.code) === normalizePlanCode(plan.code);
+
+                      return (
+                        <button
+                          key={plan.code}
+                          type="button"
+                          className={`gym-membership-actions__plan-card ${isSelected ? 'is-selected' : ''}`}
+                          onClick={() => setSelectedPlanCode(plan.code)}
+                          disabled={isJoining}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="gym-membership-actions__plan-card-top">
+                            <strong>{resolvePlanLabel(plan)}</strong>
+                            <span>{amount || 'N/A'}</span>
+                          </span>
+                          <span className="gym-membership-actions__plan-card-meta">
+                            {durationLabel || 'Membership duration unavailable'}
+                          </span>
+                          {mrp !== null && price !== null && mrp > price ? (
+                            <span className="gym-membership-actions__plan-card-meta">
+                              MRP {formatPlanAmount(mrp, currency)} / {discount}% off
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="gym-membership-actions__hint">No active membership plans are available for this gym.</p>
+                )}
+              </div>
+
               <label className="gym-membership-actions__label" htmlFor="gym-membership-trainer">
                 Select trainer
                 <select
@@ -271,12 +412,12 @@ const GymMembershipActions = ({
                       : null;
                     const summary = [statusTag, experienceTag, traineeTag]
                       .filter(Boolean)
-                      .join(' · ');
+                      .join(' / ');
 
                     return (
                       <option key={trainer.id} value={trainer.id}>
                         {trainer.name}
-                        {summary ? ` · ${summary}` : ''}
+                        {summary ? ` / ${summary}` : ''}
                       </option>
                     );
                   })}
@@ -289,18 +430,6 @@ const GymMembershipActions = ({
                 </p>
               ) : null}
 
-              <label className="gym-membership-actions__label" htmlFor="gym-membership-payment">
-                Payment reference
-                <input
-                  id="gym-membership-payment"
-                  type="text"
-                  value={paymentReference}
-                  placeholder="Txn-123456"
-                  onChange={(event) => setPaymentReference(event.target.value)}
-                  disabled={isJoining}
-                />
-              </label>
-
               <label className="gym-membership-actions__toggle" htmlFor="gym-membership-autorenew">
                 <input
                   id="gym-membership-autorenew"
@@ -309,7 +438,13 @@ const GymMembershipActions = ({
                   onChange={(event) => setAutoRenew(event.target.checked)}
                   disabled={isJoining}
                 />
-                <span>Auto-renew every month</span>
+                <span>
+                  {selectedPlanDurationMonths > 1
+                    ? `Auto-renew every ${selectedPlanDurationMonths} months`
+                    : selectedPlanDurationMonths === 1
+                      ? 'Auto-renew every month'
+                      : 'Auto-renew when the selected plan ends'}
+                </span>
               </label>
 
               {localError ? <p className="gym-membership-actions__error">{localError}</p> : null}
@@ -320,9 +455,9 @@ const GymMembershipActions = ({
                   type="button"
                   className="cta-button"
                   onClick={handleJoinClick}
-                  disabled={isJoining || !trainers.length || numericMonthlyFee === null}
+                  disabled={isJoining || !trainers.length || selectedPlanAmount === null}
                 >
-                  {isJoining ? 'Joining…' : 'Join this gym'}
+                  {isJoining ? 'Joining...' : 'Join this gym'}
                 </button>
               </div>
 
@@ -393,6 +528,10 @@ GymMembershipActions.propTypes = {
     id: PropTypes.string,
     status: PropTypes.string,
     plan: PropTypes.string,
+    autoRenew: PropTypes.bool,
+    trainer: PropTypes.shape({
+      id: PropTypes.string,
+    }),
     trainerAccess: PropTypes.shape({
       status: PropTypes.string,
       approvedAt: PropTypes.string,
@@ -424,24 +563,17 @@ GymMembershipActions.propTypes = {
       gender: PropTypes.string,
     }),
   ),
-  monthlyFee: PropTypes.number,
+  pricingPlans: PropTypes.arrayOf(
+    PropTypes.shape({
+      code: PropTypes.string.isRequired,
+      label: PropTypes.string,
+      durationMonths: PropTypes.number,
+      mrp: PropTypes.number,
+      price: PropTypes.number,
+      currency: PropTypes.string,
+    }),
+  ),
   currency: PropTypes.string,
-};
-
-GymMembershipActions.defaultProps = {
-  membership: null,
-  isLoading: false,
-  canManage: false,
-  isAuthenticated: false,
-  onJoin: undefined,
-  onLeave: undefined,
-  isJoining: false,
-  isLeaving: false,
-  error: null,
-  userRole: null,
-  trainers: [],
-  monthlyFee: null,
-  currency: '₹',
 };
 
 export default GymMembershipActions;

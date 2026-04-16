@@ -21,6 +21,11 @@ const bookingSchema = new mongoose.Schema(
             type: String,
             required: [true, "Gym name is required"]
         },
+        availabilitySlotKey: {
+            type: String,
+            required: [true, "Availability slot key is required"],
+            trim: true
+        },
         day: {
             type: String,
             enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
@@ -37,6 +42,20 @@ const bookingSchema = new mongoose.Schema(
         bookingDate: {
             type: Date,
             required: [true, "Booking date is required"]
+        },
+        timezone: {
+            type: String,
+            default: "Asia/Calcutta"
+        },
+        sessionType: {
+            type: String,
+            trim: true,
+            default: "personal-training"
+        },
+        locationLabel: {
+            type: String,
+            trim: true,
+            default: ""
         },
 
         // for future enhancements
@@ -89,6 +108,7 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.index({ user: 1, trainer: 1, bookingDate: 1 });
 bookingSchema.index({ trainer: 1, bookingDate: 1 });
 bookingSchema.index({ gym: 1, bookingDate: 1 });
+bookingSchema.index({ trainer: 1, gym: 1, bookingDate: 1, availabilitySlotKey: 1 });
 bookingSchema.index({ status: 1 });
 
 // Validate time format

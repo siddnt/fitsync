@@ -11,7 +11,11 @@ import {
   useGetMyAvailabilityQuery,
   useUpdateAvailabilityMutation,
 } from '../../../services/trainerApi.js';
-import { formatDate } from '../../../utils/format.js';
+import {
+  useGetMyBookingsQuery,
+  useUpdateBookingStatusMutation,
+} from '../../../services/bookingApi.js';
+import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const MEAL_SLOTS = [
@@ -104,6 +108,12 @@ const TrainerUpdatesPage = () => {
   const [shareFeedback, { isLoading: isSharingFeedback }] = useShareFeedbackMutation();
   const { data: availabilityResponse } = useGetMyAvailabilityQuery();
   const [updateAvailability, { isLoading: isUpdatingAvailability }] = useUpdateAvailabilityMutation();
+  const {
+    data: trainerBookingsResponse,
+    isLoading: isTrainerBookingsLoading,
+    refetch: refetchTrainerBookings,
+  } = useGetMyBookingsQuery({ limit: 100 });
+  const [updateBookingStatus, { isLoading: isUpdatingBookingStatus }] = useUpdateBookingStatusMutation();
 
   const selectedTrainee = useMemo(
     () => trainees.find((t) => t.internalId === selectedTraineeId),
@@ -122,10 +132,27 @@ const TrainerUpdatesPage = () => {
   }, [assignments]);
 
   const availabilityEntries = availabilityResponse?.data?.availability ?? [];
+  const trainerBookings = useMemo(
+    () => (Array.isArray(trainerBookingsResponse?.data?.bookings) ? trainerBookingsResponse.data.bookings : []),
+    [trainerBookingsResponse?.data?.bookings],
+  );
+  const bookingSummary = trainerBookingsResponse?.data?.summary ?? {};
 
   const selectedAvailabilityEntry = useMemo(
     () => availabilityEntries.find((entry) => entry.gym?._id === availabilityForm.gymId || entry.gym?.id === availabilityForm.gymId),
     [availabilityEntries, availabilityForm.gymId],
+  );
+  const pendingBookings = useMemo(
+    () => trainerBookings.filter((booking) => booking.status === 'pending'),
+    [trainerBookings],
+  );
+  const confirmedBookings = useMemo(
+    () => trainerBookings.filter((booking) => booking.status === 'confirmed'),
+    [trainerBookings],
+  );
+  const recentBookingHistory = useMemo(
+    () => trainerBookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status)).slice(0, 6),
+    [trainerBookings],
   );
 
   const bmiPreview = useMemo(() => {
@@ -329,6 +356,22 @@ const TrainerUpdatesPage = () => {
     }
   };
 
+  const handleBookingStatusChange = async ({ bookingId, status, cancellationReason }) => {
+    resetNotices();
+
+    try {
+      await updateBookingStatus({
+        bookingId,
+        status,
+        cancellationReason,
+      }).unwrap();
+      setNotice(`Booking ${formatStatus(status).toLowerCase()}.`);
+      await refetchTrainerBookings();
+    } catch (err) {
+      setErrorNotice(err?.data?.message ?? 'Failed to update booking status.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid">
@@ -354,7 +397,7 @@ const TrainerUpdatesPage = () => {
     <div className="update-records-page">
       <header className="update-records-header">
         <h2>Update Trainee Records</h2>
-        <p>Manage attendance, progress, diet, and feedback for your assigned trainees.</p>
+        <p>Manage attendance, progress, diet, feedback, and session approvals for your assigned trainees.</p>
       </header>
 
       <div className="trainee-selector-section">
@@ -385,12 +428,135 @@ const TrainerUpdatesPage = () => {
       {(notice || errorNotice) && (
         <div className={`notification-banner ${errorNotice ? 'error' : 'success'}`}>
           {errorNotice || notice}
-          <button onClick={resetNotices} className="close-notification">×</button>
+          <button type="button" onClick={resetNotices} className="close-notification">x</button>
         </div>
       )}
 
       {selectedTrainee || trainerGyms.length ? (
         <div className="forms-grid">
+          <section className="record-form-card record-form-card--full">
+            <div className="card-header">
+              <h3>Session bookings</h3>
+              <p>Confirm trainee requests and close out completed sessions.</p>
+            </div>
+
+            {isTrainerBookingsLoading ? (
+              <SkeletonPanel lines={6} />
+            ) : trainerBookings.length ? (
+              <>
+                <div className="stat-grid">
+                  <div className="stat-card">
+                    <small>Pending requests</small>
+                    <strong>{bookingSummary.pending ?? pendingBookings.length}</strong>
+                    <small>Waiting for trainer confirmation</small>
+                  </div>
+                  <div className="stat-card">
+                    <small>Confirmed sessions</small>
+                    <strong>{bookingSummary.confirmed ?? confirmedBookings.length}</strong>
+                    <small>Upcoming sessions on your calendar</small>
+                  </div>
+                  <div className="stat-card">
+                    <small>Completed sessions</small>
+                    <strong>{bookingSummary.completed ?? 0}</strong>
+                    <small>Recorded as delivered</small>
+                  </div>
+                </div>
+
+                <div className="trainer-booking-table-wrap">
+                  <table className="dashboard-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Trainee</th>
+                        <th>Gym</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trainerBookings.map((booking) => (
+                        <tr key={booking.id}>
+                          <td>{formatDate(booking.bookingDate)}</td>
+                          <td>{booking.startTime} - {booking.endTime}</td>
+                          <td>{booking.trainee?.name ?? 'Trainee'}</td>
+                          <td>{booking.gym?.name ?? 'Gym'}</td>
+                          <td>{formatStatus(booking.status)}</td>
+                          <td>{booking.notes || '-'}</td>
+                          <td>
+                            <div className="trainer-booking-actions">
+                              {booking.status === 'pending' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdatingBookingStatus}
+                                    onClick={() => handleBookingStatusChange({ bookingId: booking.id, status: 'confirmed' })}
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdatingBookingStatus}
+                                    onClick={() => handleBookingStatusChange({
+                                      bookingId: booking.id,
+                                      status: 'cancelled',
+                                      cancellationReason: 'Cancelled by trainer',
+                                    })}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : null}
+
+                              {booking.status === 'confirmed' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdatingBookingStatus}
+                                    onClick={() => handleBookingStatusChange({ bookingId: booking.id, status: 'completed' })}
+                                  >
+                                    Complete
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isUpdatingBookingStatus}
+                                    onClick={() => handleBookingStatusChange({
+                                      bookingId: booking.id,
+                                      status: 'cancelled',
+                                      cancellationReason: 'Cancelled by trainer',
+                                    })}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : null}
+
+                              {!['pending', 'confirmed'].includes(booking.status) ? (
+                                <span className="dashboard-table__meta">
+                                  {booking.cancellationReason || 'Finalized'}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {recentBookingHistory.length ? (
+                  <p className="trainer-booking-note">
+                    Recent history: {recentBookingHistory.length} finalized booking
+                    {recentBookingHistory.length === 1 ? '' : 's'}.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <EmptyState message="Booking requests will appear here after members start using your availability." />
+            )}
+          </section>
+
           <section className="record-form-card">
             <div className="card-header">
               <h3>Availability</h3>
@@ -771,3 +937,4 @@ const TrainerUpdatesPage = () => {
 };
 
 export default TrainerUpdatesPage;
+

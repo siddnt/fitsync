@@ -1,0 +1,12 @@
+import './authApi.js';
+import './userApi.js';
+import './bookingApi.js';
+import './adminApi.js';
+import './sellerApi.js';
+import './internalCommunicationApi.js';
+import './contactApi.js';
+import './dashboardApi.js';
+import './gymsApi.js';
+import './ownerApi.js';
+import './marketplaceApi.js';
+import './trainerApi.js';

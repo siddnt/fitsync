@@ -3,6 +3,7 @@ import {
 	listGyms,
 	getGymById,
 	recordImpression,
+	recordGymOpen,
 	createGym,
 	updateGym,
 	submitGymReview,
@@ -38,6 +39,7 @@ router.post(
 router.get('/:gymId/reviews', listGymReviews);
 router.get('/:gymId', getGymById);
 router.post('/:gymId/impressions', recordImpression);
+router.post('/:gymId/opens', recordGymOpen);
 router.put('/:gymId', verifyJWT, authorizeRoles('gym-owner', 'admin'), updateGym);
 
 export default router;

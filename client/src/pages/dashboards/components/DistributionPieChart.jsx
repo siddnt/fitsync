@@ -33,21 +33,24 @@ const slugify = (value) => {
 };
 
 const DistributionPieChart = ({
-  role,
-  data,
-  valueKey,
-  nameKey,
-  interactive,
-  valueFormatter,
-  centerLabel,
-  useSampleFallback,
-  showLegend,
+  role = 'gym-owner',
+  data = null,
+  valueKey = null,
+  nameKey = null,
+  interactive = false,
+  valueFormatter = null,
+  centerLabel = 'Total',
+  useSampleFallback = true,
+  showLegend = true,
 }) => {
   const fallbackData = sampleDistribution[role] ?? sampleDistribution['gym-owner'];
-  const resolvedData = data?.length ? data : (useSampleFallback ? fallbackData : []);
   const resolvedValueKey = valueKey || 'value';
   const resolvedNameKey = nameKey || 'name';
   const formatter = valueFormatter || defaultFormatter;
+  const resolvedData = useMemo(
+    () => (data?.length ? data : (useSampleFallback ? fallbackData : [])),
+    [data, fallbackData, useSampleFallback],
+  );
 
   const decoratedData = useMemo(
     () =>
@@ -132,7 +135,7 @@ const DistributionPieChart = ({
       {displayData.length ? (
         <div className={`pie-layout${shouldShowLegend ? ' pie-layout--with-legend' : ''}`}>
           <div className="pie-layout__chart">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={displayData}
@@ -187,19 +190,6 @@ DistributionPieChart.propTypes = {
   centerLabel: PropTypes.string,
   useSampleFallback: PropTypes.bool,
   showLegend: PropTypes.bool,
-};
-
-DistributionPieChart.defaultProps = {
-  role: 'gym-owner',
-  data: null,
-  valueKey: null,
-  nameKey: null,
-  interactive: false,
-  valueFormatter: null,
-  centerLabel: 'Total',
-  useSampleFallback: true,
-  showLegend: true,
-
 };
 
 export default DistributionPieChart;
