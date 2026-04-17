@@ -70,6 +70,28 @@ const normaliseItemStatus = (status) => {
   return 'processing';
 };
 
+const TRACKING_STATUS_INPUT_ALIASES = new Map([
+  ['preparing', 'processing'],
+  ['label-created', 'processing'],
+]);
+
+const normaliseTrackingStatusInput = (status) => {
+  if (status === undefined || status === null || String(status).trim() === '') {
+    return 'in-transit';
+  }
+
+  const lower = String(status).trim().toLowerCase();
+  if (TRACKING_STATUS_INPUT_ALIASES.has(lower)) {
+    return TRACKING_STATUS_INPUT_ALIASES.get(lower);
+  }
+
+  if (MODERN_ITEM_STATUSES.includes(lower)) {
+    return lower;
+  }
+
+  return null;
+};
+
 const SELLER_STATUS_FLAGS = new Set(MODERN_ITEM_STATUSES);
 const STATUS_SEQUENCE = [...MODERN_ITEM_STATUSES];
 const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
@@ -161,6 +183,35 @@ const normaliseCategory = (value) => {
     return 'supplements';
   }
   return lower;
+};
+
+const formatCategoryLabel = (value) => String(value ?? '')
+  .split(/[\s-_]+/)
+  .filter(Boolean)
+  .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+  .join(' ');
+
+const buildMarketplaceCategoryOptions = async (baseFilters = {}) => {
+  const categoryFilters = { ...baseFilters };
+  delete categoryFilters.category;
+
+  const categories = await Product.aggregate([
+    { $match: categoryFilters },
+    { $match: { category: { $ne: null } } },
+    {
+      $group: {
+        _id: '$category',
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  return categories.map((entry) => ({
+    value: entry._id,
+    label: formatCategoryLabel(entry._id),
+    count: entry.count,
+  }));
 };
 
 const normalizeSearchTerm = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
@@ -297,6 +348,19 @@ const mapCatalogueProduct = (product) => {
 
 const toIdString = (value) => (value ? value.toString() : null);
 
+const buildTrackingSnapshot = (item = {}) => {
+  if (!item?.tracking) {
+    return null;
+  }
+
+  return {
+    ...item.tracking,
+    status: normaliseItemStatus(item.status),
+  };
+};
+
+const buildReturnRequestSnapshot = (item = {}) => item?.returnRequest ?? { status: 'none' };
+
 const shapeMarketplaceProduct = (product) => {
   const base = mapCatalogueProduct(product);
   const salesStats = getProductSalesSnapshot(product);
@@ -329,7 +393,7 @@ const resolveMarketplaceLastModified = (products = []) =>
     return Math.max(latest, Number.isNaN(updatedAt) ? 0 : updatedAt);
   }, 0);
 
-const buildMarketplaceCollectionVersion = (products = [], pagination = {}, searchStrategy = 'browse') =>
+const buildMarketplaceCollectionVersion = (products = [], pagination = {}, searchStrategy = 'browse', categories = []) =>
   JSON.stringify({
     ids: products.map((product) => String(product.id ?? product._id)),
     updatedAt: products.map((product) => product.updatedAt ?? null),
@@ -337,6 +401,7 @@ const buildMarketplaceCollectionVersion = (products = [], pagination = {}, searc
     page: pagination.page ?? 1,
     pageSize: pagination.pageSize ?? products.length,
     searchStrategy,
+    categories,
   });
 
 const buildMarketplaceDetailVersion = (product) =>
@@ -658,16 +723,16 @@ const mapBuyerOrder = (order) => ({
   status: deriveSellerOrderStatus(order.orderItems || []),
   paymentMethod: order.paymentMethod,
   createdAt: order.createdAt,
-  items: (order.orderItems || []).map((item) => ({
-    id: item.product?._id ?? item.product,
-    name: item.name,
-    quantity: item.quantity,
-    price: item.price,
-    image: item.image ?? item.product?.image ?? null,
-    status: normaliseItemStatus(item.status),
-    tracking: item.tracking ?? null,
-    returnRequest: item.returnRequest ?? { status: 'none' },
-  })),
+    items: (order.orderItems || []).map((item) => ({
+      id: item.product?._id ?? item.product,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      image: item.image ?? item.product?.image ?? null,
+      status: normaliseItemStatus(item.status),
+      tracking: buildTrackingSnapshot(item),
+      returnRequest: buildReturnRequestSnapshot(item),
+    })),
   shippingAddress: order.shippingAddress,
 });
 
@@ -888,6 +953,7 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
         offset: skip,
         limit: resolvedPageSize,
       });
+      const categories = await buildMarketplaceCategoryOptions(filters);
 
       const cursorSortFields = MARKETPLACE_CURSOR_SORT_FIELDS[sort] ?? MARKETPLACE_CURSOR_SORT_FIELDS.featured;
       const useCursorPagination = paginationMode === 'cursor' && searchPlan.searchStrategy === 'browse';
@@ -918,6 +984,7 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
 
         return {
           products: pageItems.map(shapeMarketplaceProduct),
+          categories,
           pagination: {
             mode: 'cursor',
             pageSize: resolvedPageSize,
@@ -948,6 +1015,7 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
 
       return {
         products: enriched,
+        categories,
         pagination: {
           page: resolvedPage,
           pageSize: resolvedPageSize,
@@ -962,7 +1030,12 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
   applyCacheHeaders(res, meta);
   if (applyPublicCacheHeaders(req, res, {
     scope: 'marketplace:catalogue',
-    version: buildMarketplaceCollectionVersion(payload.products, payload.pagination, payload.searchStrategy),
+    version: buildMarketplaceCollectionVersion(
+      payload.products,
+      payload.pagination,
+      payload.searchStrategy,
+      payload.categories,
+    ),
     lastModified: resolveMarketplaceLastModified(payload.products),
     maxAgeSeconds: 60,
     staleWhileRevalidateSeconds: 180,
@@ -1247,6 +1320,10 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
       );
     });
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     throw new ApiError(500, error.message || 'Failed to create checkout session');
   } finally {
     await session.endSession();
@@ -1855,6 +1932,8 @@ const mapOrder = (order, sellerId) => {
       price: item.price,
       status: normaliseItemStatus(item.status),
       lastStatusAt: item.lastStatusAt,
+      tracking: buildTrackingSnapshot(item),
+      returnRequest: buildReturnRequestSnapshot(item),
       statusHistory: (item.statusHistory || []).map((entry) => ({
         status: normaliseItemStatus(entry.status),
         note: entry.note,
@@ -2147,6 +2226,18 @@ export const updateSellerOrderTracking = asyncHandler(async (req, res) => {
     trackingUrl,
     status = 'in-transit',
   } = req.body ?? {};
+  const carrierValue = String(carrier ?? '').trim();
+  const trackingNumberValue = String(trackingNumber ?? '').trim();
+  const trackingUrlValue = String(trackingUrl ?? '').trim();
+  const nextStatus = normaliseTrackingStatusInput(status);
+
+  if (!carrierValue || !trackingNumberValue) {
+    throw new ApiError(400, 'Carrier and tracking number are required.');
+  }
+
+  if (!nextStatus) {
+    throw new ApiError(400, 'Tracking status is invalid.');
+  }
 
   const order = await Order.findOne({
     _id: orderId,
@@ -2165,13 +2256,17 @@ export const updateSellerOrderTracking = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Order item not found for this seller');
   }
 
+  if (!canTransitionStatus(item.status, nextStatus)) {
+    throw new ApiError(400, 'Tracking status can only move forward through the fulfillment steps.');
+  }
+
   item.tracking = {
-    carrier: String(carrier ?? '').trim(),
-    trackingNumber: String(trackingNumber ?? '').trim(),
-    trackingUrl: String(trackingUrl ?? '').trim(),
+    carrier: carrierValue,
+    trackingNumber: trackingNumberValue,
+    trackingUrl: trackingUrlValue,
     updatedAt: new Date(),
   };
-  item.status = normaliseItemStatus(status);
+  item.status = nextStatus;
   item.lastStatusAt = new Date();
   order.status = deriveSellerOrderStatus(order.orderItems || []);
   await order.save();
@@ -2290,8 +2385,18 @@ export const reviewMarketplaceReturn = asyncHandler(async (req, res) => {
   if (!item || normaliseSellerId(item.seller ?? order.seller) !== normaliseSellerId(sellerId)) {
     throw new ApiError(404, 'Order item not found for this seller');
   }
-  if (item.returnRequest?.status !== 'requested' && decision !== 'refunded') {
+  const currentReturnStatus = String(item.returnRequest?.status ?? 'none').trim().toLowerCase();
+
+  if (!['requested', 'approved'].includes(currentReturnStatus)) {
     throw new ApiError(400, 'There is no pending return request for this item.');
+  }
+
+  if (decision === 'refunded' && !['requested', 'approved'].includes(currentReturnStatus)) {
+    throw new ApiError(400, 'Only requested or approved returns can be refunded.');
+  }
+
+  if (decision !== 'refunded' && currentReturnStatus !== 'requested') {
+    throw new ApiError(400, 'Only pending return requests can be approved or rejected.');
   }
 
   item.returnRequest = {

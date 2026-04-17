@@ -4,7 +4,9 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-.session-membership-card > div {
+.session-membership-card > div,
+.session-reschedule-banner,
+.session-booking-preview {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
@@ -15,28 +17,61 @@
 .session-booking-form label,
 .session-slot-group header small,
 .session-slot-card small,
-.session-history-list small {
+.session-history-list small,
+.session-date-pill small,
+.session-booking-detail small,
+.session-reschedule-banner small,
+.session-booking-preview small {
   color: var(--muted-text-color);
 }
 
 .session-membership-card strong,
 .session-booking-form strong,
 .session-slot-card strong,
-.session-history-list strong {
+.session-history-list strong,
+.session-date-pill strong,
+.session-booking-detail strong,
+.session-reschedule-banner strong,
+.session-booking-preview strong {
   color: var(--text-color);
   display: block;
 }
 
 .session-membership-card p,
 .session-booking-form p {
-  margin: 0.35rem 0 0;
   color: rgba(255, 255, 255, 0.76);
+  margin: 0.35rem 0 0;
 }
 
-.session-slot-groups {
+.session-calendar {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1rem;
+}
+
+.session-calendar__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.session-date-pill {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 150px;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+}
+
+.session-date-pill.is-active {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.4);
 }
 
 .session-slot-group {
@@ -135,12 +170,36 @@
   opacity: 0.7;
 }
 
+.session-inline-action {
+  padding: 0.5rem 0.9rem;
+}
+
+.session-inline-action--secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--text-color);
+}
+
+.session-inline-action--danger {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #fecaca;
+}
+
 .session-booking-table-wrap {
   overflow-x: auto;
 }
 
-.session-inline-action {
-  padding: 0.5rem 0.9rem;
+.session-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.session-booking-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .session-history-list {
@@ -176,4 +235,10 @@
 
 .session-notice--error {
   color: #f87171;
+}
+
+@media (max-width: 720px) {
+  .session-date-pill {
+    min-width: 100%;
+  }
 }

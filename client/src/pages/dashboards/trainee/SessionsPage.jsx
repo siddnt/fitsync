@@ -8,9 +8,75 @@ import {
   useGetMyBookingsQuery,
   useUpdateBookingStatusMutation,
 } from '../../../services/bookingApi.js';
-import { formatDate, formatStatus } from '../../../utils/format.js';
+import { formatDate, formatDateTime, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 import './SessionsPage.css';
+
+const buildIcsTimestamp = (dateValue, timeValue = '00:00') => {
+  const baseDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  const [hours, minutes] = String(timeValue || '00:00').split(':').map(Number);
+  const year = baseDate.getFullYear();
+  const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+  const day = String(baseDate.getDate()).padStart(2, '0');
+  const hour = String(Number.isFinite(hours) ? hours : 0).padStart(2, '0');
+  const minute = String(Number.isFinite(minutes) ? minutes : 0).padStart(2, '0');
+  return `${year}${month}${day}T${hour}${minute}00`;
+};
+
+const getDateKey = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+};
+
+const getBookingStartDateTime = (booking) => {
+  const [hours, minutes] = String(booking?.startTime || '00:00').split(':').map(Number);
+  const date = new Date(booking?.bookingDate);
+  date.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
+  return date;
+};
+
+const downloadCalendarInvite = (booking) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const startStamp = buildIcsTimestamp(booking.bookingDate, booking.startTime);
+  const endStamp = buildIcsTimestamp(booking.bookingDate, booking.endTime);
+  const generatedAt = buildIcsTimestamp(new Date());
+  const title = `${booking.gym?.name ?? 'FitSync'} session`;
+  const description = [
+    `Trainer: ${booking.trainer?.name ?? 'Assigned trainer'}`,
+    `Session type: ${formatStatus(booking.sessionType)}`,
+    booking.notes ? `Notes: ${booking.notes}` : null,
+  ].filter(Boolean).join('\\n');
+  const location = booking.locationLabel || booking.gym?.name || 'Gym session';
+
+  const content = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//FitSync//Session Booking//EN',
+    'BEGIN:VEVENT',
+    `UID:${booking.id}@fitsync`,
+    `DTSTAMP:${generatedAt}`,
+    `DTSTART:${startStamp}`,
+    `DTEND:${endStamp}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description}`,
+    `LOCATION:${location}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = `${booking.gym?.name ?? 'session'}-${getDateKey(booking.bookingDate)}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+};
 
 const TraineeSessionsPage = () => {
   const {
@@ -32,6 +98,8 @@ const TraineeSessionsPage = () => {
   const [selectedSlotKey, setSelectedSlotKey] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [activeDate, setActiveDate] = useState('');
+  const [reschedulingBooking, setReschedulingBooking] = useState(null);
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
 
@@ -56,6 +124,11 @@ const TraineeSessionsPage = () => {
     }));
   }, [slots]);
 
+  const visibleGroup = useMemo(
+    () => groupedSlots.find((group) => group.date === activeDate) ?? groupedSlots[0] ?? null,
+    [activeDate, groupedSlots],
+  );
+
   const selectedSlot = useMemo(
     () => slots.find((slot) => slot.availabilitySlotKey === selectedSlotKey && slot.date === selectedDate) ?? null,
     [slots, selectedDate, selectedSlotKey],
@@ -65,6 +138,16 @@ const TraineeSessionsPage = () => {
     () => bookings.filter((booking) => ['pending', 'confirmed'].includes(booking.status)),
     [bookings],
   );
+
+  const nextUpcomingBooking = useMemo(() => {
+    if (!upcomingBookings.length) {
+      return null;
+    }
+
+    return [...upcomingBookings].sort(
+      (left, right) => getBookingStartDateTime(left).getTime() - getBookingStartDateTime(right).getTime(),
+    )[0];
+  }, [upcomingBookings]);
 
   const pastBookings = useMemo(
     () => bookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status)),
@@ -93,6 +176,24 @@ const TraineeSessionsPage = () => {
     setSelectedDate(firstOpenSlot.date);
   }, [selectedDate, selectedSlotKey, slots]);
 
+  useEffect(() => {
+    if (!groupedSlots.length) {
+      setActiveDate('');
+      return;
+    }
+
+    const matchingDate = groupedSlots.some((group) => group.date === activeDate);
+    if (!matchingDate) {
+      setActiveDate(groupedSlots[0].date);
+    }
+  }, [activeDate, groupedSlots]);
+
+  useEffect(() => {
+    if (selectedDate) {
+      setActiveDate(selectedDate);
+    }
+  }, [selectedDate]);
+
   const handleRefresh = () => {
     setNotice(null);
     setErrorNotice(null);
@@ -114,18 +215,38 @@ const TraineeSessionsPage = () => {
     resetMessages();
 
     try {
-      await createBooking({
-        gymId: membership.gym.id,
-        trainerId: membership.trainer.id,
-        bookingDate: selectedSlot.date,
-        availabilitySlotKey: selectedSlot.availabilitySlotKey,
-        notes,
-      }).unwrap();
-      setNotice('Session request sent to your trainer.');
+      if (reschedulingBooking) {
+        await createBooking({
+          gymId: membership.gym.id,
+          trainerId: membership.trainer.id,
+          bookingDate: selectedSlot.date,
+          availabilitySlotKey: selectedSlot.availabilitySlotKey,
+          notes,
+        }).unwrap();
+
+        await updateBookingStatus({
+          bookingId: reschedulingBooking.id,
+          status: 'cancelled',
+          cancellationReason: 'Rescheduled by trainee',
+        }).unwrap();
+
+        setNotice('Session rescheduled successfully.');
+        setReschedulingBooking(null);
+      } else {
+        await createBooking({
+          gymId: membership.gym.id,
+          trainerId: membership.trainer.id,
+          bookingDate: selectedSlot.date,
+          availabilitySlotKey: selectedSlot.availabilitySlotKey,
+          notes,
+        }).unwrap();
+        setNotice('Session request sent to your trainer.');
+      }
+
       setNotes('');
       await Promise.all([refetchSlots(), refetchBookings()]);
     } catch (error) {
-      setErrorNotice(error?.data?.message ?? 'Could not create the booking request.');
+      setErrorNotice(error?.data?.message ?? 'Could not update the booking request.');
     }
   };
 
@@ -139,10 +260,34 @@ const TraineeSessionsPage = () => {
         cancellationReason: 'Cancelled by trainee',
       }).unwrap();
       setNotice('Booking cancelled.');
+      if (reschedulingBooking?.id === bookingId) {
+        setReschedulingBooking(null);
+      }
       await Promise.all([refetchSlots(), refetchBookings()]);
     } catch (error) {
       setErrorNotice(error?.data?.message ?? 'Could not cancel the booking.');
     }
+  };
+
+  const handleStartReschedule = (booking) => {
+    resetMessages();
+    setReschedulingBooking(booking);
+    setNotes(booking.notes ?? '');
+
+    const firstAvailable = slots.find(
+      (slot) => !slot.isSoldOut && !slot.myBooking && slot.date !== getDateKey(booking.bookingDate),
+    ) ?? slots.find((slot) => !slot.isSoldOut && !slot.myBooking);
+
+    if (firstAvailable) {
+      setSelectedDate(firstAvailable.date);
+      setSelectedSlotKey(firstAvailable.availabilitySlotKey);
+      setActiveDate(firstAvailable.date);
+    }
+  };
+
+  const handleClearReschedule = () => {
+    setReschedulingBooking(null);
+    setNotes('');
   };
 
   if (isSlotsLoading || isBookingsLoading) {
@@ -173,7 +318,7 @@ const TraineeSessionsPage = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--trainee">
-      <DashboardSection title="Membership and trainer" className="dashboard-section--span-12">
+      <DashboardSection title="Membership and trainer" className="dashboard-section--span-8">
         {membership ? (
           <div className="session-membership-card">
             <div>
@@ -197,24 +342,79 @@ const TraineeSessionsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Upcoming availability" className="dashboard-section--span-8">
+      <DashboardSection title="Rules and reminders" className="dashboard-section--span-4">
+        <div className="session-guidance-card">
+          {nextUpcomingBooking ? (
+            <div className="session-guidance-card__block">
+              <small>Next session reminder</small>
+              <strong>{formatDate(nextUpcomingBooking.bookingDate)}</strong>
+              <p>
+                {nextUpcomingBooking.startTime} - {nextUpcomingBooking.endTime}
+                {' | '}
+                {nextUpcomingBooking.trainer?.name ?? 'Assigned trainer'}
+              </p>
+              <button
+                type="button"
+                className="session-inline-action session-inline-action--secondary"
+                onClick={() => downloadCalendarInvite(nextUpcomingBooking)}
+              >
+                Add reminder to calendar
+              </button>
+            </div>
+          ) : (
+            <div className="session-guidance-card__block">
+              <small>Next session reminder</small>
+              <strong>No upcoming session</strong>
+              <p>Book a slot to create a calendar reminder and keep your trainer in sync.</p>
+            </div>
+          )}
+
+          <div className="session-guidance-card__block">
+            <small>Booking rules</small>
+            <strong>Trainer confirmation required</strong>
+            <p>New requests start as pending. You can cancel only pending or confirmed future sessions.</p>
+          </div>
+
+          <div className="session-guidance-card__block">
+            <small>Trainer notes</small>
+            <strong>{membership?.trainer?.name ?? 'Assigned trainer'}</strong>
+            <p>{availabilityNotes || 'Your trainer has not published extra prep notes yet. Add goals in your booking note to shape the session.'}</p>
+          </div>
+        </div>
+      </DashboardSection>
+
+      <DashboardSection title="Availability calendar" className="dashboard-section--span-8">
         {membership ? (
           groupedSlots.length ? (
-            <div className="session-slot-groups">
-              {groupedSlots.map((group) => (
-                <section key={group.date} className="session-slot-group">
-                  <header>
-                    <h3>{formatDate(group.date)}</h3>
+            <div className="session-calendar">
+              <div className="session-calendar__dates">
+                {groupedSlots.map((group) => (
+                  <button
+                    key={group.date}
+                    type="button"
+                    className={`session-date-pill${activeDate === group.date ? ' is-active' : ''}`}
+                    onClick={() => setActiveDate(group.date)}
+                  >
+                    <strong>{formatDate(group.date)}</strong>
                     <small>{group.entries.length} slot{group.entries.length === 1 ? '' : 's'}</small>
+                  </button>
+                ))}
+              </div>
+
+              {visibleGroup ? (
+                <section className="session-slot-group">
+                  <header>
+                    <h3>{formatDate(visibleGroup.date)}</h3>
+                    <small>{visibleGroup.entries.length} slot{visibleGroup.entries.length === 1 ? '' : 's'}</small>
                   </header>
                   <div className="session-slot-list">
-                    {group.entries.map((slot) => {
+                    {visibleGroup.entries.map((slot) => {
                       const isSelected = selectedSlotKey === slot.availabilitySlotKey && selectedDate === slot.date;
                       const isDisabled = slot.isSoldOut || Boolean(slot.myBooking);
 
                       return (
                         <button
-                          key={`${group.date}-${slot.availabilitySlotKey}`}
+                          key={`${visibleGroup.date}-${slot.availabilitySlotKey}`}
                           type="button"
                           className={`session-slot-card${isSelected ? ' is-selected' : ''}${isDisabled ? ' is-disabled' : ''}`}
                           onClick={() => {
@@ -236,7 +436,7 @@ const TraineeSessionsPage = () => {
                     })}
                   </div>
                 </section>
-              ))}
+              ) : null}
             </div>
           ) : (
             <EmptyState message="No bookable trainer slots are published yet." />
@@ -246,13 +446,24 @@ const TraineeSessionsPage = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Create booking request" className="dashboard-section--span-4">
+      <DashboardSection title={reschedulingBooking ? 'Reschedule session' : 'Create booking request'} className="dashboard-section--span-4">
+        {reschedulingBooking ? (
+          <div className="session-reschedule-banner">
+            <small>Replacing booking</small>
+            <strong>{formatDate(reschedulingBooking.bookingDate)} | {reschedulingBooking.startTime} - {reschedulingBooking.endTime}</strong>
+            <button type="button" className="session-inline-action session-inline-action--secondary" onClick={handleClearReschedule}>
+              Keep current booking
+            </button>
+          </div>
+        ) : null}
+
         {selectedSlot && membership ? (
           <form className="session-booking-form" onSubmit={handleBook}>
-            <div>
+            <div className="session-booking-preview">
               <small>Selected slot</small>
               <strong>{formatDate(selectedSlot.date)}</strong>
               <p>{selectedSlot.startTime} - {selectedSlot.endTime} | {formatStatus(selectedSlot.sessionType)}</p>
+              <small>{selectedSlot.locationLabel || 'Gym floor'} | {selectedSlot.remainingCapacity}/{selectedSlot.capacity} seats left</small>
             </div>
             <label htmlFor="session-notes">Notes for your trainer</label>
             <textarea
@@ -262,8 +473,12 @@ const TraineeSessionsPage = () => {
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Optional goals or topics to cover in this session"
             />
-            <button type="submit" disabled={isCreatingBooking || selectedSlot.isSoldOut || Boolean(selectedSlot.myBooking)}>
-              {isCreatingBooking ? 'Requesting...' : 'Request session'}
+            <button type="submit" disabled={isCreatingBooking || isUpdatingBooking || selectedSlot.isSoldOut || Boolean(selectedSlot.myBooking)}>
+              {isCreatingBooking || isUpdatingBooking
+                ? 'Saving...'
+                : reschedulingBooking
+                  ? 'Confirm reschedule'
+                  : 'Request session'}
             </button>
           </form>
         ) : (
@@ -273,7 +488,7 @@ const TraineeSessionsPage = () => {
         {errorNotice ? <p className="session-notice session-notice--error">{errorNotice}</p> : null}
       </DashboardSection>
 
-      <DashboardSection title="My bookings" className="dashboard-section--span-12">
+      <DashboardSection title="Upcoming bookings" className="dashboard-section--span-12">
         {upcomingBookings.length ? (
           <div className="session-booking-table-wrap">
             <table className="dashboard-table">
@@ -284,8 +499,8 @@ const TraineeSessionsPage = () => {
                   <th>Gym</th>
                   <th>Trainer</th>
                   <th>Status</th>
-                  <th>Notes</th>
-                  <th />
+                  <th>Details</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,18 +511,48 @@ const TraineeSessionsPage = () => {
                     <td>{booking.gym?.name ?? 'Gym'}</td>
                     <td>{booking.trainer?.name ?? 'Trainer'}</td>
                     <td>{formatStatus(booking.status)}</td>
-                    <td>{booking.notes || '-'}</td>
                     <td>
-                      {['pending', 'confirmed'].includes(booking.status) ? (
+                      <div className="session-booking-detail">
+                        <strong>{formatStatus(booking.sessionType)}</strong>
+                        <small>{booking.locationLabel || 'Gym floor'}</small>
+                        <small>{booking.notes || 'No extra notes'}</small>
+                        <small>
+                          {booking.status === 'pending'
+                            ? 'Awaiting trainer confirmation'
+                            : 'Bring this booking to the floor or your calendar reminder'}
+                        </small>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="session-action-group">
                         <button
                           type="button"
-                          className="session-inline-action"
-                          disabled={isUpdatingBooking}
-                          onClick={() => handleCancelBooking(booking.id)}
+                          className="session-inline-action session-inline-action--secondary"
+                          onClick={() => downloadCalendarInvite(booking)}
                         >
-                          Cancel
+                          Add to calendar
                         </button>
-                      ) : null}
+                        {['pending', 'confirmed'].includes(booking.status) ? (
+                          <button
+                            type="button"
+                            className="session-inline-action"
+                            disabled={isCreatingBooking || isUpdatingBooking}
+                            onClick={() => handleStartReschedule(booking)}
+                          >
+                            Reschedule
+                          </button>
+                        ) : null}
+                        {['pending', 'confirmed'].includes(booking.status) ? (
+                          <button
+                            type="button"
+                            className="session-inline-action session-inline-action--danger"
+                            disabled={isUpdatingBooking}
+                            onClick={() => handleCancelBooking(booking.id)}
+                          >
+                            Cancel
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -327,6 +572,7 @@ const TraineeSessionsPage = () => {
                 <strong>{formatDate(booking.bookingDate)} | {booking.startTime} - {booking.endTime}</strong>
                 <span>{booking.gym?.name ?? 'Gym'} with {booking.trainer?.name ?? 'Trainer'}</span>
                 <small>{formatStatus(booking.status)}{booking.cancellationReason ? ` | ${booking.cancellationReason}` : ''}</small>
+                <small>Updated {formatDateTime(booking.updatedAt)}</small>
               </li>
             ))}
           </ul>

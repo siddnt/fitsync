@@ -274,7 +274,6 @@ const AdminRevenuePage = () => {
               interactive
               valueFormatter={(amount) => formatCurrency(amount)}
               centerLabel="Marketplace"
-              useSampleFallback={false}
               showLegend={false}
             />
             <div className="pie-card__meta">
@@ -308,7 +307,6 @@ const AdminRevenuePage = () => {
               interactive={false}
               valueFormatter={(amount) => formatCurrency(amount)}
               centerLabel="Total revenue"
-              useSampleFallback={false}
               showLegend={false}
             />
             <div className="pie-card__meta">

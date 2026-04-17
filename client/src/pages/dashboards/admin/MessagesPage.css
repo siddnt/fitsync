@@ -180,8 +180,9 @@
     color: #93c5fd;
 }
 
+.ticket-pill--normal,
 .ticket-pill--medium {
-    color: #cbd5f5;
+  color: #cbd5f5;
 }
 
 .ticket-pill--high {

@@ -29,10 +29,31 @@ const dashboardLinkByRole = {
   'gym-owner': '/dashboard/gym-owner/communications',
 };
 
+const conversationPopulate = [
+  { path: 'participants.user', select: 'name email role' },
+  { path: 'messages.sender', select: 'name email role' },
+  { path: 'gym', select: 'name' },
+];
+
 const ensureSupportedRole = (role) => {
   if (!ALLOWED_ROLES.has(role)) {
     throw new ApiError(403, 'Role is not allowed to use internal communications.');
   }
+};
+
+const normalizeBoolean = (value) => ['1', 'true', 'yes'].includes(String(value ?? '').trim().toLowerCase());
+
+const getParticipantState = (conversation, userId) =>
+  conversation?.participants?.find(
+    (participant) => String(participant.user?._id ?? participant.user) === String(userId),
+  ) ?? null;
+
+const ensureConversationParticipant = (conversation, userId) => {
+  const participant = getParticipantState(conversation, userId);
+  if (!participant) {
+    throw new ApiError(403, 'You are not part of this conversation.');
+  }
+  return participant;
 };
 
 const resolveOwnedGymId = async ({ gymId, ownerId }) => {
@@ -99,16 +120,93 @@ export const getCommunicationRecipients = asyncHandler(async (req, res) => {
 export const listInternalConversations = asyncHandler(async (req, res) => {
   ensureSupportedRole(req.user?.role);
 
-  const conversations = await InternalConversation.find({
+  const includeArchived = normalizeBoolean(req.query?.includeArchived);
+  const gymId = String(req.query?.gymId || '').trim();
+  const roleFilter = String(req.query?.role || '').trim().toLowerCase();
+  const search = String(req.query?.search || '').trim().toLowerCase();
+
+  const filter = {
     'participants.user': req.user._id,
-  })
+  };
+
+  if (gymId) {
+    filter.gym = gymId;
+  }
+
+  const conversations = await InternalConversation.find(filter)
     .sort({ lastMessageAt: -1 })
-    .populate({ path: 'participants.user', select: 'name email role' })
-    .populate({ path: 'messages.sender', select: 'name email role' })
-    .populate({ path: 'gym', select: 'name' })
+    .populate(conversationPopulate)
     .lean();
 
-  return res.status(200).json(new ApiResponse(200, conversations, 'Internal conversations fetched successfully'));
+  const filteredConversations = conversations.filter((conversation) => {
+    const participantState = getParticipantState(conversation, req.user._id);
+    if (!participantState) {
+      return false;
+    }
+
+    const isArchived = Boolean(
+      participantState.archivedAt
+      && new Date(participantState.archivedAt).getTime() >= new Date(conversation.lastMessageAt).getTime(),
+    );
+
+    if (!includeArchived && isArchived) {
+      return false;
+    }
+
+    if (roleFilter) {
+      const counterpart = (conversation.participants ?? [])
+        .find((participant) => String(participant.user?._id ?? participant.user) !== String(req.user._id));
+      if (String(counterpart?.role || '').trim().toLowerCase() !== roleFilter) {
+        return false;
+      }
+    }
+
+    if (!search) {
+      return true;
+    }
+
+    const haystacks = [
+      conversation.subject,
+      conversation.category,
+      conversation.gym?.name,
+      ...(conversation.messages ?? []).map((message) => message.body),
+      ...(conversation.participants ?? []).flatMap((participant) => [
+        participant.user?.name,
+        participant.user?.email,
+        participant.role,
+      ]),
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase());
+
+    return haystacks.some((value) => value.includes(search));
+  }).map((conversation) => {
+    const participantState = getParticipantState(conversation, req.user._id);
+    const lastReadAt = participantState?.lastReadAt ? new Date(participantState.lastReadAt) : null;
+    const unreadCount = (conversation.messages ?? []).filter((message) => (
+      String(message.sender?._id ?? message.sender) !== String(req.user._id)
+      && (!lastReadAt || new Date(message.createdAt) > lastReadAt)
+    )).length;
+    const isArchived = Boolean(
+      participantState?.archivedAt
+      && new Date(participantState.archivedAt).getTime() >= new Date(conversation.lastMessageAt).getTime(),
+    );
+
+    return {
+      ...conversation,
+      isArchived,
+      unreadCount,
+      participantState: participantState
+        ? {
+            role: participantState.role,
+            lastReadAt: participantState.lastReadAt ?? null,
+            archivedAt: participantState.archivedAt ?? null,
+          }
+        : null,
+    };
+  });
+
+  return res.status(200).json(new ApiResponse(200, filteredConversations, 'Internal conversations fetched successfully'));
 });
 
 export const createInternalConversation = asyncHandler(async (req, res) => {
@@ -139,8 +237,8 @@ export const createInternalConversation = asyncHandler(async (req, res) => {
     category,
     gym: resolvedGymId,
     participants: [
-      { user: req.user._id, role: req.user.role },
-      { user: recipient._id, role: recipient.role },
+      { user: req.user._id, role: req.user.role, lastReadAt: new Date(), archivedAt: null },
+      { user: recipient._id, role: recipient.role, lastReadAt: null, archivedAt: null },
     ],
     createdBy: req.user._id,
     lastMessageAt: new Date(),
@@ -173,9 +271,7 @@ export const createInternalConversation = asyncHandler(async (req, res) => {
   });
 
   const populated = await InternalConversation.findById(conversation._id)
-    .populate({ path: 'participants.user', select: 'name email role' })
-    .populate({ path: 'messages.sender', select: 'name email role' })
-    .populate({ path: 'gym', select: 'name' })
+    .populate(conversationPopulate)
     .lean();
 
   return res.status(201).json(new ApiResponse(201, populated, 'Internal conversation created successfully'));
@@ -196,17 +292,21 @@ export const replyInternalConversation = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Conversation not found.');
   }
 
-  const isParticipant = conversation.participants.some((participant) => String(participant.user) === String(req.user._id));
-  if (!isParticipant) {
-    throw new ApiError(403, 'You are not part of this conversation.');
-  }
+  ensureConversationParticipant(conversation, req.user._id);
 
   conversation.messages.push({
     sender: req.user._id,
     senderRole: req.user.role,
     body: body.trim(),
   });
-  conversation.lastMessageAt = new Date();
+  const messageTimestamp = new Date();
+  conversation.lastMessageAt = messageTimestamp;
+  conversation.participants.forEach((participant) => {
+    participant.archivedAt = null;
+    if (String(participant.user) === String(req.user._id)) {
+      participant.lastReadAt = messageTimestamp;
+    }
+  });
   await conversation.save();
 
   const recipients = conversation.participants.filter((participant) => String(participant.user) !== String(req.user._id));
@@ -233,10 +333,58 @@ export const replyInternalConversation = asyncHandler(async (req, res) => {
   });
 
   const populated = await InternalConversation.findById(conversation._id)
-    .populate({ path: 'participants.user', select: 'name email role' })
-    .populate({ path: 'messages.sender', select: 'name email role' })
-    .populate({ path: 'gym', select: 'name' })
+    .populate(conversationPopulate)
     .lean();
 
   return res.status(200).json(new ApiResponse(200, populated, 'Reply sent successfully'));
+});
+
+export const updateInternalConversationState = asyncHandler(async (req, res) => {
+  ensureSupportedRole(req.user?.role);
+
+  const { id } = req.params;
+  const { read = false, archived } = req.body ?? {};
+
+  const conversation = await InternalConversation.findById(id);
+  if (!conversation) {
+    throw new ApiError(404, 'Conversation not found.');
+  }
+
+  ensureConversationParticipant(conversation, req.user._id);
+  const timestamp = new Date();
+
+  conversation.participants.forEach((participant) => {
+    if (String(participant.user) !== String(req.user._id)) {
+      return;
+    }
+
+    if (read) {
+      participant.lastReadAt = timestamp;
+    }
+
+    if (typeof archived === 'boolean') {
+      participant.archivedAt = archived ? timestamp : null;
+    }
+  });
+
+  await conversation.save();
+
+  await recordAuditLog({
+    actor: req.user._id,
+    actorRole: req.user.role,
+    action: 'internal-conversation.state.updated',
+    entityType: 'internal-conversation',
+    entityId: conversation._id,
+    summary: 'Internal conversation state updated',
+    metadata: {
+      read: Boolean(read),
+      archived: typeof archived === 'boolean' ? archived : undefined,
+    },
+  });
+
+  const populated = await InternalConversation.findById(conversation._id)
+    .populate(conversationPopulate)
+    .lean();
+
+  return res.status(200).json(new ApiResponse(200, populated, 'Conversation state updated successfully.'));
 });

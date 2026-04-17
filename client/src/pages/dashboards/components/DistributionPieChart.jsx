@@ -1,21 +1,9 @@
 import PropTypes from 'prop-types';
 import { useEffect, useMemo, useState } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip } from 'recharts';
+import EmptyState from './EmptyState.jsx';
 
 const COLORS = ['#845ef7', '#4dabf7', '#ff6b6b', '#ffd43b', '#20c997', '#94d82d', '#5c7cfa', '#ff922b'];
-
-const sampleDistribution = {
-  'gym-owner': [
-    { name: 'Male', value: 62 },
-    { name: 'Female', value: 35 },
-    { name: 'Non-binary', value: 3 },
-  ],
-  admin: [
-    { name: 'Listing', value: 45 },
-    { name: 'Sponsorship', value: 22 },
-    { name: 'Marketplace', value: 33 },
-  ],
-};
 
 const numberFormatter = new Intl.NumberFormat('en-IN');
 const defaultFormatter = (value) => numberFormatter.format(Number(value) || 0);
@@ -24,6 +12,7 @@ const slugify = (value) => {
   if (!value) {
     return 'segment';
   }
+
   return value
     .toString()
     .trim()
@@ -33,24 +22,18 @@ const slugify = (value) => {
 };
 
 const DistributionPieChart = ({
-  role = 'gym-owner',
   data = null,
   valueKey = null,
   nameKey = null,
   interactive = false,
   valueFormatter = null,
   centerLabel = 'Total',
-  useSampleFallback = true,
   showLegend = true,
 }) => {
-  const fallbackData = sampleDistribution[role] ?? sampleDistribution['gym-owner'];
   const resolvedValueKey = valueKey || 'value';
   const resolvedNameKey = nameKey || 'name';
   const formatter = valueFormatter || defaultFormatter;
-  const resolvedData = useMemo(
-    () => (data?.length ? data : (useSampleFallback ? fallbackData : [])),
-    [data, fallbackData, useSampleFallback],
-  );
+  const resolvedData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const decoratedData = useMemo(
     () =>
@@ -80,7 +63,7 @@ const DistributionPieChart = ({
     : decoratedData;
 
   const totalVisible = activeData.reduce((sum, entry) => sum + entry.value, 0);
-  const hasData = decoratedData.length > 0;
+  const hasData = decoratedData.some((entry) => entry.value > 0);
 
   const toggleKey = (key) => {
     setHiddenKeys((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
@@ -113,7 +96,7 @@ const DistributionPieChart = ({
                 <strong>{entry.name}</strong>
                 <small>
                   {formatter(entry.value)}
-                  {totalVisible ? ` · ${share}%` : ''}
+                  {totalVisible ? ` | ${share}%` : ''}
                 </small>
               </span>
             </button>
@@ -123,7 +106,7 @@ const DistributionPieChart = ({
     </ul>
   ) : null;
 
-  const displayData = activeData.length ? activeData : [];
+  const displayData = activeData.filter((entry) => entry.value > 0);
   const emptyMessage = hasData
     ? 'No segments selected. Use the legend below to toggle categories.'
     : 'No data available yet.';
@@ -174,21 +157,19 @@ const DistributionPieChart = ({
           {shouldShowLegend ? <div className="pie-layout__legend">{legendContent}</div> : null}
         </div>
       ) : (
-        <p className="empty-state">{emptyMessage}</p>
+        <EmptyState message={emptyMessage} />
       )}
     </div>
   );
 };
 
 DistributionPieChart.propTypes = {
-  role: PropTypes.string,
   data: PropTypes.arrayOf(PropTypes.object),
   valueKey: PropTypes.string,
   nameKey: PropTypes.string,
   interactive: PropTypes.bool,
   valueFormatter: PropTypes.func,
   centerLabel: PropTypes.string,
-  useSampleFallback: PropTypes.bool,
   showLegend: PropTypes.bool,
 };
 

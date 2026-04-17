@@ -456,7 +456,6 @@ export const joinGym = asyncHandler(async (req, res) => {
         $setOnInsert: {
           trainer: assignment.trainer._id,
           gym: gym._id,
-          status: 'active',
         },
         $set: { status: 'active' },
         $push: {

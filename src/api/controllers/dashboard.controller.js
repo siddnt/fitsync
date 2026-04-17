@@ -418,6 +418,52 @@ const normaliseOrderItemStatus = (status) => {
   return 'processing';
 };
 
+const buildOrderItemStatusHistory = (item = {}) => {
+  const history = Array.isArray(item?.statusHistory) ? item.statusHistory : [];
+
+  if (history.length) {
+    return [...history]
+      .sort((left, right) => new Date(left?.updatedAt ?? 0) - new Date(right?.updatedAt ?? 0))
+      .map((entry) => ({
+        status: normaliseOrderItemStatus(entry?.status),
+        note: entry?.note ?? '',
+        updatedAt: entry?.updatedAt ?? null,
+      }));
+  }
+
+  return [{
+    status: normaliseOrderItemStatus(item?.status),
+    note: '',
+    updatedAt: item?.lastStatusAt ?? item?.updatedAt ?? null,
+  }];
+};
+
+const buildOrderItemTrackingSnapshot = (item = {}) => {
+  if (!item?.tracking?.carrier && !item?.tracking?.trackingNumber && !item?.tracking?.trackingUrl) {
+    return null;
+  }
+
+  return {
+    carrier: item?.tracking?.carrier ?? '',
+    trackingNumber: item?.tracking?.trackingNumber ?? '',
+    trackingUrl: item?.tracking?.trackingUrl ?? '',
+    updatedAt: item?.tracking?.updatedAt ?? item?.lastStatusAt ?? null,
+    status: normaliseOrderItemStatus(item?.status),
+  };
+};
+
+const buildOrderItemReturnRequest = (item = {}) => {
+  const request = item?.returnRequest ?? {};
+  return {
+    status: request?.status ?? 'none',
+    reason: request?.reason ?? '',
+    requestedAt: request?.requestedAt ?? null,
+    reviewedAt: request?.reviewedAt ?? null,
+    refundAmount: Number(request?.refundAmount) || 0,
+    note: request?.note ?? '',
+  };
+};
+
 
 const toEntityIdString = (value) => {
   if (!value) {
@@ -900,6 +946,7 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(20)
     .populate({ path: 'orderItems.product', select: 'name image' })
+    .populate({ path: 'orderItems.seller', select: 'name email role' })
     .lean();
 
   const productIds = orders.flatMap((order) => (order.orderItems || [])
@@ -924,10 +971,23 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
       return {
         id: item._id ?? `${order._id}-${productId}`,
         productId,
+        seller: item.seller?._id
+          ? {
+              id: String(item.seller._id),
+              name: item.seller.name,
+              email: item.seller.email,
+              role: item.seller.role,
+            }
+          : null,
         name: item.name ?? item.product?.name ?? 'Marketplace item',
         image: item.image ?? item.product?.image ?? null,
         quantity: item.quantity ?? 0,
+        price: formatCurrency(item.price ?? 0, 'INR'),
+        subtotal: formatCurrency((Number(item.price) || 0) * (Number(item.quantity) || 0), 'INR'),
         status,
+        statusHistory: buildOrderItemStatusHistory(item),
+        tracking: buildOrderItemTrackingSnapshot(item),
+        returnRequest: buildOrderItemReturnRequest(item),
         reviewed,
         canReview,
       };
@@ -936,10 +996,15 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
     return {
       id: order._id,
       orderNumber: order.orderNumber,
+      subtotal: formatCurrency(order.subtotal, 'INR'),
+      tax: formatCurrency(order.tax, 'INR'),
+      shippingCost: formatCurrency(order.shippingCost, 'INR'),
       total: formatCurrency(order.total, 'INR'),
       status: summariseOrderStatus(order),
+      paymentMethod: order.paymentMethod ?? 'Cash on Delivery',
       createdAt: order.createdAt,
       itemsCount: items.reduce((total, item) => total + (item.quantity || 0), 0),
+      shippingAddress: order.shippingAddress ?? null,
       items,
     };
   });
@@ -1313,7 +1378,7 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
 
   const gymIds = gyms.map((gym) => gym._id);
 
-  const [assignmentDocs, membershipDocs] = await Promise.all([
+  const [assignmentDocs, membershipDocs, progressDocs] = await Promise.all([
     TrainerAssignment.find({ gym: { $in: gymIds }, status: { $in: ['pending', 'active'] } })
       .populate({ path: 'trainer', select: 'name email profilePicture status role' })
       .lean(),
@@ -1326,7 +1391,22 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
       .populate({ path: 'trainee', select: 'name email profilePicture role' })
       .populate({ path: 'trainer', select: 'name email profilePicture role' })
       .lean(),
+
+    TrainerProgress.find({ gym: { $in: gymIds } })
+      .select('gym trainee attendance updatedAt')
+      .lean(),
   ]);
+
+  const progressMap = progressDocs.reduce((acc, doc) => {
+    const gymId = doc.gym ? String(doc.gym) : '';
+    const traineeId = doc.trainee ? String(doc.trainee) : '';
+    if (!gymId || !traineeId) {
+      return acc;
+    }
+
+    acc[`${gymId}:${traineeId}`] = doc;
+    return acc;
+  }, {});
 
   const rosterMap = gyms.reduce((acc, gym) => {
     acc[gym._id.toString()] = {
@@ -1365,11 +1445,19 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
       return;
     }
 
+    const traineeId = membership.trainee?._id ? String(membership.trainee._id) : '';
+    const progressDoc = traineeId ? progressMap[`${gymId}:${traineeId}`] : null;
+    const attendanceSummary = progressDoc ? buildAttendanceSummary(progressDoc.attendance || []) : null;
+    const latestAttendance = Array.isArray(progressDoc?.attendance) && progressDoc.attendance.length
+      ? [...progressDoc.attendance].sort((left, right) => new Date(right.date) - new Date(left.date))[0]
+      : null;
+
     rosterMap[gymId].trainees.push({
       membershipId: membership._id,
       id: membership.trainee?._id ?? null,
       name: membership.trainee?.name ?? 'Member',
       email: membership.trainee?.email ?? '',
+      profilePicture: membership.trainee?.profilePicture ?? null,
       status: membership.status,
       plan: membership.plan,
       startDate: membership.startDate,
@@ -1381,6 +1469,19 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
           name: membership.trainer.name,
         }
         : null,
+      attendance: attendanceSummary
+        ? {
+            streak: attendanceSummary.streak ?? 0,
+            presentPercentage: attendanceSummary.presentPercentage ?? 0,
+            latePercentage: attendanceSummary.latePercentage ?? 0,
+            absentPercentage: attendanceSummary.absentPercentage ?? 0,
+            recentCount: attendanceSummary.records?.length ?? 0,
+          }
+        : null,
+      checkIn: {
+        lastDate: latestAttendance?.date ?? null,
+        lastStatus: latestAttendance?.status ?? null,
+      },
     });
   });
 
@@ -3426,16 +3527,25 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
     return {
       id: order._id,
       orderNumber: order.orderNumber,
+      subtotal: formatCurrency(order.subtotal, 'INR'),
+      tax: formatCurrency(order.tax, 'INR'),
+      shippingCost: formatCurrency(order.shippingCost, 'INR'),
       total: formatCurrency(order.total, 'INR'),
       status: summariseOrderStatus(order),
+      paymentMethod: order.paymentMethod ?? 'Cash on Delivery',
       createdAt: order.createdAt,
+      shippingAddress: order.shippingAddress ?? null,
       user: toContact(order.user),
       seller: toContact(sellerEntity),
       items: order.orderItems?.map((item) => ({
+        id: item._id,
         name: item.name,
         quantity: item.quantity,
         price: item.price,
         category: item.product?.category,
+        status: normaliseOrderItemStatus(item.status),
+        tracking: buildOrderItemTrackingSnapshot(item),
+        returnRequest: buildOrderItemReturnRequest(item),
         seller: toContact(item.seller),
       })) ?? [],
     };

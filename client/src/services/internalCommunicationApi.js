@@ -7,7 +7,10 @@ export const internalCommunicationApi = apiSlice.injectEndpoints({
       providesTags: ['InternalCommunication'],
     }),
     getCommunicationThreads: builder.query({
-      query: () => '/communications',
+      query: (params = {}) => ({
+        url: '/communications',
+        params,
+      }),
       providesTags: ['InternalCommunication'],
     }),
     createCommunicationThread: builder.mutation({
@@ -26,6 +29,14 @@ export const internalCommunicationApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['InternalCommunication', 'Notification'],
     }),
+    updateCommunicationThreadState: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/communications/${id}/state`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['InternalCommunication'],
+    }),
   }),
 });
 
@@ -34,4 +45,5 @@ export const {
   useGetCommunicationThreadsQuery,
   useCreateCommunicationThreadMutation,
   useReplyCommunicationThreadMutation,
+  useUpdateCommunicationThreadStateMutation,
 } = internalCommunicationApi;

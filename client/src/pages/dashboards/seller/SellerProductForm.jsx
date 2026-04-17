@@ -74,6 +74,7 @@ const SellerProductFormComponent = ({
   onImageSelect,
   selectedFile = null,
   previewUrl = null,
+  categoryOptions = null,
 }) => (
   <form className="dashboard-form" onSubmit={handleSubmit}>
     <div className="form-grid">
@@ -89,7 +90,7 @@ const SellerProductFormComponent = ({
         label="Category"
         as="select"
       >
-        {renderCategoryOptions()}
+        {renderCategoryOptions(categoryOptions ?? undefined)}
       </Field>
       <Field
         name="mrp"
@@ -208,6 +209,10 @@ SellerProductFormComponent.propTypes = {
   onImageSelect: PropTypes.func.isRequired,
   selectedFile: filePropType,
   previewUrl: PropTypes.string,
+  categoryOptions: PropTypes.arrayOf(PropTypes.shape({
+    value: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+  })),
 };
 
 const SellerProductForm = reduxForm({

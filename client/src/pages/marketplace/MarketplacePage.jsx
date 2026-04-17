@@ -19,6 +19,12 @@ const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest arrivals' },
 ];
 
+const formatCategoryLabel = (value) => String(value ?? '')
+  .split(/[\s-_]+/)
+  .filter(Boolean)
+  .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+  .join(' ');
+
 const MarketplacePage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -175,6 +181,30 @@ const MarketplacePage = () => {
     return suggestions;
   }, [productPool]);
 
+  const categoryOptions = useMemo(() => {
+    const responseCategories = Array.isArray(data?.data?.categories)
+      ? data.data.categories
+      : [];
+
+    const liveCategories = responseCategories.length
+      ? responseCategories
+      : Array.from(
+          new Set(
+            productPool
+              .map((product) => product?.category?.toString().trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        ).map((value) => ({ value }));
+
+    return [
+      { value: 'all', label: 'All categories' },
+      ...liveCategories.map((entry) => ({
+        value: entry.value,
+        label: entry.label ?? formatCategoryLabel(entry.value),
+      })),
+    ];
+  }, [data?.data?.categories, productPool]);
+
   const updateFilters = (partial) => {
     setFilters((prev) => ({ ...prev, ...partial }));
   };
@@ -278,6 +308,7 @@ const MarketplacePage = () => {
       <div className="marketplace-layout">
         <ProductFilters
           filters={filters}
+          categoryOptions={categoryOptions}
           onChange={updateFilters}
           onReset={handleResetFilters}
           onPricePreset={handlePricePreset}

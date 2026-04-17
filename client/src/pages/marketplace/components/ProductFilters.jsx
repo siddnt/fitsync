@@ -1,13 +1,5 @@
 import PropTypes from 'prop-types';
 
-const CATEGORY_OPTIONS = [
-  { value: 'all', label: 'All categories' },
-  { value: 'supplements', label: 'Supplements' },
-  { value: 'equipment', label: 'Equipment' },
-  { value: 'clothing', label: 'Clothing' },
-  { value: 'accessories', label: 'Accessories' },
-];
-
 const PRICE_PRESETS = [
   { id: 'under-500', label: 'Under ₹500', min: 0, max: 500 },
   { id: '500-1000', label: '₹500 – ₹1,000', min: 500, max: 1000 },
@@ -15,7 +7,14 @@ const PRICE_PRESETS = [
   { id: '2000-plus', label: '₹2,000+', min: 2000, max: null },
 ];
 
-const ProductFilters = ({ filters, onChange, onReset, onPricePreset, disabled = false }) => (
+const ProductFilters = ({
+  filters,
+  categoryOptions = [],
+  onChange,
+  onReset,
+  onPricePreset,
+  disabled = false,
+}) => (
   <aside className="marketplace-sidebar" aria-label="Marketplace filters">
     <div className="marketplace-filter-group">
       <div className="marketplace-filter-group__header">
@@ -34,7 +33,7 @@ const ProductFilters = ({ filters, onChange, onReset, onPricePreset, disabled = 
         onChange={(event) => onChange({ category: event.target.value })}
         disabled={disabled}
       >
-        {CATEGORY_OPTIONS.map((option) => (
+        {categoryOptions.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -101,6 +100,10 @@ ProductFilters.propTypes = {
     maxPrice: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     inStockOnly: PropTypes.bool,
   }).isRequired,
+  categoryOptions: PropTypes.arrayOf(PropTypes.shape({
+    value: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+  })),
   onChange: PropTypes.func.isRequired,
   onReset: PropTypes.func.isRequired,
   onPricePreset: PropTypes.func.isRequired,

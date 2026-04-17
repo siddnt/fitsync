@@ -43,6 +43,7 @@ const dashboardLinksByRole = {
     { to: '/dashboard/admin/communications', label: 'Communications' },
     { to: '/dashboard/admin/messages', label: 'Messages' },
     { to: '/dashboard/admin/audit-logs', label: 'Audit Logs' },
+    { to: '/dashboard/admin/settings', label: 'Settings' },
   ],
 };
 

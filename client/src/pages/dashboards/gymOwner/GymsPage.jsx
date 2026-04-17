@@ -107,6 +107,7 @@ const GymOwnerGymsPage = () => {
       name: details.name,
       description: details.description,
       location: {
+        address: details.location?.address ?? details.address ?? '',
         city: details.city ?? details.location?.city ?? '',
         state: details.location?.state ?? '',
       },
@@ -115,6 +116,8 @@ const GymOwnerGymsPage = () => {
       },
       contact: {
         phone: details.contact?.phone ?? '',
+        email: details.contact?.email ?? '',
+        website: details.contact?.website ?? '',
       },
       schedule: {
         open: details.schedule?.openTime ?? details.schedule?.open ?? '',
@@ -126,6 +129,7 @@ const GymOwnerGymsPage = () => {
           ? details.amenities
           : [],
       tags: (details.tags ?? []).join(', '),
+      gallery: Array.isArray(details.gallery) ? details.gallery.join('\n') : '',
     };
   }, [gymDetailsResponse]);
 
@@ -290,12 +294,12 @@ const GymOwnerGymsPage = () => {
     }
   };
 
-  const handleDeleteGym = async (gym) => {
+  const handleArchiveGym = async (gym) => {
     if (!gym) {
       return;
     }
 
-    const confirmed = window.confirm(`Remove ${gym.name}? This will hide the listing for members.`);
+    const confirmed = window.confirm(`Archive ${gym.name}? This will hide the listing from members and preserve its history.`);
     if (!confirmed) {
       return;
     }
@@ -306,14 +310,14 @@ const GymOwnerGymsPage = () => {
 
     try {
       await updateGym({ id: gym.id, status: 'suspended', isPublished: false }).unwrap();
-      setGymActionMessage('Gym removed from your listings.');
+      setGymActionMessage('Gym archived and hidden from your listings.');
       if (activeGymId === gym.id) {
         setActiveGymId(null);
         dispatch(resetForm('gymEdit'));
       }
       await refetch();
     } catch (mutationError) {
-      setGymActionError(mutationError?.data?.message ?? 'Could not remove this gym.');
+      setGymActionError(mutationError?.data?.message ?? 'Could not archive this gym.');
     } finally {
       setProcessingGymId(null);
       setProcessingGymAction(null);
@@ -399,13 +403,34 @@ const GymOwnerGymsPage = () => {
                   const isProcessing = processingGymId === gym.id;
                   const toggling = isProcessing && processingGymAction === 'toggle';
                   const deleting = isProcessing && processingGymAction === 'delete';
-                  const disableLabel = gym.isPublished ? 'Disable' : 'Enable';
+                  const visibilityLabel = gym.isPublished ? 'Hide' : 'Publish';
+                  const featureSummary = (Array.isArray(gym.keyFeatures) ? gym.keyFeatures : [])
+                    .slice(0, 3)
+                    .join(' | ');
+                  const quickStats = [
+                    `${gym.members?.active ?? 0} active`,
+                    `${gym.members?.paused ?? 0} paused`,
+                    `${gym.members?.expiringSoon ?? 0} expiring soon`,
+                    `${gym.analytics?.impressions30d ?? 0} views / 30d`,
+                    `${gym.analytics?.opens ?? 0} opens`,
+                    `${gym.analytics?.memberships ?? 0} joins`,
+                  ].join(' | ');
                   return (
                     <tr key={gym.id}>
-                      <td>{gym.name}</td>
-                      <td>{formatStatus(gym.status)}</td>
                       <td>
-                        Active {gym.members?.active ?? 0} · Paused {gym.members?.paused ?? 0}
+                        <strong>{gym.name}</strong>
+                        <div className="dashboard-table__meta">
+                          {featureSummary || 'No feature highlights yet'}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{formatStatus(gym.status)}</strong>
+                        <div className="dashboard-table__meta">
+                          {gym.isPublished ? 'Marketplace visible' : 'Hidden from marketplace'}
+                        </div>
+                      </td>
+                      <td>
+                        {quickStats}
                       </td>
                       <td>{formatDate(gym.updatedAt)}</td>
                       <td>
@@ -418,15 +443,15 @@ const GymOwnerGymsPage = () => {
                             onClick={() => handleTogglePublishGym(gym)}
                             disabled={isProcessing}
                           >
-                            {toggling ? 'Updating…' : disableLabel}
+                            {toggling ? 'Updating...' : visibilityLabel}
                           </button>
                           <button
                             type="button"
                             className="button--danger"
-                            onClick={() => handleDeleteGym(gym)}
+                            onClick={() => handleArchiveGym(gym)}
                             disabled={isProcessing}
                           >
-                            {deleting ? 'Removing…' : 'Delete'}
+                            {deleting ? 'Archiving...' : 'Archive'}
                           </button>
                         </div>
                       </td>
@@ -589,20 +614,20 @@ const GymOwnerGymsPage = () => {
                         disabled={processingGymId === activeGym.id}
                       >
                         {processingGymId === activeGym.id && processingGymAction === 'toggle'
-                          ? 'Updating…'
+                          ? 'Updating...'
                           : activeGym.isPublished
-                            ? 'Disable listing'
-                            : 'Enable listing'}
+                            ? 'Hide listing'
+                            : 'Publish listing'}
                       </button>
                       <button
                         type="button"
                         className="button--danger"
-                        onClick={() => handleDeleteGym(activeGym)}
+                        onClick={() => handleArchiveGym(activeGym)}
                         disabled={processingGymId === activeGym.id}
                       >
                         {processingGymId === activeGym.id && processingGymAction === 'delete'
-                          ? 'Removing…'
-                          : 'Delete'}
+                          ? 'Archiving...'
+                          : 'Archive'}
                       </button>
                     </>
                   ) : null}

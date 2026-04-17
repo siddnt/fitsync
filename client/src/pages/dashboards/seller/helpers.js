@@ -8,6 +8,12 @@ export const categoryOptions = [
   { value: 'accessories', label: 'Accessories' },
 ];
 
+const formatCategoryLabel = (value) => String(value ?? '')
+  .split(/[\s-_]+/)
+  .filter(Boolean)
+  .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+  .join(' ');
+
 export const normaliseCategoryValue = (value) => {
   if (typeof value !== 'string') {
     return value;
@@ -26,9 +32,29 @@ export const normaliseCategoryValue = (value) => {
   return lower;
 };
 
-export const renderCategoryOptions = () => [
+export const buildCategoryOptions = (values = [], seedOptions = categoryOptions) => {
+  const optionMap = new Map(
+    (Array.isArray(seedOptions) ? seedOptions : []).map((option) => [option.value, option]),
+  );
+
+  (Array.isArray(values) ? values : []).forEach((value) => {
+    const normalized = normaliseCategoryValue(value);
+    if (!normalized || optionMap.has(normalized)) {
+      return;
+    }
+
+    optionMap.set(normalized, {
+      value: normalized,
+      label: formatCategoryLabel(normalized),
+    });
+  });
+
+  return Array.from(optionMap.values()).sort((left, right) => left.label.localeCompare(right.label));
+};
+
+export const renderCategoryOptions = (options = categoryOptions) => [
   createElement('option', { key: 'placeholder', value: '' }, 'Select category'),
-  ...categoryOptions.map((option) =>
+  ...options.map((option) =>
     createElement('option', { key: option.value, value: option.value }, option.label),
   ),
 ];

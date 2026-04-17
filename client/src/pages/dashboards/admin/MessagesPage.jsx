@@ -8,6 +8,17 @@ import {
 } from '../../../services/contactApi';
 import './MessagesPage.css';
 
+const normalizePriority = (value) => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'medium') {
+    return 'normal';
+  }
+  if (raw === 'urgent') {
+    return 'high';
+  }
+  return ['low', 'normal', 'high'].includes(raw) ? raw : 'normal';
+};
+
 const MessagesPage = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   const isAdmin = currentUser?.role === 'admin';
@@ -146,9 +157,8 @@ const MessagesPage = () => {
           >
             <option value="">All</option>
             <option value="low">Low</option>
-            <option value="medium">Medium</option>
+            <option value="normal">Normal</option>
             <option value="high">High</option>
-            <option value="urgent">Urgent</option>
           </select>
           <button type="button" className="messages-refresh" onClick={() => refetch()}>
             Refresh
@@ -175,7 +185,8 @@ const MessagesPage = () => {
         ) : (
           messages.map((msg) => {
             const draftStatus = statusDrafts[msg._id] ?? msg.status ?? 'new';
-            const draftPriority = priorityDrafts[msg._id] ?? msg.priority ?? 'medium';
+            const normalizedPriority = normalizePriority(msg.priority);
+            const draftPriority = priorityDrafts[msg._id] ?? normalizedPriority;
             const draftNotes = internalNotesDrafts[msg._id] ?? msg.internalNotes ?? '';
             const replyDraft = replyDrafts[msg._id] ?? '';
             const resolvedAssignee = assignmentOverrides[msg._id] ?? msg.assignedTo ?? null;
@@ -187,8 +198,8 @@ const MessagesPage = () => {
                     <h3>{msg.subject || msg.name}</h3>
                     <span className="email">{msg.email}</span>
                     <div className="message-tags">
-                      <span className={`ticket-pill ticket-pill--${msg.priority || 'medium'}`}>
-                        {msg.priority || 'medium'}
+                      <span className={`ticket-pill ticket-pill--${normalizedPriority}`}>
+                        {normalizedPriority}
                       </span>
                       <span className="ticket-pill">{msg.category || 'general'}</span>
                       <span className={`ticket-pill ticket-pill--status-${(msg.status || 'new').replace(/\s+/g, '-')}`}>
@@ -245,9 +256,8 @@ const MessagesPage = () => {
                       onChange={(event) => setPriorityDrafts((prev) => ({ ...prev, [msg._id]: event.target.value }))}
                     >
                       <option value="low">Low</option>
-                      <option value="medium">Medium</option>
+                      <option value="normal">Normal</option>
                       <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
                     </select>
                   </div>
 

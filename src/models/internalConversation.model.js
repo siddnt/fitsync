@@ -12,6 +12,14 @@ const participantSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    lastReadAt: {
+      type: Date,
+      default: null,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { _id: false },
 );

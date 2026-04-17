@@ -25,6 +25,7 @@ const GymCreateFormComponent = ({
       </div>
       <div className="gym-form__section-fields">
         <Field name="name" component={FormField} label="Gym name" placeholder="FitSync Downtown" />
+        <Field name="location.address" component={FormField} label="Street address" placeholder="12 Residency Road" />
         <Field name="location.city" component={FormField} label="City" placeholder="Mumbai" />
         <Field name="location.state" component={FormField} label="State" placeholder="Maharashtra" />
       </div>
@@ -44,6 +45,8 @@ const GymCreateFormComponent = ({
       </div>
       <div className="gym-form__section-fields">
         <Field name="contact.phone" component={FormField} label="Contact phone" placeholder="+91 98765 43210" />
+        <Field name="contact.email" component={FormField} label="Contact email" placeholder="hello@fitsyncgym.com" />
+        <Field name="contact.website" component={FormField} label="Website" placeholder="https://fitsyncgym.com" />
         <Field name="schedule.open" component={FormField} label="Opens" placeholder="06:00" />
         <Field name="schedule.close" component={FormField} label="Closes" placeholder="22:00" />
       </div>
@@ -91,6 +94,20 @@ const GymCreateFormComponent = ({
               component={FormField}
               label={null}
               placeholder="weights, cardio, yoga"
+            />
+          </div>
+        </div>
+
+        <div className="gym-form__highlight-row">
+          <span className="gym-form__highlight-label">Gallery URLs</span>
+          <div className="gym-form__highlight-control">
+            <Field
+              name="gallery"
+              component={FormField}
+              as="textarea"
+              label={null}
+              placeholder={'https://.../lobby.jpg\nhttps://.../weights-floor.jpg'}
+              rows={4}
             />
           </div>
         </div>
@@ -164,6 +181,11 @@ const validate = (values) => {
   const city = values.location?.city?.trim();
   if (!city) {
     errors.location = { ...(errors.location ?? {}), city: 'City is required' };
+  }
+
+  const address = values.location?.address?.trim();
+  if (!address) {
+    errors.location = { ...(errors.location ?? {}), address: 'Street address is required' };
   }
 
   const pricingErrors = validateMembershipPricingValues(values.pricing, { requireAtLeastOne: true });

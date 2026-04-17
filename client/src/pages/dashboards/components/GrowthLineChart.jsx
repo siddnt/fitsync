@@ -1,24 +1,9 @@
 import PropTypes from 'prop-types';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend } from 'recharts';
-
-const sampleGrowth = {
-  'gym-owner': [
-    { label: 'Jan', subscriptions: 32, earnings: 44 },
-    { label: 'Feb', subscriptions: 35, earnings: 48 },
-    { label: 'Mar', subscriptions: 37, earnings: 52 },
-    { label: 'Apr', subscriptions: 40, earnings: 55 },
-  ],
-  admin: [
-    { label: 'Week 1', listing: 5400, sponsorship: 2400, marketplace: 3200 },
-    { label: 'Week 2', listing: 6000, sponsorship: 2800, marketplace: 3500 },
-    { label: 'Week 3', listing: 5800, sponsorship: 2600, marketplace: 3300 },
-    { label: 'Week 4', listing: 6400, sponsorship: 3000, marketplace: 3900 },
-  ],
-};
+import EmptyState from './EmptyState.jsx';
 
 const GrowthLineChart = ({ role = 'gym-owner', data = null, series = null }) => {
-  const fallbackData = sampleGrowth[role] ?? sampleGrowth['gym-owner'];
-  const resolvedData = data?.length ? data : fallbackData;
+  const resolvedData = Array.isArray(data) ? data : [];
 
   const defaultSeries = {
     'gym-owner': [
@@ -32,7 +17,13 @@ const GrowthLineChart = ({ role = 'gym-owner', data = null, series = null }) => 
     ],
   };
 
-  const resolvedSeries = series?.length ? series : defaultSeries[role] ?? defaultSeries['gym-owner'];
+  const resolvedSeries = Array.isArray(series) && series.length
+    ? series
+    : defaultSeries[role] ?? [];
+
+  if (!resolvedData.length || !resolvedSeries.length) {
+    return <EmptyState message="No chart data available yet." />;
+  }
 
   return (
     <div className="chart-container">

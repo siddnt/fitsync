@@ -8,6 +8,7 @@ import { recordAuditLog } from '../../services/audit.service.js';
 import { createNotification } from '../../services/notification.service.js';
 
 const MANAGER_OPEN_STATUSES = ['new', 'read', 'in-progress', 'responded'];
+const SUPPORT_ASSIGNEE_ROLES = new Set(['admin', 'manager']);
 
 const resolveSupportNotificationLink = (role) => {
   if (role === 'manager') {
@@ -80,6 +81,40 @@ const resolveLeastBurdenedManagerId = async () => {
   }, null);
 
   return selectedManager?.id ?? null;
+};
+
+const ensureManagerOwnsContact = (contact, user, actionLabel = 'manage this support ticket') => {
+  if (user?.role !== 'manager') {
+    return;
+  }
+
+  const assignedTo = String(contact?.assignedTo?._id ?? contact?.assignedTo ?? '').trim();
+  if (assignedTo && assignedTo === String(user?._id)) {
+    return;
+  }
+
+  throw new ApiError(403, `Managers can only ${actionLabel} when the ticket is assigned to them.`);
+};
+
+const resolveSupportAssignee = async (assignedTo) => {
+  if (!assignedTo) {
+    throw new ApiError(400, 'Assigned user is required.');
+  }
+
+  const assignee = await User.findById(assignedTo).select('_id role status name email');
+  if (!assignee) {
+    throw new ApiError(404, 'Assigned user not found.');
+  }
+
+  if (!SUPPORT_ASSIGNEE_ROLES.has(assignee.role)) {
+    throw new ApiError(400, 'Support tickets can only be assigned to administrators or managers.');
+  }
+
+  if (assignee.status !== 'active') {
+    throw new ApiError(400, 'Support tickets can only be assigned to active support staff.');
+  }
+
+  return assignee;
 };
 
 const rebalanceUnassignedTickets = async () => {
@@ -264,6 +299,14 @@ export const updateMessageStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid status');
   }
 
+  const existingMessage = await Contact.findById(id).select('_id assignedTo');
+
+  if (!existingMessage) {
+    throw new ApiError(404, 'Message not found');
+  }
+
+  ensureManagerOwnsContact(existingMessage, req.user, 'update this support ticket');
+
   const message = await Contact.findByIdAndUpdate(
     id,
     {
@@ -273,10 +316,6 @@ export const updateMessageStatus = asyncHandler(async (req, res) => {
     },
     { new: true }
   );
-
-  if (!message) {
-    throw new ApiError(404, 'Message not found');
-  }
 
   await recordAuditLog({
     actor: req.user?._id,
@@ -297,11 +336,30 @@ export const assignMessage = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { assignedTo, status = 'in-progress', gymId, autoAssignManager = false } = req.body ?? {};
   const resolvedGymId = await resolveOptionalGymId(gymId);
-  const targetAssignee = autoAssignManager ? await resolveLeastBurdenedManagerId() : assignedTo;
+  const existingMessage = await Contact.findById(id).select('_id assignedTo');
+
+  if (!existingMessage) {
+    throw new ApiError(404, 'Message not found');
+  }
+
+  if (req.user?.role === 'manager') {
+    const currentAssignee = String(existingMessage.assignedTo ?? '').trim();
+    if (currentAssignee && currentAssignee !== String(req.user?._id)) {
+      throw new ApiError(403, 'Managers can only assign tickets that are already assigned to them.');
+    }
+  }
+
+  const resolvedAssignee = autoAssignManager
+    ? await resolveSupportAssignee(await resolveLeastBurdenedManagerId())
+    : await resolveSupportAssignee(assignedTo);
+
+  if (req.user?.role === 'manager' && String(resolvedAssignee._id) !== String(req.user?._id)) {
+    throw new ApiError(403, 'Managers can only assign support tickets to themselves.');
+  }
 
   const message = await Contact.findByIdAndUpdate(
     id,
-    { $set: { assignedTo: targetAssignee, status, ...(resolvedGymId ? { gym: resolvedGymId } : {}) } },
+    { $set: { assignedTo: resolvedAssignee._id, status, ...(resolvedGymId ? { gym: resolvedGymId } : {}) } },
     { new: true },
   )
     .populate({ path: 'assignedTo', select: 'name email role' })
@@ -311,10 +369,6 @@ export const assignMessage = asyncHandler(async (req, res) => {
       populate: { path: 'owner', select: 'name email role' },
     });
 
-  if (!message) {
-    throw new ApiError(404, 'Message not found');
-  }
-
   await recordAuditLog({
     actor: req.user?._id,
     actorRole: req.user?.role,
@@ -323,20 +377,20 @@ export const assignMessage = asyncHandler(async (req, res) => {
     entityId: message._id,
     summary: autoAssignManager ? 'Support ticket auto-assigned to least-burdened manager' : 'Support ticket assigned',
     metadata: {
-      assignedTo: targetAssignee,
+      assignedTo: resolvedAssignee._id,
       gymId: resolvedGymId ?? message.gym?._id ?? null,
       strategy: autoAssignManager ? 'least-burdened-manager' : 'manual',
     },
   });
 
-  if (targetAssignee) {
+  if (resolvedAssignee?._id) {
     await createNotification({
-      user: targetAssignee,
+      user: resolvedAssignee._id,
       type: 'support-assigned',
       title: 'Support ticket assigned',
       message: `A support ticket from ${message.name} has been assigned to you.`,
       metadata: { contactId: message._id },
-      link: resolveSupportNotificationLink(message.assignedTo?.role),
+      link: resolveSupportNotificationLink(resolvedAssignee.role),
     });
   }
 
@@ -356,6 +410,8 @@ export const replyToMessage = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Message not found');
   }
 
+  ensureManagerOwnsContact(message, req.user, 'reply to this support ticket');
+
   message.replies.push({
     author: req.user?._id ?? null,
     authorRole: req.user?.role ?? 'admin',
@@ -363,7 +419,7 @@ export const replyToMessage = asyncHandler(async (req, res) => {
     createdAt: new Date(),
   });
   message.status = closeAfterReply ? 'closed' : 'responded';
-  await message.save();
+  await message.save({ validateBeforeSave: false });
 
   await recordAuditLog({
     actor: req.user?._id,

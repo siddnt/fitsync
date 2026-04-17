@@ -5,7 +5,12 @@ import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import SellerProductForm from './SellerProductForm.jsx';
 import { SubmissionError } from 'redux-form';
-import { createSubmissionHandler, normaliseCategoryValue, categoryOptions } from './helpers.js';
+import {
+  buildCategoryOptions,
+  categoryOptions,
+  createSubmissionHandler,
+  normaliseCategoryValue,
+} from './helpers.js';
 import {
   useGetSellerProductsQuery,
   useCreateSellerProductMutation,
@@ -139,6 +144,19 @@ const InventoryPage = () => {
   const editingProduct = useMemo(
     () => products.find((product) => product.id === editingProductId) ?? null,
     [products, editingProductId],
+  );
+
+  const categoryFilterOptions = useMemo(
+    () => buildCategoryOptions(products.map((product) => product.category), []),
+    [products],
+  );
+
+  const productFormCategoryOptions = useMemo(
+    () => buildCategoryOptions(
+      [editingProduct?.category, ...products.map((product) => product.category)],
+      categoryOptions,
+    ),
+    [editingProduct?.category, products],
   );
 
   const [notice, setNotice] = useState(null);
@@ -511,7 +529,7 @@ const InventoryPage = () => {
             className="inventory-toolbar__input inventory-toolbar__input--select"
           >
             <option value="">All categories</option>
-            {categoryOptions.map((c) => (
+            {categoryFilterOptions.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
@@ -639,6 +657,7 @@ const InventoryPage = () => {
             onImageSelect={handleImageSelect}
             selectedFile={imageFile}
             previewUrl={imagePreviewUrl}
+            categoryOptions={productFormCategoryOptions}
           />
         </DashboardSection>
       ) : null}

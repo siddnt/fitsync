@@ -9,27 +9,7 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-
-const sampleData = {
-  trainee: [
-    { label: 'Week 1', payments: 4200, orders: 3 },
-    { label: 'Week 2', payments: 3800, orders: 4 },
-    { label: 'Week 3', payments: 5200, orders: 5 },
-    { label: 'Week 4', payments: 6100, orders: 4 },
-  ],
-  'gym-owner': [
-    { label: 'Jan', subscriptions: 12000, earnings: 36000, expenses: 9000 },
-    { label: 'Feb', subscriptions: 14000, earnings: 42000, expenses: 12000 },
-    { label: 'Mar', subscriptions: 16000, earnings: 47000, expenses: 15000 },
-    { label: 'Apr', subscriptions: 15000, earnings: 45000, expenses: 18000 },
-  ],
-  admin: [
-    { label: 'Week 1', listing: 5400, sponsorship: 2400, marketplace: 3200 },
-    { label: 'Week 2', listing: 6000, sponsorship: 2800, marketplace: 3500 },
-    { label: 'Week 3', listing: 5800, sponsorship: 2600, marketplace: 3300 },
-    { label: 'Week 4', listing: 6400, sponsorship: 3000, marketplace: 3900 },
-  ],
-};
+import EmptyState from './EmptyState.jsx';
 
 
 const formatAxisTick = (value) => {
@@ -58,8 +38,7 @@ const RevenueSummaryChart = ({
   labelKey = null,
   series = null,
 }) => {
-  const fallbackData = sampleData[role] ?? sampleData.trainee;
-  const resolvedData = data?.length ? data : fallbackData;
+  const resolvedData = Array.isArray(data) ? data : [];
   const resolvedValueKey = valueKey || (role === 'gym-owner' ? 'earnings' : 'listing');
   const resolvedLabelKey = labelKey || 'label';
   const hasCustomSeries = Array.isArray(series) && series.length > 0;
@@ -82,6 +61,10 @@ const RevenueSummaryChart = ({
         name: item.name,
       }))
     : defaultSeries;
+
+  if (!resolvedData.length || !resolvedSeries.length) {
+    return <EmptyState message="No chart data available yet." />;
+  }
 
   return (
     <div className="chart-container">

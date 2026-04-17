@@ -1,5 +1,5 @@
-import { useParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
   useGetGymByIdQuery,
@@ -12,15 +12,93 @@ import {
   useGetGymReviewsQuery,
   useSubmitGymReviewMutation,
 } from '../../services/gymsApi.js';
-import { formatDate } from '../../utils/format.js';
+import { useGetBookableSlotsQuery } from '../../services/bookingApi.js';
+import { formatDate, formatDateTime, formatStatus } from '../../utils/format.js';
 import { getGymImpressionViewerId } from '../../utils/impressionViewer.js';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './components/GymMembershipActions.jsx';
 import './GymDetailsPage.css';
 
+const SAVED_GYMS_STORAGE_KEY = 'fitsync:saved-gyms';
+
 const parseAmount = (value) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
+const normalizeWebsiteUrl = (value) => {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+};
+
+const buildMapLink = (gym) => {
+  const parts = [
+    gym?.location?.address,
+    gym?.location?.city,
+    gym?.location?.state,
+  ].filter(Boolean);
+
+  if (!parts.length) {
+    return '';
+  }
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}`;
+};
+
+const formatWorkingDays = (workingDays = []) => {
+  if (!Array.isArray(workingDays) || !workingDays.length) {
+    return 'Schedule updates pending';
+  }
+
+  return workingDays.map((day) => formatStatus(day)).join(', ');
+};
+
+const getTrainerMeta = (trainer) => {
+  const parts = [];
+
+  if (typeof trainer?.experienceYears === 'number' && trainer.experienceYears > 0) {
+    parts.push(`${trainer.experienceYears}+ years experience`);
+  }
+
+  if (typeof trainer?.mentoredCount === 'number' && trainer.mentoredCount > 0) {
+    parts.push(`${trainer.mentoredCount} trainees supported`);
+  }
+
+  if (Array.isArray(trainer?.specializations) && trainer.specializations.length) {
+    parts.push(trainer.specializations.slice(0, 3).join(', '));
+  }
+
+  return parts;
+};
+
+const readSavedGyms = () => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SAVED_GYMS_STORAGE_KEY);
+    const parsed = JSON.parse(raw ?? '[]');
+    return Array.isArray(parsed) ? parsed.map((entry) => String(entry)) : [];
+  } catch (_error) {
+    return [];
+  }
+};
+
+const writeSavedGyms = (ids) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(SAVED_GYMS_STORAGE_KEY, JSON.stringify(ids));
 };
 
 const GymDetailsPage = () => {
@@ -36,11 +114,15 @@ const GymDetailsPage = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState({ error: null, success: null });
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const [pageNotice, setPageNotice] = useState(null);
+  const [isSaved, setIsSaved] = useState(false);
 
   const user = useSelector((state) => state.auth.user);
   const userRole = user?.role ?? null;
   const isAuthenticated = Boolean(user);
   const canManageMembership = ['trainee', 'trainer'].includes(userRole);
+  const shouldFetchSessionPreview = userRole === 'trainee' && Boolean(gymId);
 
   const gym = data?.data?.gym ?? null;
   const shouldFetchMembership = canManageMembership && Boolean(gymId);
@@ -66,11 +148,20 @@ const GymDetailsPage = () => {
     refetch: refetchReviews,
     isFetching: isReviewsFetching,
   } = useGetGymReviewsQuery(gymId, { skip: !gymId });
+  const { data: sessionPreviewResponse } = useGetBookableSlotsQuery(
+    { gymId, days: 10 },
+    { skip: !shouldFetchSessionPreview },
+  );
 
   const trainers = useMemo(
     () => (Array.isArray(trainersResponse?.data?.trainers) ? trainersResponse.data.trainers : []),
     [trainersResponse?.data?.trainers],
   );
+
+  const sessionPreview = useMemo(() => {
+    const slots = Array.isArray(sessionPreviewResponse?.data?.slots) ? sessionPreviewResponse.data.slots : [];
+    return slots.slice(0, 4);
+  }, [sessionPreviewResponse?.data?.slots]);
 
   const reviews = useMemo(() => {
     const reviewList = Array.isArray(reviewsResponse?.data?.reviews)
@@ -92,6 +183,35 @@ const GymDetailsPage = () => {
     return reviews.find((review) => review.authorId === userId) ?? null;
   }, [reviews, userId]);
 
+  const mediaGallery = useMemo(
+    () => (Array.isArray(gym?.gallery) ? gym.gallery.filter(Boolean) : []),
+    [gym?.gallery],
+  );
+  const activeMedia = mediaGallery[selectedMediaIndex] ?? mediaGallery[0] ?? '';
+
+  const featurePills = useMemo(() => {
+    const values = [
+      ...(Array.isArray(gym?.keyFeatures) ? gym.keyFeatures : []),
+      ...(Array.isArray(gym?.amenities) ? gym.amenities : []),
+      ...(Array.isArray(gym?.tags) ? gym.tags : []),
+      ...(Array.isArray(gym?.features) ? gym.features : []),
+    ]
+      .map((entry) => String(entry ?? '').trim())
+      .filter(Boolean);
+
+    return [...new Set(values)];
+  }, [gym?.amenities, gym?.features, gym?.keyFeatures, gym?.tags]);
+
+  const locationLabel = useMemo(() => (
+    [
+      gym?.location?.address,
+      [gym?.location?.city, gym?.location?.state].filter(Boolean).join(', '),
+    ].filter(Boolean).join(' | ')
+  ), [gym?.location?.address, gym?.location?.city, gym?.location?.state]);
+
+  const mapLink = useMemo(() => buildMapLink(gym), [gym]);
+  const websiteUrl = useMemo(() => normalizeWebsiteUrl(gym?.contact?.website), [gym?.contact?.website]);
+
   useEffect(() => {
     if (gymId) {
       recordImpression({ id: gymId, viewerId });
@@ -105,6 +225,12 @@ const GymDetailsPage = () => {
 
   useEffect(() => {
     setReviewStatus({ error: null, success: null });
+  }, [gymId]);
+
+  useEffect(() => {
+    setSelectedMediaIndex(0);
+    setPageNotice(null);
+    setIsSaved(readSavedGyms().includes(String(gymId)));
   }, [gymId]);
 
   useEffect(() => {
@@ -158,6 +284,53 @@ const GymDetailsPage = () => {
     }
   }, [gymId, membership?.id, leaveGym, refetch, shouldFetchMembership, refetchMembership]);
 
+  const handleShareGym = useCallback(async () => {
+    if (typeof window === 'undefined' || !gym) {
+      return;
+    }
+
+    const url = window.location.href;
+    const sharePayload = {
+      title: gym.name,
+      text: `Check out ${gym.name} on FitSync.`,
+      url,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(sharePayload);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        throw new Error('Share not supported');
+      }
+      setPageNotice('Gym link ready to share.');
+    } catch (_error) {
+      setPageNotice('Could not share this link right now.');
+    }
+  }, [gym]);
+
+  const handleToggleSave = useCallback(() => {
+    if (!gymId) {
+      return;
+    }
+
+    const current = new Set(readSavedGyms());
+    const key = String(gymId);
+
+    if (current.has(key)) {
+      current.delete(key);
+      setIsSaved(false);
+      setPageNotice('Removed from your saved gyms.');
+    } else {
+      current.add(key);
+      setIsSaved(true);
+      setPageNotice('Saved for later.');
+    }
+
+    writeSavedGyms([...current]);
+  }, [gymId]);
+
   const canSubmitReview = useMemo(() => {
     if (userRole !== 'trainee' || !membership) {
       return false;
@@ -199,7 +372,7 @@ const GymDetailsPage = () => {
       try {
         await submitGymReview({ gymId, rating: reviewRating, comment: trimmedComment }).unwrap();
         setReviewComment(trimmedComment);
-        setReviewStatus({ error: null, success: 'Thanks for sharing your experience!' });
+        setReviewStatus({ error: null, success: 'Thanks for sharing your experience.' });
         await Promise.all([
           refetch(),
           refetchReviews ? refetchReviews() : Promise.resolve(),
@@ -235,9 +408,21 @@ const GymDetailsPage = () => {
   return (
     <div className="gym-details">
       <header className="gym-details__header">
-        <div>
+        <div className="gym-details__headline">
+          <div className="gym-details__eyebrow">Gym listing</div>
           <h1>{gym.name}</h1>
-          <p>{gym.location?.address}</p>
+          <p>{locationLabel || 'Location details pending'}</p>
+          <div className="gym-details__header-actions">
+            <button type="button" onClick={handleShareGym}>
+              Share
+            </button>
+            <button type="button" onClick={handleToggleSave}>
+              {isSaved ? 'Saved' : 'Save'}
+            </button>
+            <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
+              Contact
+            </Link>
+          </div>
         </div>
         <div className="gym-details__pricing">
           <span className="price">
@@ -247,12 +432,11 @@ const GymDetailsPage = () => {
             <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
           ) : null}
           {headlinePlanLabel ? (
-            <small style={{ display: 'block', marginTop: '0.35rem', color: 'var(--muted-text-color)' }}>
-              Starting with {headlinePlanLabel}
-            </small>
+            <small>Starting with {headlinePlanLabel}</small>
           ) : null}
         </div>
       </header>
+      {pageNotice ? <p className="gym-details__notice">{pageNotice}</p> : null}
 
       <GymMembershipActions
         membership={membership}
@@ -270,40 +454,184 @@ const GymDetailsPage = () => {
         currency={currencyPrefix}
       />
 
-      <section className="gym-details__gallery">
-        {gym.gallery?.length ? (
-          gym.gallery.map((image) => <img key={image} src={image} alt={gym.name} />)
-        ) : (
-          <div className="gym-details__placeholder">Gallery coming soon</div>
-        )}
+      <section className="gym-details__hero">
+        <div className="gym-details__media">
+          {mediaGallery.length ? (
+            <>
+              <div className="gym-details__media-primary">
+                <img src={activeMedia} alt={`${gym.name} preview`} />
+              </div>
+              {mediaGallery.length > 1 ? (
+                <div className="gym-details__media-grid">
+                  {mediaGallery.slice(0, 5).map((image, index) => (
+                    <button
+                      key={`${image}-${index}`}
+                      type="button"
+                      className={`gym-details__media-thumb${image === activeMedia ? ' is-active' : ''}`}
+                      onClick={() => setSelectedMediaIndex(index)}
+                    >
+                      <img src={image} alt={`${gym.name} gallery ${index + 1}`} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="gym-details__media-empty">
+              <strong>No gallery uploaded yet</strong>
+              <p>The owner has not published facility photos for this listing yet.</p>
+            </div>
+          )}
+        </div>
+
+        <aside className="gym-details__hero-card">
+          <div>
+            <small>Rating</small>
+            <strong>
+              {gym.analytics?.ratingCount
+                ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5`
+                : 'No ratings yet'}
+            </strong>
+            <p>{gym.analytics?.ratingCount ? `${gym.analytics.ratingCount} member reviews` : 'Be the first to review this gym.'}</p>
+          </div>
+          <div>
+            <small>Opening hours</small>
+            <strong>{gym.schedule?.open || '06:00'} - {gym.schedule?.close || '22:00'}</strong>
+            <p>{formatWorkingDays(gym.schedule?.workingDays)}</p>
+          </div>
+          <div className="gym-details__hero-actions">
+            {mapLink ? (
+              <a href={mapLink} target="_blank" rel="noreferrer">Open in Maps</a>
+            ) : null}
+            {gym.contact?.phone ? (
+              <a href={`tel:${gym.contact.phone}`}>Call gym</a>
+            ) : null}
+            {gym.contact?.email ? (
+              <a href={`mailto:${gym.contact.email}?subject=${encodeURIComponent(`Enquiry about ${gym.name}`)}`}>Email gym</a>
+            ) : null}
+            <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
+              Contact support
+            </Link>
+            {websiteUrl ? (
+              <a href={websiteUrl} target="_blank" rel="noreferrer">Visit website</a>
+            ) : null}
+          </div>
+        </aside>
       </section>
 
       <section className="gym-details__grid">
         <article>
+          <h2>Location</h2>
+          <p>{gym.location?.address || 'Address pending'}</p>
+          <p>{[gym.location?.city, gym.location?.state].filter(Boolean).join(', ') || 'City pending'}</p>
+          {gym.location?.coordinates?.lat && gym.location?.coordinates?.lng ? (
+            <p>
+              {Number(gym.location.coordinates.lat).toFixed(5)}, {Number(gym.location.coordinates.lng).toFixed(5)}
+            </p>
+          ) : null}
+          {mapLink ? (
+            <a href={mapLink} target="_blank" rel="noreferrer">Get directions</a>
+          ) : null}
+        </article>
+        <article>
           <h2>Contact</h2>
-          <p>{gym.contact?.phone}</p>
-          <p>{gym.contact?.email}</p>
+          <p>{gym.contact?.phone || 'Phone not published'}</p>
+          <p>{gym.contact?.email || 'Email not published'}</p>
+          <p>{websiteUrl || 'Website not published'}</p>
         </article>
         <article>
-          <h2>Schedule</h2>
-          <p>{gym.schedule?.days?.join(', ')}</p>
-          <p>
-            {gym.schedule?.open ?? '06:00'} - {gym.schedule?.close ?? '22:00'}
-          </p>
-        </article>
-        <article>
-          <h2>Features</h2>
-          <div className="gym-details__chips">
-            {(gym.features?.length ? gym.features : ['AC', 'Lockers']).map((feature) => (
-              <span key={feature}>{feature}</span>
-            ))}
-          </div>
+          <h2>Facilities and focus</h2>
+          {featurePills.length ? (
+            <div className="gym-details__chips">
+              {featurePills.map((feature) => (
+                <span key={feature}>{feature}</span>
+              ))}
+            </div>
+          ) : (
+            <p>No amenities or focus areas have been published yet.</p>
+          )}
         </article>
       </section>
 
       <section className="gym-details__about">
         <h2>About this gym</h2>
-        <p>{gym.description}</p>
+        <p>{gym.description || 'This gym has not added a description yet.'}</p>
+      </section>
+
+      <section className="gym-details__section">
+        <div className="gym-details__section-header">
+          <h2>Trainer preview</h2>
+          <p>Meet the active trainers currently assigned to this gym.</p>
+        </div>
+        {trainers.length ? (
+          <div className="gym-details__trainer-grid">
+            {trainers.slice(0, 6).map((trainer) => (
+              <article key={trainer.id} className="gym-details__trainer-card">
+                <div className="gym-details__trainer-avatar">
+                  {trainer.profilePicture ? (
+                    <img src={trainer.profilePicture} alt={trainer.name} />
+                  ) : (
+                    <span>{trainer.name?.slice(0, 1) ?? 'T'}</span>
+                  )}
+                </div>
+                <div>
+                  <h3>{trainer.name}</h3>
+                  <p>{trainer.headline || 'Active trainer at this gym'}</p>
+                </div>
+                <div className="gym-details__trainer-meta">
+                  {getTrainerMeta(trainer).length ? (
+                    getTrainerMeta(trainer).map((entry) => <span key={entry}>{entry}</span>)
+                  ) : (
+                    <span>Profile details will appear once the trainer completes them.</span>
+                  )}
+                </div>
+                <p className="gym-details__trainer-bio">
+                  {trainer.bio || 'Trainer biography will appear once published.'}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="gym-details__empty-card">
+            <p>No active trainers are assigned to this gym yet.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="gym-details__section">
+        <div className="gym-details__section-header">
+          <h2>Session preview</h2>
+          <p>Preview upcoming trainer availability when you have an active membership.</p>
+        </div>
+        {userRole === 'trainee' ? (
+          sessionPreview.length ? (
+            <div className="gym-details__session-grid">
+              {sessionPreview.map((slot) => (
+                <article key={`${slot.date}-${slot.availabilitySlotKey}`} className="gym-details__session-card">
+                  <strong>{formatDate(slot.date)}</strong>
+                  <p>{slot.startTime} - {slot.endTime}</p>
+                  <small>{formatStatus(slot.sessionType)}</small>
+                  <small>{slot.locationLabel || 'Gym floor'}</small>
+                  <span>{slot.remainingCapacity}/{slot.capacity} seats left</span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="gym-details__empty-card">
+              <p>Join this gym and select a trainer to unlock the live booking calendar.</p>
+            </div>
+          )
+        ) : (
+          <div className="gym-details__empty-card">
+            <p>Session slots are shown to signed-in trainees with an active membership.</p>
+          </div>
+        )}
+        <div className="gym-details__cta-row">
+          <Link to="/dashboard/trainee/sessions">Open booking dashboard</Link>
+          <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Trainer enquiry for ${gym.name}`)}`}>
+            Ask about sessions
+          </Link>
+        </div>
       </section>
 
       <section className="gym-details__reviews">

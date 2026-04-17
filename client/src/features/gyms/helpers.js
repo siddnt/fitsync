@@ -35,6 +35,20 @@ const coerceToList = (value) => {
   return String(value).split(',');
 };
 
+const normalizeUrlList = (value) => {
+  const tokens = coerceToList(
+    Array.isArray(value)
+      ? value
+      : String(value ?? '')
+          .split(/\r?\n/)
+          .flatMap((entry) => entry.split(',')),
+  )
+    .map((token) => String(token ?? '').trim())
+    .filter(Boolean);
+
+  return tokens.length ? [...new Set(tokens)] : undefined;
+};
+
 const AMENITY_SET = new Set(AMENITY_OPTIONS);
 
 export const normalizeTags = (value) => {
@@ -167,7 +181,8 @@ export const transformGymPayload = (values) => {
 
   const city = trimToUndefined(values?.location?.city);
   const state = trimToUndefined(values?.location?.state);
-  const address = [city, state].filter(Boolean).join(', ') || undefined;
+  const address = trimToUndefined(values?.location?.address)
+    ?? ([city, state].filter(Boolean).join(', ') || undefined);
   const location = buildSection([
     ['address', address],
     ['city', city],
@@ -179,6 +194,8 @@ export const transformGymPayload = (values) => {
 
   const contact = buildSection([
     ['phone', trimToUndefined(values?.contact?.phone)],
+    ['email', trimToUndefined(values?.contact?.email)],
+    ['website', trimToUndefined(values?.contact?.website)],
   ]);
   if (contact) {
     payload.contact = contact;
@@ -232,6 +249,12 @@ export const transformGymPayload = (values) => {
   const tags = normalizeTags(values?.tags);
   if (tags) {
     payload.tags = tags;
+  }
+
+  const gallery = normalizeUrlList(values?.gallery);
+  if (gallery) {
+    payload.gallery = gallery;
+    payload.images = gallery.slice(0, 1);
   }
 
   return payload;

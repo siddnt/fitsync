@@ -5,6 +5,7 @@ import {
   getCommunicationRecipients,
   listInternalConversations,
   replyInternalConversation,
+  updateInternalConversationState,
 } from '../controllers/internalConversation.controller.js';
 
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/recipients', getCommunicationRecipients);
 router.get('/', listInternalConversations);
 router.post('/', createInternalConversation);
 router.post('/:id/reply', replyInternalConversation);
+router.patch('/:id/state', updateInternalConversationState);
 
 export default router;

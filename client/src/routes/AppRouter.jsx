@@ -40,6 +40,7 @@ const AdminRevenuePage = lazy(() => import('../pages/dashboards/admin/RevenuePag
 const AdminMarketplacePage = lazy(() => import('../pages/dashboards/admin/MarketplacePage.jsx'));
 const AdminMessagesPage = lazy(() => import('../pages/dashboards/admin/MessagesPage.jsx'));
 const AdminAuditLogsPage = lazy(() => import('../pages/dashboards/admin/AuditLogsPage.jsx'));
+const AdminSettingsPage = lazy(() => import('../pages/dashboards/admin/SettingsPage.jsx'));
 const SellerInventoryPage = lazy(() => import('../pages/dashboards/seller/InventoryPage.jsx'));
 const SellerOrdersPage = lazy(() => import('../pages/dashboards/seller/OrdersPage.jsx'));
 const DashboardLanding = lazy(() => import('../pages/dashboards/DashboardLanding.jsx'));
@@ -118,6 +119,7 @@ const AppRouter = () => (
             <Route path="communications" element={<InternalCommunicationsPage />} />
             <Route path="messages" element={<AdminMessagesPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFoundPage />} />
