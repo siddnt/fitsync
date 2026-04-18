@@ -13,13 +13,14 @@ import {
   useSubmitGymReviewMutation,
 } from '../../services/gymsApi.js';
 import { useGetBookableSlotsQuery } from '../../services/bookingApi.js';
-import { formatDate, formatDateTime, formatStatus } from '../../utils/format.js';
+import { formatDate, formatStatus } from '../../utils/format.js';
 import { getGymImpressionViewerId } from '../../utils/impressionViewer.js';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './components/GymMembershipActions.jsx';
 import './GymDetailsPage.css';
 
 const SAVED_GYMS_STORAGE_KEY = 'fitsync:saved-gyms';
+const WEEKDAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const parseAmount = (value) => {
   const numeric = Number(value);
@@ -77,6 +78,21 @@ const getTrainerMeta = (trainer) => {
   }
 
   return parts;
+};
+
+const buildWeeklyHours = (schedule = {}) => {
+  const publishedDays = new Set(
+    (Array.isArray(schedule?.workingDays) ? schedule.workingDays : [])
+      .map((day) => String(day ?? '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const hoursLabel = schedule?.open && schedule?.close ? `${schedule.open} - ${schedule.close}` : 'Closed';
+
+  return WEEKDAY_ORDER.map((day) => ({
+    key: day,
+    label: formatStatus(day),
+    hours: publishedDays.has(day) ? hoursLabel : 'Closed',
+  }));
 };
 
 const readSavedGyms = () => {
@@ -211,6 +227,14 @@ const GymDetailsPage = () => {
 
   const mapLink = useMemo(() => buildMapLink(gym), [gym]);
   const websiteUrl = useMemo(() => normalizeWebsiteUrl(gym?.contact?.website), [gym?.contact?.website]);
+  const pricingPlans = useMemo(() => {
+    const plans = Array.isArray(gym?.pricing?.plans) ? gym.pricing.plans : [];
+    return [...plans]
+      .filter((plan) => Number(plan?.price ?? plan?.mrp) > 0)
+      .sort((left, right) => Number(left?.price ?? left?.mrp ?? 0) - Number(right?.price ?? right?.mrp ?? 0));
+  }, [gym?.pricing?.plans]);
+  const recommendedPlan = pricingPlans[0] ?? null;
+  const weeklyHours = useMemo(() => buildWeeklyHours(gym?.schedule), [gym?.schedule]);
 
   useEffect(() => {
     if (gymId) {
@@ -426,7 +450,7 @@ const GymDetailsPage = () => {
         </div>
         <div className="gym-details__pricing">
           <span className="price">
-            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'N/A'}
+            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'Pricing unavailable'}
           </span>
           {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
             <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
@@ -434,25 +458,46 @@ const GymDetailsPage = () => {
           {headlinePlanLabel ? (
             <small>Starting with {headlinePlanLabel}</small>
           ) : null}
+          <div className="gym-details__pricing-actions">
+            <a href="#gym-membership-options">Join membership</a>
+            <Link to="/dashboard/trainee/sessions">Book session</Link>
+          </div>
         </div>
       </header>
       {pageNotice ? <p className="gym-details__notice">{pageNotice}</p> : null}
 
-      <GymMembershipActions
-        membership={membership}
-        isLoading={isMembershipFetching && shouldFetchMembership}
-        canManage={canManageMembership}
-        isAuthenticated={isAuthenticated}
-        onJoin={handleJoin}
-        onLeave={handleLeave}
-        isJoining={isJoining}
-        isLeaving={isLeaving}
-        error={actionError}
-        userRole={userRole}
-        trainers={trainers}
-        pricingPlans={gym.pricing?.plans ?? []}
-        currency={currencyPrefix}
-      />
+      <section className="gym-details__conversion-strip" id="gym-membership-options">
+        <div className="gym-details__conversion-copy">
+          <small>Membership conversion</small>
+          <strong>
+            {recommendedPlan
+              ? `${recommendedPlan.label} from ${currencyPrefix}${Number(recommendedPlan.price ?? recommendedPlan.mrp ?? 0).toLocaleString('en-IN')}`
+              : headlinePrice !== null
+                ? `Memberships start at ${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}`
+                : 'Ask the gym about membership pricing'}
+          </strong>
+          <p>
+            Compare plan durations, lock in the right membership, and keep trainer session booking tied to the same plan.
+          </p>
+        </div>
+        <div className="gym-details__conversion-actions">
+          <GymMembershipActions
+            membership={membership}
+            isLoading={isMembershipFetching && shouldFetchMembership}
+            canManage={canManageMembership}
+            isAuthenticated={isAuthenticated}
+            onJoin={handleJoin}
+            onLeave={handleLeave}
+            isJoining={isJoining}
+            isLeaving={isLeaving}
+            error={actionError}
+            userRole={userRole}
+            trainers={trainers}
+            pricingPlans={gym.pricing?.plans ?? []}
+            currency={currencyPrefix}
+          />
+        </div>
+      </section>
 
       <section className="gym-details__hero">
         <div className="gym-details__media">
@@ -496,8 +541,17 @@ const GymDetailsPage = () => {
           </div>
           <div>
             <small>Opening hours</small>
-            <strong>{gym.schedule?.open || '06:00'} - {gym.schedule?.close || '22:00'}</strong>
+            <strong>{gym.schedule?.open || 'Schedule pending'}{gym.schedule?.close ? ` - ${gym.schedule.close}` : ''}</strong>
             <p>{formatWorkingDays(gym.schedule?.workingDays)}</p>
+          </div>
+          <div>
+            <small>Best fit</small>
+            <strong>{recommendedPlan?.label ?? 'Membership enquiry'}</strong>
+            <p>
+              {recommendedPlan
+                ? `${recommendedPlan.durationMonths ? `${recommendedPlan.durationMonths} month plan` : 'Flexible plan'} at ${currencyPrefix}${Number(recommendedPlan.price ?? recommendedPlan.mrp ?? 0).toLocaleString('en-IN')}`
+                : 'Ask the gym to confirm the best plan for your goals.'}
+            </p>
           </div>
           <div className="gym-details__hero-actions">
             {mapLink ? (
@@ -517,6 +571,43 @@ const GymDetailsPage = () => {
             ) : null}
           </div>
         </aside>
+      </section>
+
+      <section className="gym-details__section">
+        <div className="gym-details__section-header">
+          <h2>Membership plans</h2>
+          <p>Compare durations, discounts, and the best entry point before you join.</p>
+        </div>
+        {pricingPlans.length ? (
+          <div className="gym-details__plan-grid">
+            {pricingPlans.map((plan) => {
+              const planPrice = Number(plan.price ?? plan.mrp ?? 0);
+              const planMrp = Number(plan.mrp ?? plan.price ?? 0);
+              const hasDiscount = Number.isFinite(planMrp) && planMrp > planPrice;
+
+              return (
+                <article key={plan.code ?? plan.label} className="gym-details__plan-card">
+                  <small>{plan.durationMonths ? `${plan.durationMonths} month${plan.durationMonths > 1 ? 's' : ''}` : 'Flexible duration'}</small>
+                  <strong>{plan.label}</strong>
+                  <p className="gym-details__plan-price">
+                    {currencyPrefix}{planPrice.toLocaleString('en-IN')}
+                  </p>
+                  {hasDiscount ? (
+                    <p className="gym-details__plan-note">
+                      MRP {currencyPrefix}{planMrp.toLocaleString('en-IN')} | Save {Math.round(((planMrp - planPrice) / planMrp) * 100)}%
+                    </p>
+                  ) : (
+                    <p className="gym-details__plan-note">Current listed plan price.</p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="gym-details__empty-card">
+            <p>This gym has not published membership plans yet.</p>
+          </div>
+        )}
       </section>
 
       <section className="gym-details__grid">
@@ -550,6 +641,17 @@ const GymDetailsPage = () => {
           ) : (
             <p>No amenities or focus areas have been published yet.</p>
           )}
+        </article>
+        <article>
+          <h2>Weekly hours</h2>
+          <div className="gym-details__hours-list">
+            {weeklyHours.map((entry) => (
+              <div key={entry.key} className="gym-details__hours-row">
+                <span>{entry.label}</span>
+                <strong>{entry.hours}</strong>
+              </div>
+            ))}
+          </div>
         </article>
       </section>
 
@@ -628,6 +730,7 @@ const GymDetailsPage = () => {
         )}
         <div className="gym-details__cta-row">
           <Link to="/dashboard/trainee/sessions">Open booking dashboard</Link>
+          <a href="#gym-membership-options">Join membership first</a>
           <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Trainer enquiry for ${gym.name}`)}`}>
             Ask about sessions
           </Link>

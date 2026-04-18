@@ -6,6 +6,7 @@ import {
   useGetAdminTogglesQuery,
   useUpdateAdminTogglesMutation,
 } from '../../../services/adminApi.js';
+import { formatDateTime } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const TOGGLE_DEFINITIONS = [
@@ -37,12 +38,16 @@ const AdminSettingsPage = () => {
 
   const [localToggles, setLocalToggles] = useState({});
   const [status, setStatus] = useState(null);
+  const persistedToggles = serverToggles?.toggles ?? {};
 
   useEffect(() => {
-    if (serverToggles) {
-      setLocalToggles(serverToggles);
-    }
-  }, [serverToggles]);
+    setLocalToggles(persistedToggles);
+  }, [persistedToggles]);
+
+  const enabledCount = useMemo(
+    () => TOGGLE_DEFINITIONS.filter(({ key }) => Boolean(localToggles?.[key])).length,
+    [localToggles],
+  );
 
   const handleToggleChange = (key) => {
     setLocalToggles((prev) => ({
@@ -53,16 +58,16 @@ const AdminSettingsPage = () => {
   };
 
   const handleReset = () => {
-    setLocalToggles(serverToggles ?? {});
+    setLocalToggles(persistedToggles);
     setStatus(null);
   };
 
   const isDirty = useMemo(() => {
-    if (!serverToggles) {
+    if (!serverToggles?.toggles) {
       return false;
     }
-    return TOGGLE_DEFINITIONS.some(({ key }) => Boolean(serverToggles[key]) !== Boolean(localToggles[key]));
-  }, [localToggles, serverToggles]);
+    return TOGGLE_DEFINITIONS.some(({ key }) => Boolean(persistedToggles[key]) !== Boolean(localToggles[key]));
+  }, [localToggles, persistedToggles, serverToggles?.toggles]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -112,7 +117,7 @@ const AdminSettingsPage = () => {
               Reset
             </button>
             <button type="submit" form="admin-toggle-form" disabled={!isDirty || isSaving}>
-              {isSaving ? 'Saving…' : 'Save changes'}
+              {isSaving ? 'Saving...' : 'Save changes'}
             </button>
           </div>
         )}
@@ -143,11 +148,28 @@ const AdminSettingsPage = () => {
         </form>
       </DashboardSection>
 
-      <DashboardSection title="Audit trail guidance">
-        <p className="empty-state">
-          Toggle changes are stored in the <code>systemsettings</code> collection with the acting admin&apos;s ID.
-          Ensure production deployments include a backup of this collection before mass updates.
-        </p>
+      <DashboardSection title="Configuration history">
+        <div className="stat-grid">
+          <div className="stat-card">
+            <small>Last updated</small>
+            <strong>{serverToggles?.updatedAt ? formatDateTime(serverToggles.updatedAt) : 'Not updated yet'}</strong>
+            <small>
+              {serverToggles?.updatedBy?.name
+                ? `${serverToggles.updatedBy.name}${serverToggles.updatedBy.email ? ` (${serverToggles.updatedBy.email})` : ''}`
+                : 'No admin recorded'}
+            </small>
+          </div>
+          <div className="stat-card">
+            <small>Enabled toggles</small>
+            <strong>{enabledCount} / {TOGGLE_DEFINITIONS.length}</strong>
+            <small>Live configuration currently applied across the platform.</small>
+          </div>
+          <div className="stat-card">
+            <small>Persistence</small>
+            <strong>systemsettings</strong>
+            <small>Changes are persisted with the acting admin for audit review.</small>
+          </div>
+        </div>
       </DashboardSection>
     </div>
   );

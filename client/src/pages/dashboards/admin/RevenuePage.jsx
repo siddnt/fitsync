@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import { useAppSelector } from '../../../app/hooks.js';
 import { useGetAdminRevenueQuery, useGetAdminOverviewQuery } from '../../../services/dashboardApi.js';
 import { downloadReport } from '../../../utils/reportDownload.js';
-import { formatCurrency, formatNumber, formatStatus } from '../../../utils/format.js';
+import { formatCurrency, formatNumber, formatPercentage, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const STREAM_COLORS = {
@@ -113,6 +113,54 @@ const AdminRevenuePage = () => {
 
   const totalRevenueValue = totals.listing + totals.sponsorship + totals.marketplace;
 
+  const periodComparison = useMemo(() => {
+    if (summarySeries.length < 2) {
+      return null;
+    }
+
+    const current = summarySeries[summarySeries.length - 1];
+    const previous = summarySeries[summarySeries.length - 2];
+    const currentTotal = Number(current?.total) || 0;
+    const previousTotal = Number(previous?.total) || 0;
+    const delta = currentTotal - previousTotal;
+    const change = previousTotal > 0
+      ? Number(((delta / previousTotal) * 100).toFixed(1))
+      : currentTotal > 0
+        ? 100
+        : 0;
+
+    return {
+      currentLabel: current?.fullLabel ?? current?.label ?? 'Current period',
+      previousLabel: previous?.fullLabel ?? previous?.label ?? 'Previous period',
+      currentTotal,
+      previousTotal,
+      delta,
+      change,
+    };
+  }, [summarySeries]);
+
+  const revenueDrivers = useMemo(() => {
+    if (!totalRevenueValue) {
+      return [];
+    }
+
+    return revenueStreamDistribution
+      .map((entry) => ({
+        ...entry,
+        share: Number(((entry.value / totalRevenueValue) * 100).toFixed(1)),
+      }))
+      .sort((left, right) => right.value - left.value);
+  }, [revenueStreamDistribution, totalRevenueValue]);
+
+  const topRevenueDriver = revenueDrivers[0] ?? null;
+  const exportState = isExporting
+    ? `Generating ${reportFormat.toUpperCase()}`
+    : reportError
+      ? 'Retry export'
+      : reportNotice
+        ? 'Last export complete'
+        : 'Ready to download';
+
   const handleExportRevenue = async () => {
     setReportNotice(null);
     setReportError(null);
@@ -176,17 +224,45 @@ const AdminRevenuePage = () => {
           <div className="stat-card">
             <small>Total revenue</small>
             <strong>{formatCurrency({ amount: totals.listing + totals.sponsorship + totals.marketplace })}</strong>
-            <small>Listing {formatCurrency({ amount: totals.listing })}</small>
+            <small>{granularity === 'weekly' ? 'Weekly buckets selected' : 'Monthly buckets selected'}</small>
           </div>
           <div className="stat-card">
-            <small>Sponsorship</small>
-            <strong>{formatCurrency({ amount: totals.sponsorship })}</strong>
-            <small>{formatNumber(overview?.gyms?.sponsored ?? 0)} sponsored gyms</small>
+            <small>Period over period</small>
+            <strong className={
+              periodComparison
+                ? (periodComparison.delta >= 0 ? 'dashboard-metric--positive' : 'dashboard-metric--negative')
+                : undefined
+            }>
+              {periodComparison ? `${periodComparison.delta >= 0 ? '+' : ''}${formatPercentage(periodComparison.change)}` : '-'}
+            </strong>
+            <small>
+              {periodComparison
+                ? `${periodComparison.currentLabel} vs ${periodComparison.previousLabel}`
+                : 'Need at least two periods to compare'}
+            </small>
           </div>
           <div className="stat-card">
-            <small>Marketplace</small>
-            <strong>{formatCurrency({ amount: totals.marketplace })}</strong>
-            <small>{formatNumber(overview?.marketplace?.totalOrders ?? 0)} total orders</small>
+            <small>Top revenue driver</small>
+            <strong>{topRevenueDriver?.name ?? '-'}</strong>
+            <small>
+              {topRevenueDriver
+                ? `${formatCurrency(topRevenueDriver.value)} · ${formatPercentage(topRevenueDriver.share)} of total`
+                : 'No revenue captured in this window'}
+            </small>
+          </div>
+          <div className="stat-card">
+            <small>Top marketplace category</small>
+            <strong>{topMarketplaceCategory?.name ?? '-'}</strong>
+            <small>
+              {topMarketplaceCategory
+                ? `${formatCurrency(topMarketplaceCategory.value)} in commissions`
+                : 'No delivered marketplace revenue yet'}
+            </small>
+          </div>
+          <div className="stat-card">
+            <small>Download state</small>
+            <strong>{exportState}</strong>
+            <small>{reportFormat.toUpperCase()} export · {formatNumber(overview?.marketplace?.totalOrders ?? 0)} tracked orders</small>
           </div>
         </div>
       </DashboardSection>
@@ -333,6 +409,31 @@ const AdminRevenuePage = () => {
           </div>
         ) : (
           <EmptyState message="Revenue data not available for this window." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Top revenue drivers"
+        className="dashboard-section--span-12"
+        action={<span className="dashboard-timeframe-label">Share of revenue during the selected window</span>}
+      >
+        {revenueDrivers.length ? (
+          <div className="dashboard-list">
+            {revenueDrivers.map((driver, index) => (
+              <div key={driver.name} className="dashboard-list__item">
+                <div>
+                  <small>{`#${index + 1}`}</small>
+                  <strong>{driver.name}</strong>
+                </div>
+                <div className="dashboard-list__meta">
+                  <strong>{formatCurrency(driver.value)}</strong>
+                  <small>{formatPercentage(driver.share)} of total</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Revenue drivers will appear once transactions land in the selected window." />
         )}
       </DashboardSection>
 

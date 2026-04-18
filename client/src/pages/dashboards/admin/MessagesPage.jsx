@@ -19,9 +19,28 @@ const normalizePriority = (value) => {
   return ['low', 'normal', 'high'].includes(raw) ? raw : 'normal';
 };
 
+const formatTicketAge = (createdAt) => {
+  const created = new Date(createdAt ?? 0).getTime();
+  if (!created) {
+    return 'Age unavailable';
+  }
+
+  const diffHours = Math.max(0, Math.floor((Date.now() - created) / (60 * 60 * 1000)));
+  if (diffHours < 24) {
+    return `${diffHours}h old`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d old`;
+};
+
+const deriveOrderReference = (message) => {
+  const haystack = `${message?.subject ?? ''} ${message?.message ?? ''}`;
+  const match = haystack.match(/FS-[A-Z0-9-]+/i);
+  return match?.[0] ?? '';
+};
+
 const MessagesPage = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
-  const isAdmin = currentUser?.role === 'admin';
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [notice, setNotice] = useState(null);
@@ -190,6 +209,7 @@ const MessagesPage = () => {
             const draftNotes = internalNotesDrafts[msg._id] ?? msg.internalNotes ?? '';
             const replyDraft = replyDrafts[msg._id] ?? '';
             const resolvedAssignee = assignmentOverrides[msg._id] ?? msg.assignedTo ?? null;
+            const orderReference = deriveOrderReference(msg);
 
             return (
               <div key={msg._id} className={`message-card ${msg.status}`}>
@@ -211,8 +231,12 @@ const MessagesPage = () => {
                     <span className="date">
                       {new Date(msg.createdAt).toLocaleDateString()}
                     </span>
+                    <small>{formatTicketAge(msg.createdAt)}</small>
                     {msg.gym?.name ? (
                       <small>Gym: {msg.gym.name}</small>
+                    ) : null}
+                    {orderReference ? (
+                      <small>Order: {orderReference}</small>
                     ) : null}
                     <small>
                       Assigned to {resolvedAssignee?.name || 'Unassigned'}
@@ -230,6 +254,12 @@ const MessagesPage = () => {
 
                 <div className="message-body">
                   <p>{msg.message}</p>
+                  <div className="message-context">
+                    <span>Category: {msg.category || 'general'}</span>
+                    <span>Priority: {normalizedPriority}</span>
+                    <span>Status: {msg.status || 'new'}</span>
+                    <span>{msg.gym?.name ? `Gym context: ${msg.gym.name}` : 'No gym context'}</span>
+                  </div>
                 </div>
 
                 <div className="message-controls">
@@ -287,8 +317,9 @@ const MessagesPage = () => {
                     <ul>
                       {msg.replies.map((reply) => (
                         <li key={`${msg._id}-${reply.createdAt}-${reply.message.slice(0, 12)}`}>
-                          <strong>{reply.authorRole || 'admin'}</strong>
+                          <strong>{reply.author?.name ?? reply.authorRole ?? 'admin'}</strong>
                           <span>{new Date(reply.createdAt).toLocaleString()}</span>
+                          <span>{reply.author?.email ?? reply.authorRole ?? 'Support team'}</span>
                           <p>{reply.message}</p>
                         </li>
                       ))}

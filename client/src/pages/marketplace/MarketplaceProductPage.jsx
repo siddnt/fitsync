@@ -2,10 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
-import { useGetMarketplaceProductQuery } from '../../services/marketplaceApi.js';
+import {
+  useGetMarketplaceCatalogQuery,
+  useGetMarketplaceProductQuery,
+} from '../../services/marketplaceApi.js';
 import { formatCurrency, formatDate, formatNumber } from '../../utils/format.js';
 import { deriveProductPricing, formatRatingLabel, formatSoldCopy } from './utils.js';
+import ProductCard from './components/ProductCard.jsx';
 import { saveBuyNowCheckoutItem } from './checkoutState.js';
+import './MarketplacePage.css';
 import './MarketplaceProductPage.css';
 
 const MarketplaceProductPage = () => {
@@ -33,6 +38,20 @@ const MarketplaceProductPage = () => {
   }, [feedback]);
 
   const product = data?.data?.product ?? null;
+  const {
+    data: relatedResponse,
+  } = useGetMarketplaceCatalogQuery(
+    {
+      category: product?.category,
+      page: 1,
+      pageSize: 5,
+      sort: 'featured',
+    },
+    {
+      skip: !product?.category,
+    },
+  );
+
   const pricing = useMemo(() => deriveProductPricing(product ?? {}), [product]);
   const ratingValue = Number(product?.reviews?.averageRating ?? 0);
   const ratingPercent = Math.min(100, Math.max(0, (ratingValue / 5) * 100));
@@ -41,6 +60,13 @@ const MarketplaceProductPage = () => {
   const soldCopy = formatSoldCopy(product?.stats?.soldLast30Days ?? 0);
   const inStock = product?.stats?.inStock !== false;
   const totalSold = Number(product?.stats?.totalSold ?? 0);
+  const sellerSummary = product?.seller?.name
+    ? `${product.seller.name}${product.seller.role ? ` | ${product.seller.role}` : ''}`
+    : 'FitSync inventory partner';
+  const relatedProducts = useMemo(
+    () => (relatedResponse?.data?.products ?? []).filter((entry) => String(entry.id) !== String(product?.id)).slice(0, 4),
+    [product?.id, relatedResponse?.data?.products],
+  );
 
   const addProductToCart = () => {
     if (!product?.id) {
@@ -91,11 +117,55 @@ const MarketplaceProductPage = () => {
     navigate('/marketplace');
   };
 
+  const handleViewRelatedDetails = (item) => {
+    if (!item?.id) {
+      return;
+    }
+    navigate(`/marketplace/products/${item.id}`);
+  };
+
+  const handleBuyRelatedNow = (item) => {
+    const checkoutItem = saveBuyNowCheckoutItem({
+      id: item?.id,
+      name: item?.name,
+      price: item?.price,
+      image: item?.image,
+      seller: item?.seller ?? null,
+      quantity: 1,
+    });
+
+    if (!checkoutItem) {
+      return;
+    }
+
+    navigate('/checkout?mode=buy-now', {
+      state: {
+        checkoutMode: 'buy-now',
+        checkoutItem,
+      },
+    });
+  };
+
+  const handleAddRelatedToCart = (item) => {
+    if (!item?.id) {
+      return;
+    }
+    dispatch(cartActions.addItem({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      seller: item.seller ?? null,
+      quantity: 1,
+    }));
+    setFeedback(`${item.name ?? 'Product'} added to your cart.`);
+  };
+
   if (isLoading || (isFetching && !product)) {
     return (
       <div className="product-detail-page">
         <div className="product-detail__state" role="status">
-          Loading product details…
+          Loading product details...
         </div>
       </div>
     );
@@ -126,7 +196,7 @@ const MarketplaceProductPage = () => {
   return (
     <div className="product-detail-page">
       <button type="button" className="product-detail__back" onClick={handleBack}>
-        ← Back to marketplace
+        Back to marketplace
       </button>
 
       {feedback ? (
@@ -180,7 +250,9 @@ const MarketplaceProductPage = () => {
           <ul className="product-detail__highlights">
             <li>{soldCopy}</li>
             <li>{totalSold ? `${formatNumber(totalSold)} lifetime units sold` : 'Be the first to buy this item'}</li>
-            <li>Category: <strong>{product.category ?? '—'}</strong></li>
+            <li>Category: <strong>{product.category ?? 'Uncategorised'}</strong></li>
+            <li>{inStock ? 'Estimated delivery in 3-5 business days' : 'Delivery resumes once stock is back'}</li>
+            <li>Return support is handled from your orders dashboard after delivery.</li>
           </ul>
 
           <div className="product-detail__actions">
@@ -204,19 +276,20 @@ const MarketplaceProductPage = () => {
         </div>
 
         <aside className="product-detail__meta">
-          <h2>Seller</h2>
-          {product.seller ? (
-            <>
-              <p className="product-detail__seller-name">{product.seller.name}</p>
-              {product.seller.role ? <p className="product-detail__seller-role">{product.seller.role}</p> : null}
-            </>
-          ) : (
-            <p>FitSync inventory partner</p>
-          )}
+          <h2>Seller summary</h2>
+          <p className="product-detail__seller-name">{sellerSummary}</p>
           <dl>
             <div>
               <dt>Status</dt>
               <dd>{inStock ? 'Available to ship' : 'Restocking soon'}</dd>
+            </div>
+            <div>
+              <dt>Delivery estimate</dt>
+              <dd>{inStock ? '3-5 business days' : 'Dispatch once restocked'}</dd>
+            </div>
+            <div>
+              <dt>Return policy</dt>
+              <dd>Request returns from your orders page after delivery.</dd>
             </div>
             <div>
               <dt>Updated</dt>
@@ -243,7 +316,15 @@ const MarketplaceProductPage = () => {
           </div>
           <div>
             <dt>Category</dt>
-            <dd>{product.category ?? '—'}</dd>
+            <dd>{product.category ?? 'Uncategorised'}</dd>
+          </div>
+          <div>
+            <dt>Seller</dt>
+            <dd>{product.seller?.name ?? 'Marketplace partner'}</dd>
+          </div>
+          <div>
+            <dt>Dispatch</dt>
+            <dd>{inStock ? 'Usually within 24 hours' : 'Pending restock confirmation'}</dd>
           </div>
         </dl>
       </section>
@@ -251,7 +332,7 @@ const MarketplaceProductPage = () => {
       <section className="product-detail__section">
         <div className="product-detail__reviews-header">
           <h2>Customer reviews</h2>
-          <span>{formatRatingLabel(ratingValue)} • {reviewCount ? `${formatNumber(reviewCount)} ratings` : 'New product'}</span>
+          <span>{formatRatingLabel(ratingValue)} | {reviewCount ? `${formatNumber(reviewCount)} ratings` : 'New product'}</span>
         </div>
         {reviewItems.length ? (
           <div className="product-detail__reviews">
@@ -261,7 +342,7 @@ const MarketplaceProductPage = () => {
                   <div>
                     <p className="product-review__author">{review.user?.name ?? 'FitSync member'}</p>
                     <p className="product-review__meta">
-                      {formatDate(review.createdAt)} • {review.isVerifiedPurchase ? 'Verified purchase' : 'Community review'}
+                      {formatDate(review.createdAt)} | {review.isVerifiedPurchase ? 'Verified purchase' : 'Community review'}
                     </p>
                   </div>
                   <span className="product-review__rating">{review.rating}/5</span>
@@ -275,6 +356,26 @@ const MarketplaceProductPage = () => {
           <p className="product-detail__state">No reviews yet. Be the first to share your experience.</p>
         )}
       </section>
+
+      {relatedProducts.length ? (
+        <section className="product-detail__section">
+          <div className="product-detail__reviews-header">
+            <h2>Related products</h2>
+            <span>Explore more from this category</span>
+          </div>
+          <div className="product-grid">
+            {relatedProducts.map((item) => (
+              <ProductCard
+                key={item.id}
+                product={item}
+                onAddToCart={handleAddRelatedToCart}
+                onBuyNow={handleBuyRelatedNow}
+                onViewDetails={handleViewRelatedDetails}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 };

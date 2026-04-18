@@ -10,6 +10,7 @@ import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import {
   applyAdminToggleUpdates,
+  loadAdminToggleState,
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
 import { listAuditLogs, recordAuditLog } from '../../services/audit.service.js';
@@ -223,17 +224,22 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
 });
 
 export const getAdminToggles = asyncHandler(async (_req, res) => {
-  const adminToggles = await loadAdminToggles();
+  const adminToggleState = await loadAdminToggleState();
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { adminToggles }, 'Admin toggles fetched successfully.'));
+    .json(new ApiResponse(200, {
+      adminToggles: adminToggleState.toggles,
+      updatedAt: adminToggleState.updatedAt,
+      updatedBy: adminToggleState.updatedBy,
+    }, 'Admin toggles fetched successfully.'));
 });
 
 export const updateAdminToggles = asyncHandler(async (req, res) => {
   const { toggles = {} } = req.body ?? {};
 
-  const adminToggles = await applyAdminToggleUpdates(toggles, req.user);
+  await applyAdminToggleUpdates(toggles, req.user);
+  const adminToggleState = await loadAdminToggleState();
   await recordAuditLog({
     actor: req.user?._id,
     actorRole: req.user?.role,
@@ -246,7 +252,11 @@ export const updateAdminToggles = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { adminToggles }, 'Admin toggles updated successfully.'));
+    .json(new ApiResponse(200, {
+      adminToggles: adminToggleState.toggles,
+      updatedAt: adminToggleState.updatedAt,
+      updatedBy: adminToggleState.updatedBy,
+    }, 'Admin toggles updated successfully.'));
 });
 
 export const getAuditHistory = asyncHandler(async (req, res) => {

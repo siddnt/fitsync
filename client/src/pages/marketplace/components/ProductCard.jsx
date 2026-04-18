@@ -52,10 +52,18 @@ const ProductCard = ({ product, onAddToCart, onBuyNow, onViewDetails }) => {
         <div className="product-card__meta">
           {product?.seller?.name ? (
             <span>Sold by <strong>{product.seller.name}</strong></span>
-          ) : null}
+          ) : (
+            <span>FitSync marketplace seller</span>
+          )}
           <span className={inStock ? 'product-card__stock' : 'product-card__stock product-card__stock--muted'}>
             {inStock ? 'In stock' : 'Out of stock'}
           </span>
+        </div>
+
+        <div className="product-card__submeta">
+          <small>{product?.category ? `Category: ${product.category}` : 'Category pending'}</small>
+          <small>{inStock ? 'Estimated delivery: 3-5 business days' : 'Restocking update pending'}</small>
+          <small>Returns supported after delivery review.</small>
         </div>
       </div>
       <div className="product-card__actions">
@@ -91,6 +99,7 @@ ProductCard.propTypes = {
     image: PropTypes.string,
     price: PropTypes.number,
     mrp: PropTypes.number,
+    category: PropTypes.string,
     stats: PropTypes.shape({
       soldLast30Days: PropTypes.number,
       inStock: PropTypes.bool,

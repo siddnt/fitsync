@@ -26,6 +26,40 @@ const resolveReturnShape = (draft = {}) => ({
   note: draft?.note ?? '',
 });
 
+const ORDER_FULFILLMENT_SLA_HOURS = 48;
+const ORDER_FULFILLMENT_RISK_HOURS = 72;
+
+const getOrderAgeHours = (createdAt) => {
+  const created = new Date(createdAt ?? 0).getTime();
+  if (!created) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((Date.now() - created) / (60 * 60 * 1000)));
+};
+
+const getTrackingStatus = (item) => String(item?.tracking?.status ?? '').trim().toLowerCase();
+
+const isDeliveredItem = (item) => {
+  const status = String(item?.status ?? '').trim().toLowerCase();
+  const trackingStatus = getTrackingStatus(item);
+  return status === 'delivered' || trackingStatus === 'delivered';
+};
+
+const deriveFulfillmentSla = (order, item) => {
+  if (isDeliveredItem(item)) {
+    return { label: 'Delivered', tone: 'success' };
+  }
+
+  const ageHours = getOrderAgeHours(order?.createdAt);
+  if (ageHours >= ORDER_FULFILLMENT_RISK_HOURS) {
+    return { label: 'At risk', tone: 'warning' };
+  }
+  if (ageHours >= ORDER_FULFILLMENT_SLA_HOURS) {
+    return { label: 'Due now', tone: 'info' };
+  }
+  return { label: 'On track', tone: 'success' };
+};
+
 const OrdersPage = () => {
   const {
     data: ordersResponse,
@@ -153,6 +187,32 @@ const OrdersPage = () => {
     delivered: filteredOrders.filter((order) => (order.status ?? '').toString().toLowerCase() === 'delivered').length,
     revenue: filteredOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
   }), [filteredOrders]);
+
+  const operationalStats = useMemo(() => {
+    const backlogItems = [];
+    const pendingReturns = [];
+    const slaAtRisk = [];
+
+    filteredOrders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        if (!isDeliveredItem(item)) {
+          backlogItems.push(item);
+        }
+        if (String(item?.returnRequest?.status ?? '').toLowerCase() === 'requested') {
+          pendingReturns.push(item);
+        }
+        if (deriveFulfillmentSla(order, item).tone === 'warning') {
+          slaAtRisk.push(item);
+        }
+      });
+    });
+
+    return {
+      shipmentBacklog: backlogItems.length,
+      pendingReturns: pendingReturns.length,
+      slaAtRisk: slaAtRisk.length,
+    };
+  }, [filteredOrders]);
 
   const isFiltering = statusFilter !== 'all' || Boolean(searchQuery.trim());
 
@@ -370,14 +430,24 @@ const OrdersPage = () => {
             <small>{formatNumber(orders.length)} total</small>
           </div>
           <div className="stat-card">
-            <small>Delivered</small>
-            <strong>{formatNumber(filteredStats.delivered)}</strong>
-            <small>Within current filters</small>
+            <small>Shipment backlog</small>
+            <strong>{formatNumber(operationalStats.shipmentBacklog)}</strong>
+            <small>Items still moving through fulfillment</small>
+          </div>
+          <div className="stat-card">
+            <small>Pending return requests</small>
+            <strong>{formatNumber(operationalStats.pendingReturns)}</strong>
+            <small>Customer decisions waiting on seller review</small>
+          </div>
+          <div className="stat-card">
+            <small>Fulfillment SLA at risk</small>
+            <strong>{formatNumber(operationalStats.slaAtRisk)}</strong>
+            <small>{`Older than ${ORDER_FULFILLMENT_RISK_HOURS} hours without delivery`}</small>
           </div>
           <div className="stat-card">
             <small>Gross revenue</small>
             <strong>{formatCurrency(filteredStats.revenue)}</strong>
-            <small>Filtered selection</small>
+            <small>{formatNumber(filteredStats.delivered)} delivered within current filters</small>
           </div>
         </div>
 
@@ -421,6 +491,7 @@ const OrdersPage = () => {
                         const trackingDraft = resolveTrackingDraft(order.id, itemId, item.tracking);
                         const returnDraft = resolveReturnDraft(order.id, itemId);
                         const selectId = `${order.id}-${itemId}`;
+                        const slaState = deriveFulfillmentSla(order, item);
 
                         return (
                           <div key={selectId} className="order-item-row">
@@ -430,6 +501,9 @@ const OrdersPage = () => {
                               <span className="order-item-row__status">Current: {formatStatus(item.status)}</span>
                               <span className="order-item-row__substatus">
                                 Tracking: {item.tracking?.status ? formatStatus(item.tracking.status) : 'Not added'}
+                              </span>
+                              <span className={`order-item-row__substatus order-item-row__substatus--${slaState.tone}`}>
+                                Fulfillment SLA: {slaState.label}
                               </span>
                               <span className="order-item-row__substatus">
                                 Return: {item.returnRequest?.status ? formatStatus(item.returnRequest.status) : 'None'}

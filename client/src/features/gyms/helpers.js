@@ -251,8 +251,8 @@ export const transformGymPayload = (values) => {
     payload.tags = tags;
   }
 
-  const gallery = normalizeUrlList(values?.gallery);
-  if (gallery) {
+  if (Object.prototype.hasOwnProperty.call(values ?? {}, 'gallery')) {
+    const gallery = normalizeUrlList(values?.gallery) ?? [];
     payload.gallery = gallery;
     payload.images = gallery.slice(0, 1);
   }

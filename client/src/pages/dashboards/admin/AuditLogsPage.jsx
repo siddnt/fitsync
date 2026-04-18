@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -12,6 +13,69 @@ import '../Dashboard.css';
 
 const DEFAULT_LIMIT = 50;
 
+const stringifyMetadataValue = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+  return String(value);
+};
+
+const buildRelatedLinks = (log) => {
+  const links = [];
+  const metadata = log?.metadata ?? {};
+  const entityType = String(log?.entityType ?? '').toLowerCase();
+  const entityId = String(log?.entityId ?? '').trim();
+
+  if (entityType === 'user' && entityId) {
+    links.push({ id: `entity-user-${entityId}`, label: 'Open user', to: `/dashboard/admin/users/${entityId}` });
+  }
+
+  if (entityType === 'gym' && entityId) {
+    links.push({ id: `entity-gym-${entityId}`, label: 'Open gym', to: `/dashboard/admin/gyms/${entityId}` });
+  }
+
+  if (entityType.includes('order') && entityId) {
+    links.push({ id: `entity-order-${entityId}`, label: 'Find order', to: `/dashboard/admin/marketplace?search=${encodeURIComponent(entityId)}` });
+  }
+
+  const gymId = metadata.gymId ?? metadata.gym;
+  if (gymId) {
+    links.push({ id: `meta-gym-${gymId}`, label: 'Related gym', to: `/dashboard/admin/gyms/${gymId}` });
+  }
+
+  const orderId = metadata.orderId ?? metadata.paymentReference;
+  if (orderId) {
+    links.push({ id: `meta-order-${orderId}`, label: 'Related order', to: `/dashboard/admin/marketplace?search=${encodeURIComponent(orderId)}` });
+  }
+
+  const userId = metadata.userId ?? metadata.traineeId ?? metadata.trainerId ?? metadata.recipientId;
+  if (userId) {
+    links.push({ id: `meta-user-${userId}`, label: 'Related user', to: `/dashboard/admin/users/${userId}` });
+  }
+
+  return links;
+};
+
+const buildEntitySummary = (log) => {
+  const metadata = log?.metadata ?? {};
+  return [
+    log?.entityType ? formatStatus(log.entityType) : null,
+    log?.entityId || metadata.targetId || metadata.resourceId || null,
+  ].filter(Boolean).join(' | ') || 'System entity';
+};
+
+const buildRequestMetadata = (log) => {
+  const metadata = log?.metadata ?? {};
+  return [
+    metadata.paymentReference ? `Payment ref: ${metadata.paymentReference}` : null,
+    metadata.targetId ? `Target: ${metadata.targetId}` : null,
+    metadata.source || metadata.strategy ? `Source: ${metadata.source ?? metadata.strategy}` : null,
+  ].filter(Boolean);
+};
+
 const AuditLogsPage = () => {
   const [actionFilter, setActionFilter] = useState('');
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
@@ -21,6 +85,7 @@ const AuditLogsPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [reportNotice, setReportNotice] = useState(null);
   const [reportError, setReportError] = useState(null);
+  const [activeLogId, setActiveLogId] = useState('');
   const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   const queryParams = useMemo(() => ({
@@ -64,6 +129,11 @@ const AuditLogsPage = () => {
       return matchesAcrossFields(haystacks, query);
     });
   }, [logs, searchTerm]);
+
+  const activeLog = useMemo(
+    () => filteredLogs.find((log) => String(log._id) === String(activeLogId)) ?? null,
+    [activeLogId, filteredLogs],
+  );
 
   const searchSuggestions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -263,6 +333,7 @@ const AuditLogsPage = () => {
                 <th>Entity</th>
                 <th>Actor</th>
                 <th>Summary</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -283,17 +354,26 @@ const AuditLogsPage = () => {
                     <div>
                       <small>{log.actor?.email ?? log.actorRole ?? '-'}</small>
                     </div>
+                    <div className="dashboard-table__meta">
+                      <span className="status-pill status-pill--info">{log.actorRole ?? 'system'}</span>
+                    </div>
                   </td>
                   <td>
                     <strong>{log.summary ?? 'Audit event recorded'}</strong>
+                    <div className="dashboard-table__meta">{buildEntitySummary(log)}</div>
                     {log.metadata ? (
                       <div className="dashboard-table__meta">
                         {Object.entries(log.metadata)
                           .slice(0, 3)
                           .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`)
-                          .join(' • ')}
+                          .join(' | ')}
                       </div>
                     ) : null}
+                  </td>
+                  <td>
+                    <button type="button" className="order-item-card__action" onClick={() => setActiveLogId(log._id)}>
+                      View
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -309,6 +389,85 @@ const AuditLogsPage = () => {
           />
         )}
       </DashboardSection>
+
+      {activeLog ? (
+        <div className="dashboard-overlay" role="dialog" aria-modal="true" onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            setActiveLogId('');
+          }
+        }}>
+          <div className="dashboard-overlay__panel">
+            <DashboardSection
+              title="Audit event details"
+              className="dashboard-section--overlay"
+              action={<button type="button" className="ghost-button" onClick={() => setActiveLogId('')}>Close</button>}
+            >
+              <div className="owner-roster-detail">
+                <div className="owner-roster-detail__grid">
+                  <div className="owner-roster-detail__card">
+                    <small>Action</small>
+                    <strong>{formatStatus(activeLog.action)}</strong>
+                    <p>{activeLog.summary ?? 'Audit event recorded'}</p>
+                  </div>
+                  <div className="owner-roster-detail__card">
+                    <small>Recorded at</small>
+                    <strong>{formatDateTime(activeLog.createdAt)}</strong>
+                    <p>{activeLog.actor?.name ?? activeLog.actorRole ?? 'System'}</p>
+                    <span className="status-pill status-pill--info">{activeLog.actorRole ?? 'system'}</span>
+                  </div>
+                  <div className="owner-roster-detail__card">
+                    <small>Entity</small>
+                    <strong>{formatStatus(activeLog.entityType)}</strong>
+                    <p>{buildEntitySummary(activeLog)}</p>
+                  </div>
+                </div>
+
+                <div className="owner-roster-detail__panel">
+                  <h4>Request metadata</h4>
+                  {buildRequestMetadata(activeLog).length ? (
+                    <div className="admin-audit-log__links">
+                      {buildRequestMetadata(activeLog).map((entry) => (
+                        <span key={entry} className="status-pill status-pill--info">{entry}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">No request metadata was captured for this event.</p>
+                  )}
+                </div>
+
+                <div className="owner-roster-detail__panel">
+                  <h4>Related links</h4>
+                  {buildRelatedLinks(activeLog).length ? (
+                    <div className="admin-audit-log__links">
+                      {buildRelatedLinks(activeLog).map((link) => (
+                        <Link key={link.id} to={link.to}>{link.label}</Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">No related entity links were derived for this event.</p>
+                  )}
+                </div>
+
+                <div className="owner-roster-detail__panel">
+                  <h4>Metadata</h4>
+                  {activeLog.metadata && Object.keys(activeLog.metadata).length ? (
+                    <div className="admin-audit-log__metadata">
+                      {Object.entries(activeLog.metadata).map(([key, value]) => (
+                        <div key={key} className="admin-audit-log__metadata-row">
+                          <span>{key}</span>
+                          <pre>{stringifyMetadataValue(value)}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">No metadata was recorded for this event.</p>
+                  )}
+                </div>
+              </div>
+            </DashboardSection>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

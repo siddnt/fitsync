@@ -36,6 +36,8 @@ const filters = [
   { key: 'out-of-stock', label: 'Out of stock' },
 ];
 
+const LOW_STOCK_THRESHOLD = 5;
+
 const buildProductFormData = (fields, file) => {
   const formData = new FormData();
   const supportsFile = typeof File !== 'undefined';
@@ -486,6 +488,48 @@ const InventoryPage = () => {
     return sum + (price || 0) * (Number(product.stock) || 0);
   }, 0);
 
+  const lowStockProducts = filteredProducts.filter((product) => {
+    const stock = Number(product.stock) || 0;
+    return stock > 0 && stock <= LOW_STOCK_THRESHOLD;
+  });
+
+  const hiddenProducts = filteredProducts.filter((product) => !product.isPublished);
+  const liveProducts = filteredProducts.filter((product) => product.isPublished);
+
+  const categoryPerformance = filteredProducts.reduce((accumulator, product) => {
+    const key = product.category ? formatStatus(product.category) : 'Uncategorised';
+    const stock = Number(product.stock) || 0;
+    const { price } = derivePricingDetails(product);
+
+    if (!accumulator[key]) {
+      accumulator[key] = {
+        category: key,
+        products: 0,
+        live: 0,
+        hidden: 0,
+        lowStock: 0,
+        stockUnits: 0,
+        inventoryValue: 0,
+      };
+    }
+
+    accumulator[key].products += 1;
+    accumulator[key].live += product.isPublished ? 1 : 0;
+    accumulator[key].hidden += product.isPublished ? 0 : 1;
+    accumulator[key].lowStock += stock > 0 && stock <= LOW_STOCK_THRESHOLD ? 1 : 0;
+    accumulator[key].stockUnits += stock;
+    accumulator[key].inventoryValue += (price || 0) * stock;
+
+    return accumulator;
+  }, {});
+
+  const categoryRows = Object.values(categoryPerformance).sort((left, right) => {
+    if (right.inventoryValue !== left.inventoryValue) {
+      return right.inventoryValue - left.inventoryValue;
+    }
+    return right.products - left.products;
+  });
+
   return (
     <div className="dashboard-grid">
       <DashboardSection
@@ -562,11 +606,16 @@ const InventoryPage = () => {
             <strong>{formatNumber(filteredProducts.length)}</strong>
             <small>{formatNumber(products.length)} total</small>
           </div>
-          <div className="stat-card">
-            <small>Published listings</small>
-            <strong>{formatNumber(filteredProducts.filter((product) => product.isPublished).length)}</strong>
-            <small>Current filter</small>
-          </div>
+            <div className="stat-card">
+              <small>Live listings</small>
+              <strong>{formatNumber(liveProducts.length)}</strong>
+              <small>{formatNumber(hiddenProducts.length)} hidden in this view</small>
+            </div>
+            <div className="stat-card">
+              <small>Low-stock warnings</small>
+              <strong>{formatNumber(lowStockProducts.length)}</strong>
+              <small>{`At or below ${LOW_STOCK_THRESHOLD} units`}</small>
+            </div>
           <div className="stat-card">
             <small>Inventory value</small>
             <strong>{formatCurrency(totalInventoryValue)}</strong>
@@ -644,6 +693,42 @@ const InventoryPage = () => {
           </table>
         ) : (
           <EmptyState message="No products match the current filter." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Category performance"
+        action={<span className="dashboard-timeframe-label">Current filtered catalogue health</span>}
+      >
+        {categoryRows.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Products</th>
+                <th>Live / Hidden</th>
+                <th>Low stock</th>
+                <th>Stock units</th>
+                <th>Inventory value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categoryRows.map((row) => (
+                <tr key={row.category}>
+                  <td>
+                    <strong>{row.category}</strong>
+                  </td>
+                  <td>{formatNumber(row.products)}</td>
+                  <td>{`${formatNumber(row.live)} / ${formatNumber(row.hidden)}`}</td>
+                  <td>{formatNumber(row.lowStock)}</td>
+                  <td>{formatNumber(row.stockUnits)}</td>
+                  <td>{formatCurrency(row.inventoryValue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="Category performance will appear once products match the current filters." />
         )}
       </DashboardSection>
 

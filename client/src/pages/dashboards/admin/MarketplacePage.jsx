@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
+import { downloadCsvFile } from '../../../utils/csvExport.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
@@ -11,13 +12,40 @@ import '../Dashboard.css';
 
 const getUserId = (user) => String(user?.id ?? user?._id ?? '');
 
+const formatAddress = (address) => ([
+  address?.address,
+  [address?.city, address?.state].filter(Boolean).join(', '),
+  address?.zipCode,
+].filter(Boolean).join(' | ') || 'Address unavailable');
+
+const buildOrderHealth = (order) => {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const trackingCount = items.filter((item) => item?.tracking?.trackingNumber || item?.tracking?.carrier).length;
+  const returnCount = items.filter((item) => String(item?.returnRequest?.status ?? 'none').toLowerCase() !== 'none').length;
+  const refundAmount = items.reduce((total, item) => total + (Number(item?.returnRequest?.refundAmount) || 0), 0);
+  const itemStatusSummary = items.reduce((acc, item) => {
+    const key = item?.status ?? 'processing';
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    trackingCount,
+    returnCount,
+    refundAmount,
+    itemStatusSummary,
+  };
+};
+
 const AdminMarketplacePage = () => {
+  const [searchParams] = useSearchParams();
   const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
   const rawOrders = data?.data?.orders;
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [activeOrderId, setActiveOrderId] = useState('');
 
   const orders = useMemo(
     () => (Array.isArray(rawOrders) ? rawOrders : []),
@@ -94,6 +122,11 @@ const AdminMarketplacePage = () => {
       return matchesAcrossFields(searchableFields, query);
     });
   }, [orders, searchTerm, statusFilter, categoryFilter]);
+
+  const activeOrder = useMemo(
+    () => filteredOrders.find((order) => String(order.id) === String(activeOrderId)) ?? null,
+    [activeOrderId, filteredOrders],
+  );
 
   const searchSuggestions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -230,6 +263,64 @@ const AdminMarketplacePage = () => {
     return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [orders]);
 
+  const returnSummary = useMemo(() => {
+    return orders.reduce((acc, order) => {
+      (order.items || []).forEach((item) => {
+        const status = String(item.returnRequest?.status ?? 'none').toLowerCase();
+        if (status !== 'none') {
+          acc.requests += 1;
+        }
+        acc.refundValue += Number(item.returnRequest?.refundAmount) || 0;
+      });
+      return acc;
+    }, { requests: 0, refundValue: 0 });
+  }, [orders]);
+
+  const activeOrderHealth = useMemo(
+    () => (activeOrder ? buildOrderHealth(activeOrder) : null),
+    [activeOrder],
+  );
+
+  const handleExportOrders = () => {
+    const rows = filteredOrders.flatMap((order) => (
+      (order.items || []).map((item) => ({
+        orderNumber: order.orderNumber ?? order.id,
+        buyer: order.user?.name ?? '',
+        seller: item.seller?.name ?? order.seller?.name ?? '',
+        item: item.name ?? '',
+        category: item.category ?? '',
+        quantity: item.quantity ?? 0,
+        itemStatus: item.status ?? '',
+        tracking: item.tracking?.trackingNumber ?? '',
+        returnStatus: item.returnRequest?.status ?? 'none',
+        refundAmount: item.returnRequest?.refundAmount ?? 0,
+        orderStatus: order.status ?? '',
+        total: order.total?.amount ?? order.total ?? 0,
+        createdAt: formatDateTime(order.createdAt),
+      }))
+    ));
+
+    downloadCsvFile({
+      filename: 'admin-marketplace-orders.csv',
+      columns: [
+        { key: 'orderNumber', label: 'Order' },
+        { key: 'buyer', label: 'Buyer' },
+        { key: 'seller', label: 'Seller' },
+        { key: 'item', label: 'Item' },
+        { key: 'category', label: 'Category' },
+        { key: 'quantity', label: 'Qty' },
+        { key: 'itemStatus', label: 'Item Status' },
+        { key: 'tracking', label: 'Tracking #' },
+        { key: 'returnStatus', label: 'Return Status' },
+        { key: 'refundAmount', label: 'Refund Amount' },
+        { key: 'orderStatus', label: 'Order Status' },
+        { key: 'total', label: 'Order Total' },
+        { key: 'createdAt', label: 'Placed' },
+      ],
+      rows,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--admin">
@@ -289,6 +380,11 @@ const AdminMarketplacePage = () => {
               <strong>{formatCurrency({ amount: summary.revenue })}</strong>
               <small>Including shipping & taxes</small>
             </div>
+            <div className="stat-card">
+              <small>Returns and refunds</small>
+              <strong>{returnSummary.requests}</strong>
+              <small>{formatCurrency({ amount: returnSummary.refundValue })} in tracked refunds</small>
+            </div>
           </div>
         ) : (
           <EmptyState message="Orders will populate once customers start buying." />
@@ -339,6 +435,9 @@ const AdminMarketplacePage = () => {
                 Reset
               </button>
             ) : null}
+            <button type="button" className="users-toolbar__reset" onClick={handleExportOrders} disabled={!filteredOrders.length}>
+              Export
+            </button>
             <button type="button" className="users-toolbar__refresh" onClick={() => refetch()}>
               Refresh
             </button>
@@ -356,6 +455,7 @@ const AdminMarketplacePage = () => {
                 <th>Category</th>
                 <th>Status</th>
                 <th>Total</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -391,6 +491,11 @@ const AdminMarketplacePage = () => {
                     <td>{formatStatus(categoryDisplay)}</td>
                     <td>{formatStatus(order.status)}</td>
                     <td>{formatCurrency(order.total)}</td>
+                    <td>
+                      <button type="button" className="order-item-card__action" onClick={() => setActiveOrderId(order.id)}>
+                        View
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -476,6 +581,135 @@ const AdminMarketplacePage = () => {
           </table>
         ) : <EmptyState message="No category data available." />}
       </DashboardSection>
+
+      {activeOrder ? (
+        <div className="dashboard-overlay" role="dialog" aria-modal="true" onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            setActiveOrderId('');
+          }
+        }}>
+          <div className="dashboard-overlay__panel">
+            <DashboardSection
+              title={`Order ${activeOrder.orderNumber ?? activeOrder.id}`}
+              className="dashboard-section--overlay"
+              action={<button type="button" className="ghost-button" onClick={() => setActiveOrderId('')}>Close</button>}
+            >
+              <div className="order-info-grid">
+                <div className="order-info-card">
+                  <small>Buyer</small>
+                  <strong>{activeOrder.user?.name ?? 'Unknown buyer'}</strong>
+                  <p>{activeOrder.user?.email ?? 'No buyer email'}</p>
+                </div>
+                <div className="order-info-card">
+                  <small>Seller</small>
+                  <strong>{activeOrder.seller?.name ?? 'Unknown seller'}</strong>
+                  <p>{activeOrder.seller?.email ?? 'No seller email'}</p>
+                </div>
+                <div className="order-info-card">
+                  <small>Shipping</small>
+                  <strong>{activeOrder.paymentMethod ?? 'Cash on Delivery'}</strong>
+                  <p>{formatAddress(activeOrder.shippingAddress)}</p>
+                </div>
+              </div>
+
+              <div className="order-info-grid">
+                <div className="order-info-card">
+                  <small>Financials</small>
+                  <strong>{formatCurrency(activeOrder.total)}</strong>
+                  <p>
+                    Subtotal {formatCurrency(activeOrder.subtotal)}
+                    {' | '}
+                    Tax {formatCurrency(activeOrder.tax)}
+                    {' | '}
+                    Shipping {formatCurrency(activeOrder.shippingCost)}
+                  </p>
+                </div>
+                <div className="order-info-card">
+                  <small>Status</small>
+                  <strong>{formatStatus(activeOrder.status)}</strong>
+                  <p>Placed {formatDateTime(activeOrder.createdAt)}</p>
+                  <small>{activeOrder.paymentMethod === 'Cash on Delivery' ? 'Payment due on delivery' : 'Payment captured'}</small>
+                </div>
+              </div>
+
+              {activeOrderHealth ? (
+                <div className="order-info-grid">
+                  <div className="order-info-card">
+                    <small>Tracking coverage</small>
+                    <strong>{activeOrderHealth.trackingCount} / {(activeOrder.items || []).length}</strong>
+                    <p>Items with carrier or tracking number</p>
+                  </div>
+                  <div className="order-info-card">
+                    <small>Returns</small>
+                    <strong>{activeOrderHealth.returnCount}</strong>
+                    <p>{formatCurrency({ amount: activeOrderHealth.refundAmount })} marked for refund</p>
+                  </div>
+                  <div className="order-info-card">
+                    <small>Item statuses</small>
+                    <strong>
+                      {Object.entries(activeOrderHealth.itemStatusSummary)
+                        .map(([status, count]) => `${count} ${formatStatus(status)}`)
+                        .join(' | ') || 'No items'}
+                    </strong>
+                    <p>Compact order view for review and escalation.</p>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="order-items-list">
+                {(activeOrder.items || []).map((item) => (
+                  <div key={item.id} className="order-item-card order-item-card--detailed">
+                    <div className="order-item-card__primary">
+                      <div>
+                        <strong>{item.name}</strong>
+                        <small>
+                          Qty {item.quantity ?? 0}
+                          {' | '}
+                          Seller {item.seller?.name ?? activeOrder.seller?.name ?? 'Unknown'}
+                        </small>
+                      </div>
+                    </div>
+
+                    <span className={`order-item-card__status order-item-card__status--${item.status}`}>
+                      {formatStatus(item.status)}
+                    </span>
+
+                    <div className="order-item-card__details">
+                      <div className="order-item-card__detail-block">
+                        <small>Tracking</small>
+                        <strong>{item.tracking?.carrier || 'Awaiting seller update'}</strong>
+                        <p className="order-item-card__detail-text">
+                          {item.tracking?.trackingNumber
+                            ? `Tracking #: ${item.tracking.trackingNumber}`
+                            : 'No tracking number provided yet.'}
+                        </p>
+                        {item.tracking?.trackingUrl ? (
+                          <a href={item.tracking.trackingUrl} target="_blank" rel="noreferrer" className="order-item-card__action">
+                            Open courier link
+                          </a>
+                        ) : null}
+                      </div>
+
+                      <div className="order-item-card__detail-block">
+                        <small>Returns and refunds</small>
+                        <strong>{formatStatus(item.returnRequest?.status ?? 'none')}</strong>
+                        <p className="order-item-card__detail-text">
+                          {item.returnRequest?.reason || 'No return request has been filed for this item.'}
+                        </p>
+                        <small>
+                          {item.returnRequest?.refundAmount
+                            ? `Refund amount ${formatCurrency({ amount: item.returnRequest.refundAmount })}`
+                            : 'No refund amount recorded'}
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DashboardSection>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

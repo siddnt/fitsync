@@ -4,9 +4,26 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
+.session-guidance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.session-guidance-card__block {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+}
+
 .session-membership-card > div,
 .session-reschedule-banner,
-.session-booking-preview {
+.session-booking-preview,
+.session-guidance-card__block {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
@@ -38,7 +55,8 @@
 }
 
 .session-membership-card p,
-.session-booking-form p {
+.session-booking-form p,
+.session-guidance-card p {
   color: rgba(255, 255, 255, 0.76);
   margin: 0.35rem 0 0;
 }
@@ -200,6 +218,36 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.session-status-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.session-status-timeline__pill {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted-text-color);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.65rem;
+}
+
+.session-status-timeline__pill--complete {
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+.session-status-timeline__pill--current {
+  border-color: rgba(34, 197, 94, 0.44);
+  color: #dcfce7;
+}
+
+.session-status-timeline__pill--muted {
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #fca5a5;
 }
 
 .session-history-list {

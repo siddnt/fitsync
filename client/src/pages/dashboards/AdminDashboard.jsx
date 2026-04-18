@@ -1,14 +1,5 @@
-// ...existing code...
 import { useMemo, useState } from 'react';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from 'recharts';
+import { Link } from 'react-router-dom';
 import DashboardSection from './components/DashboardSection.jsx';
 import DemographicsSummary from './components/DemographicsSummary.jsx';
 import NotificationsPanel from './components/NotificationsPanel.jsx';
@@ -19,9 +10,16 @@ import {
   useGetAdminRevenueQuery,
   useGetAdminMarketplaceQuery,
   useGetAdminInsightsQuery,
+  useGetAdminGymsQuery,
 } from '../../services/dashboardApi.js';
-import { formatCurrency, formatNumber, formatDate } from '../../utils/format.js';
+import { useGetContactMessagesQuery } from '../../services/contactApi.js';
+import { useGetAuditLogsQuery } from '../../services/adminApi.js';
+import { formatNumber, formatDate, formatStatus } from '../../utils/format.js';
 import './Dashboard.css';
+
+const OPEN_TICKET_STATUSES = new Set(['new', 'read', 'in-progress', 'responded']);
+
+const formatQuickCount = (value, isLoading) => (isLoading ? '...' : formatNumber(value ?? 0));
 
 const AdminDashboard = () => {
   const [timeframe, setTimeframe] = useState('weekly');
@@ -49,14 +47,31 @@ const AdminDashboard = () => {
     isError: isInsightsError,
     refetch: refetchInsights,
   } = useGetAdminInsightsQuery();
+  const {
+    data: gymsResponse,
+    isFetching: isGymsFetching,
+  } = useGetAdminGymsQuery();
+  const {
+    data: contactsResponse,
+    isFetching: isContactsFetching,
+  } = useGetContactMessagesQuery();
+  const {
+    data: auditResponse,
+    isFetching: isAuditFetching,
+  } = useGetAuditLogsQuery({ limit: 100 });
 
   const overview = overviewResponse?.data;
   const rawRevenueTrend = revenueResponse?.data?.trend;
   const recentOrders = marketplaceResponse?.data?.orders ?? [];
   const insights = insightsResponse?.data;
+  const gyms = gymsResponse?.data?.gyms ?? [];
+  const contactMessages = contactsResponse?.data ?? [];
+  const auditLogs = auditResponse?.data?.logs ?? [];
 
   const revenueSeries = useMemo(() => {
-    if (!rawRevenueTrend) return [];
+    if (!rawRevenueTrend) {
+      return [];
+    }
     return Array.isArray(rawRevenueTrend[timeframe]) ? rawRevenueTrend[timeframe] : [];
   }, [rawRevenueTrend, timeframe]);
 
@@ -67,14 +82,118 @@ const AdminDashboard = () => {
   const hasError = isOverviewError || isRevenueError || isMarketplaceError || isInsightsError;
 
   const totalUsers = useMemo(() => {
-    if (!overview?.users) return 0;
+    if (!overview?.users) {
+      return 0;
+    }
     return (overview.users.trainer || 0) + (overview.users.trainee || 0) + (overview.users['gym-owner'] || 0);
   }, [overview?.users]);
+
+  const pendingTickets = useMemo(
+    () => contactMessages.filter((message) => OPEN_TICKET_STATUSES.has(String(message?.status ?? 'new').toLowerCase())).length,
+    [contactMessages],
+  );
+
+  const flaggedGyms = useMemo(
+    () => gyms.filter((gym) => !gym?.isPublished || String(gym?.status ?? '').toLowerCase() !== 'active').length,
+    [gyms],
+  );
+
+  const auditSpikeSummary = useMemo(() => {
+    const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+    const recentLogs = auditLogs.filter((log) => {
+      const timestamp = new Date(log?.createdAt ?? 0).getTime();
+      return timestamp && timestamp >= twentyFourHoursAgo;
+    });
+
+    const actionCounts = recentLogs.reduce((accumulator, log) => {
+      const action = log?.action || 'unknown';
+      accumulator[action] = (accumulator[action] ?? 0) + 1;
+      return accumulator;
+    }, {});
+
+    const dominantAction = Object.entries(actionCounts).reduce((best, entry) => {
+      if (!best || entry[1] > best[1]) {
+        return entry;
+      }
+      return best;
+    }, null);
+
+    return {
+      count: recentLogs.length,
+      dominantAction: dominantAction?.[0] ?? '',
+      dominantCount: dominantAction?.[1] ?? 0,
+    };
+  }, [auditLogs]);
+
+  const recentOrderSummary = useMemo(() => ({
+    count: recentOrders.length,
+    latestAt: recentOrders[0]?.createdAt ?? null,
+  }), [recentOrders]);
+
+  const quickLinks = useMemo(() => ([
+    {
+      id: 'tickets',
+      label: 'Pending tickets',
+      value: formatQuickCount(pendingTickets, isContactsFetching),
+      meta: isContactsFetching
+        ? 'Checking support inbox'
+        : `${formatNumber(contactMessages.filter((message) => String(message?.status ?? '').toLowerCase() === 'new').length)} still new`,
+      to: '/dashboard/admin/messages?status=new',
+    },
+    {
+      id: 'gyms',
+      label: 'Flagged gyms',
+      value: formatQuickCount(flaggedGyms, isGymsFetching),
+      meta: isGymsFetching
+        ? 'Loading moderation queue'
+        : 'Draft, suspended, or unpublished listings',
+      to: '/dashboard/admin/gyms',
+    },
+    {
+      id: 'orders',
+      label: 'Recent orders',
+      value: formatNumber(recentOrderSummary.count),
+      meta: recentOrderSummary.latestAt
+        ? `Latest order ${formatDate(recentOrderSummary.latestAt)}`
+        : 'No recent marketplace orders',
+      to: '/dashboard/admin/marketplace',
+    },
+    {
+      id: 'audit',
+      label: 'Audit spikes',
+      value: formatQuickCount(auditSpikeSummary.count, isAuditFetching),
+      meta: isAuditFetching
+        ? 'Scanning last 24 hours'
+        : auditSpikeSummary.dominantAction
+          ? `${formatStatus(auditSpikeSummary.dominantAction)} x ${formatNumber(auditSpikeSummary.dominantCount)}`
+          : 'No clustered action detected',
+      to: '/dashboard/admin/audit-logs',
+    },
+  ]), [
+    auditSpikeSummary.count,
+    auditSpikeSummary.dominantAction,
+    auditSpikeSummary.dominantCount,
+    contactMessages,
+    flaggedGyms,
+    isAuditFetching,
+    isContactsFetching,
+    isGymsFetching,
+    pendingTickets,
+    recentOrderSummary.count,
+    recentOrderSummary.latestAt,
+  ]);
 
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--stacked">
-        {['Platform performance', 'Revenue trend', 'Recent marketplace activity', 'User demographics', 'Monetisation timeline'].map((section) => (
+        {[
+          'Admin action center',
+          'Platform performance',
+          'Revenue trend',
+          'Recent marketplace activity',
+          'User demographics',
+          'Monetisation timeline',
+        ].map((section) => (
           <DashboardSection key={section} title={section}>
             <SkeletonPanel lines={8} />
           </DashboardSection>
@@ -89,12 +208,15 @@ const AdminDashboard = () => {
         <DashboardSection
           title="Admin dashboard"
           action={(
-            <button type="button" onClick={() => {
-              refetchOverview();
-              refetchRevenue();
-              refetchMarketplace();
-              refetchInsights();
-            }}>
+            <button
+              type="button"
+              onClick={() => {
+                refetchOverview();
+                refetchRevenue();
+                refetchMarketplace();
+                refetchInsights();
+              }}
+            >
               Retry
             </button>
           )}
@@ -107,6 +229,23 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-grid dashboard-grid--stacked">
+      <DashboardSection title="Admin action center">
+        <div className="dashboard-link-grid">
+          {quickLinks.map((link) => (
+            <Link key={link.id} className="dashboard-link-card" to={link.to}>
+              <small>{link.label}</small>
+              <strong>{link.value}</strong>
+              <span>{link.meta}</span>
+            </Link>
+          ))}
+        </div>
+        <div className="dashboard-export-shortcuts">
+          <Link to="/dashboard/admin/revenue">Revenue exports</Link>
+          <Link to="/dashboard/admin/marketplace">Marketplace exports</Link>
+          <Link to="/dashboard/admin/audit-logs">Audit exports</Link>
+        </div>
+      </DashboardSection>
+
       <DashboardSection title="Platform performance">
         {overview ? (
           <div className="stat-grid">
@@ -135,18 +274,48 @@ const AdminDashboard = () => {
         )}
       </DashboardSection>
 
-      <DashboardSection title="Revenue Overview">
+      <DashboardSection
+        title="Revenue overview"
+        action={(
+          <div className="owner-revenue-chart__toggle" role="group" aria-label="Select revenue timeframe">
+            {['weekly', 'monthly'].map((option) => {
+              const isActive = option === timeframe;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  className={`owner-revenue-chart__toggle-button${isActive ? ' owner-revenue-chart__toggle-button--active' : ''}`}
+                  onClick={() => setTimeframe(option)}
+                >
+                  {formatStatus(option)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      >
         {overview?.revenue ? (
           <div className="stat-grid">
             {overview.revenue.map((item) => (
               <div className="stat-card" key={item.type}>
-                <small>{item.type === 'marketplace' ? 'Marketplace' : item.type === 'listing' ? 'Listing Plans' : item.type === 'sponsorship' ? 'Sponsorships' : item.type} Revenue</small>
-                <strong>{formatCurrency(item.amount)}</strong>
+                <small>
+                  {item.type === 'marketplace'
+                    ? 'Marketplace'
+                    : item.type === 'listing'
+                      ? 'Listing plans'
+                      : item.type === 'sponsorship'
+                        ? 'Sponsorships'
+                        : item.type}
+                  {' '}
+                  revenue
+                </small>
+                <strong>{item.amount}</strong>
               </div>
             ))}
-             <div className="stat-card">
-              <small>Total Revenue</small>
-              <strong>{formatCurrency(overview.revenue.reduce((sum, item) => sum + (Number(item.amount?.amount) || 0), 0))}</strong>
+            <div className="stat-card">
+              <small>Tracked periods</small>
+              <strong>{formatNumber(revenueSeries.length)}</strong>
+              <small>{timeframe === 'weekly' ? 'Weekly buckets loaded' : 'Monthly buckets loaded'}</small>
             </div>
           </div>
         ) : (
@@ -181,9 +350,9 @@ const AdminDashboard = () => {
                       <small>{formatDate(order.createdAt)}</small>
                     </div>
                   </td>
-                  <td>{order.user?.name ?? '—'}</td>
+                  <td>{order.user?.name ?? '-'}</td>
                   <td>{order.status}</td>
-                  <td>{formatCurrency(order.total)}</td>
+                  <td>{order.total ?? '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -209,4 +378,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-

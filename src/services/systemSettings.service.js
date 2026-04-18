@@ -23,6 +23,53 @@ export const loadAdminToggles = async () => {
   return merged;
 };
 
+export const loadAdminToggleState = async () => {
+  const stored = await SystemSetting.find({
+    key: { $in: Object.keys(DEFAULT_ADMIN_TOGGLES) },
+  })
+    .select('key value updatedAt updatedBy')
+    .populate({ path: 'updatedBy', select: 'name email role' })
+    .lean();
+
+  const toggles = { ...DEFAULT_ADMIN_TOGGLES };
+  let latestUpdateAt = null;
+  let latestUpdatedBy = null;
+
+  stored.forEach((setting) => {
+    toggles[setting.key] = setting.value;
+
+    if (!setting.updatedAt) {
+      return;
+    }
+
+    if (!latestUpdateAt || new Date(setting.updatedAt) > new Date(latestUpdateAt)) {
+      latestUpdateAt = setting.updatedAt;
+      latestUpdatedBy = setting.updatedBy ?? null;
+    }
+  });
+
+  return {
+    toggles,
+    updatedAt: latestUpdateAt,
+    updatedBy: latestUpdatedBy
+      ? {
+          id: settingUserId(latestUpdatedBy),
+          name: latestUpdatedBy.name ?? '',
+          email: latestUpdatedBy.email ?? '',
+          role: latestUpdatedBy.role ?? null,
+        }
+      : null,
+  };
+};
+
+const settingUserId = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  return user._id ? String(user._id) : String(user);
+};
+
 export const applyAdminToggleUpdates = async (updates = {}, actor) => {
   const entries = Object.entries(updates).filter(([key]) => key in DEFAULT_ADMIN_TOGGLES);
 

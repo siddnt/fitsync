@@ -95,6 +95,44 @@ const buildTrackingSteps = (item) => {
   });
 };
 
+const getLatestStatusNote = (item) => {
+  const historyEntries = Array.isArray(item?.statusHistory) ? [...item.statusHistory] : [];
+  const latestWithNote = historyEntries
+    .sort((left, right) => new Date(right?.updatedAt ?? 0) - new Date(left?.updatedAt ?? 0))
+    .find((entry) => entry?.note);
+  return latestWithNote?.note ?? '';
+};
+
+const getEstimatedDeliveryCopy = (item, order) => {
+  const status = item?.status ?? order?.status ?? 'processing';
+  const anchorDate = new Date(order?.createdAt ?? Date.now());
+
+  if (status === 'delivered') {
+    return 'Delivered';
+  }
+
+  if (status === 'out-for-delivery') {
+    return 'Expected delivery today';
+  }
+
+  const offsetDays = status === 'in-transit' ? 2 : 4;
+  anchorDate.setDate(anchorDate.getDate() + offsetDays);
+  return `Estimated by ${formatDateTime(anchorDate)}`;
+};
+
+const getReturnWindowCopy = (item) => {
+  const deliveredEntry = (Array.isArray(item?.statusHistory) ? item.statusHistory : [])
+    .find((entry) => entry?.status === 'delivered');
+
+  if (!deliveredEntry?.updatedAt) {
+    return 'Return window begins after delivery is confirmed.';
+  }
+
+  const deadline = new Date(deliveredEntry.updatedAt);
+  deadline.setDate(deadline.getDate() + 7);
+  return `Return window closes on ${formatDateTime(deadline)}`;
+};
+
 const buildInvoiceMarkup = (order) => {
   const itemRows = (order.items ?? [])
     .map((item) => `
@@ -438,6 +476,7 @@ const TraineeOrdersPage = () => {
                             Shipping {formatCurrency(order.shippingCost)}
                           </p>
                           <small>Total charged {formatCurrency(order.total)}</small>
+                          <small>{order.paymentMethod === 'Cash on Delivery' ? 'Payment due on delivery.' : 'Payment confirmation completed.'}</small>
                         </div>
                       </div>
 
@@ -447,6 +486,9 @@ const TraineeOrdersPage = () => {
                             const trackingSteps = buildTrackingSteps(item);
                             const returnStatus = item.returnRequest?.status ?? 'none';
                             const canRequestReturn = item.status === 'delivered' && returnStatus === 'none';
+                            const sellerNote = getLatestStatusNote(item);
+                            const estimatedDelivery = getEstimatedDeliveryCopy(item, order);
+                            const returnWindowCopy = getReturnWindowCopy(item);
 
                             return (
                               <div key={item.id} className="order-item-card order-item-card--detailed">
@@ -467,6 +509,8 @@ const TraineeOrdersPage = () => {
                                       {' | '}
                                       Line total {formatCurrency(item.subtotal)}
                                     </small>
+                                    <small>{item.seller?.name ? `Seller: ${item.seller.name}` : 'Seller information pending'}</small>
+                                    <small>{estimatedDelivery}</small>
                                   </div>
                                 </div>
 
@@ -548,6 +592,9 @@ const TraineeOrdersPage = () => {
                                     ) : (
                                       <p className="order-item-card__detail-text">Seller has not shared courier details yet.</p>
                                     )}
+                                    {sellerNote ? (
+                                      <small>Seller update: {sellerNote}</small>
+                                    ) : null}
                                   </div>
 
                                   <div className="order-item-card__detail-block">
@@ -561,8 +608,9 @@ const TraineeOrdersPage = () => {
                                         ? `Requested ${formatDateTime(item.returnRequest.requestedAt)}`
                                         : 'Delivered items can be returned once the seller has marked them fulfilled.'}
                                     </small>
+                                    <small>{returnWindowCopy}</small>
                                     {item.returnRequest?.refundAmount ? (
-                                      <small>Refund amount {formatCurrency(item.returnRequest.refundAmount)}</small>
+                                      <small>Refund breakdown: expected refund {formatCurrency(item.returnRequest.refundAmount)}</small>
                                     ) : null}
                                     {item.returnRequest?.note ? (
                                       <small>Seller note: {item.returnRequest.note}</small>

@@ -219,6 +219,17 @@ const CheckoutSuccessPage = () => {
           </div>
         </div>
 
+        <div className="checkout-success__address">
+          <h3>Payment confirmation</h3>
+          <p>
+            Method: {orderData.paymentMethod || 'Online payment'}
+            <br />
+            Status: {orderData.paymentMethod === 'Cash on Delivery' ? 'Amount due on delivery' : 'Payment confirmed'}
+            <br />
+            Your confirmation email and future tracking updates will be sent to {orderData.shippingAddress?.email || 'your registered email'}.
+          </p>
+        </div>
+
         {orderData.shippingAddress ? (
           <div className="checkout-success__address">
             <h3>Shipping Address</h3>
@@ -241,6 +252,25 @@ const CheckoutSuccessPage = () => {
           <Link to={ORDERS_PATH} className="btn btn-secondary">
             Track Order
           </Link>
+        </div>
+
+        <div className="checkout-success__next-steps">
+          <div className="checkout-success__next-step">
+            <small>Order tracking</small>
+            <strong>Follow courier updates</strong>
+            <p>Open your orders dashboard to see item-level tracking, delivery status, and invoice access.</p>
+            <Link to={ORDERS_PATH} className="btn btn-secondary">
+              Open orders dashboard
+            </Link>
+          </div>
+          <div className="checkout-success__next-step">
+            <small>Returns and refunds</small>
+            <strong>Review the return window</strong>
+            <p>Delivered items can be returned from your orders page once the seller marks them fulfilled. Refund amounts and seller notes will appear item by item.</p>
+            <Link to="/contact?subject=Marketplace%20return%20question" className="btn btn-secondary">
+              Ask about returns
+            </Link>
+          </div>
         </div>
 
         <p className="checkout-success__footer-note">

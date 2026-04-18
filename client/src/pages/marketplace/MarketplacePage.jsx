@@ -101,17 +101,16 @@ const MarketplacePage = () => {
   const serverProducts = data?.data?.products ?? [];
   const pagination = data?.data?.pagination;
 
-  // Client-side prefix filter so products narrow live while typing,
-  // without waiting for the server round-trip.
   const products = useMemo(() => {
     const typed = searchInput.trim();
-    if (!typed) return serverProducts;
-    return serverProducts.filter((p) =>
+    if (!typed) {
+      return serverProducts;
+    }
+    return serverProducts.filter((product) =>
       matchesAcrossFields(
-        [p.name, p.category, p.seller?.name],
+        [product.name, product.category, product.seller?.name],
         typed,
-      ),
-    );
+      ));
   }, [serverProducts, searchInput]);
 
   const totalResults = pagination?.total ?? products.length;
@@ -120,26 +119,23 @@ const MarketplacePage = () => {
   const showingLowerBound = totalResults === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const isEmptyState = !isLoading && !isFetching && !products.length && !isError;
 
-  // Accumulate products across API responses so suggestions stay useful
-  // while the user is still typing (before the debounced API call returns).
   const [productPool, setProductPool] = useState([]);
   useEffect(() => {
-    if (!products.length) return;
+    if (!products.length) {
+      return;
+    }
     setProductPool((prev) => {
-      const existing = new Set(prev.map((p) => p.id));
+      const existing = new Set(prev.map((product) => product.id));
       const next = [...prev];
-      products.forEach((p) => {
-        if (p.id && !existing.has(p.id)) {
-          next.push(p);
+      products.forEach((product) => {
+        if (product.id && !existing.has(product.id)) {
+          next.push(product);
         }
       });
       return next;
     });
   }, [products]);
 
-  // Build suggestion candidates from the accumulated pool.
-  // SearchSuggestInput handles prefix-matching and ranking internally,
-  // so we don't filter here — we just supply all known values.
   const searchSuggestions = useMemo(() => {
     const suggestions = [];
     const seen = new Set();
@@ -148,15 +144,15 @@ const MarketplacePage = () => {
       [
         {
           value: product.name,
-          meta: `${product.category ?? 'Product'} • ${product.seller?.name ?? 'Unknown seller'}`,
+          meta: `${product.category ?? 'Product'} | ${product.seller?.name ?? 'Unknown seller'}`,
         },
         {
           value: product.category,
-          meta: `Category • ${product.name ?? 'Unnamed product'}`,
+          meta: `Category | ${product.name ?? 'Unnamed product'}`,
         },
         {
           value: product.seller?.name,
-          meta: `Seller • ${product.name ?? 'Unnamed product'}`,
+          meta: `Seller | ${product.name ?? 'Unnamed product'}`,
         },
       ].forEach((entry, index) => {
         const normalized = entry.value?.toString().trim();
@@ -204,6 +200,16 @@ const MarketplacePage = () => {
       })),
     ];
   }, [data?.data?.categories, productPool]);
+
+  const catalogueSummary = useMemo(() => {
+    const inStockCount = serverProducts.filter((product) => product?.stats?.inStock !== false).length;
+    const sellerCount = new Set(serverProducts.map((product) => product?.seller?.id).filter(Boolean)).size;
+    return {
+      inStockCount,
+      sellerCount,
+      categoryCount: Math.max(categoryOptions.length - 1, 0),
+    };
+  }, [categoryOptions.length, serverProducts]);
 
   const updateFilters = (partial) => {
     setFilters((prev) => ({ ...prev, ...partial }));
@@ -279,6 +285,34 @@ const MarketplacePage = () => {
   return (
     <div className="marketplace-page">
       <header className="marketplace-hero">
+        <div className="marketplace-hero__intro">
+          <div>
+            <p className="eyebrow">FitSync marketplace</p>
+            <h1>Equipment, supplements, and essentials with real seller context.</h1>
+            <p className="marketplace-hero__copy">
+              Browse live stock, seller summaries, estimated delivery windows, and return support before you place an order.
+            </p>
+          </div>
+          <div className="marketplace-hero__stats">
+            <div>
+              <small>Results</small>
+              <strong>{totalResults}</strong>
+            </div>
+            <div>
+              <small>In stock</small>
+              <strong>{catalogueSummary.inStockCount}</strong>
+            </div>
+            <div>
+              <small>Sellers</small>
+              <strong>{catalogueSummary.sellerCount}</strong>
+            </div>
+            <div>
+              <small>Categories</small>
+              <strong>{catalogueSummary.categoryCount}</strong>
+            </div>
+          </div>
+        </div>
+
         <form className="marketplace-search-simple" onSubmit={handleSearchSubmit}>
           <SearchSuggestInput
             id="marketplace-search"
@@ -297,6 +331,12 @@ const MarketplacePage = () => {
           />
           <button type="submit">Search</button>
         </form>
+
+        <div className="marketplace-hero__policies">
+          <span>Estimated delivery: 3-5 business days</span>
+          <span>Track every item after checkout</span>
+          <span>Returns reviewed after delivery confirmation</span>
+        </div>
       </header>
 
       {feedback ? (

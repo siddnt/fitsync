@@ -12,6 +12,8 @@ import { formatDate, formatDateTime, formatStatus } from '../../../utils/format.
 import '../Dashboard.css';
 import './SessionsPage.css';
 
+const BOOKING_STATUS_STEPS = ['pending', 'confirmed', 'completed', 'cancelled'];
+
 const buildIcsTimestamp = (dateValue, timeValue = '00:00') => {
   const baseDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
   const [hours, minutes] = String(timeValue || '00:00').split(':').map(Number);
@@ -33,6 +35,27 @@ const getBookingStartDateTime = (booking) => {
   const date = new Date(booking?.bookingDate);
   date.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
   return date;
+};
+
+const buildBookingStatusTimeline = (status) => {
+  const normalizedStatus = BOOKING_STATUS_STEPS.includes(status) ? status : 'pending';
+  return BOOKING_STATUS_STEPS.map((step) => {
+    if (normalizedStatus === 'cancelled') {
+      return {
+        key: step,
+        label: formatStatus(step),
+        state: step === 'cancelled' ? 'current' : 'muted',
+      };
+    }
+
+    const activeIndex = BOOKING_STATUS_STEPS.indexOf(normalizedStatus);
+    const stepIndex = BOOKING_STATUS_STEPS.indexOf(step);
+    return {
+      key: step,
+      label: formatStatus(step),
+      state: step === normalizedStatus ? 'current' : stepIndex < activeIndex ? 'complete' : 'upcoming',
+    };
+  });
 };
 
 const downloadCalendarInvite = (booking) => {
@@ -135,7 +158,9 @@ const TraineeSessionsPage = () => {
   );
 
   const upcomingBookings = useMemo(
-    () => bookings.filter((booking) => ['pending', 'confirmed'].includes(booking.status)),
+    () => bookings
+      .filter((booking) => ['pending', 'confirmed'].includes(booking.status))
+      .sort((left, right) => getBookingStartDateTime(left).getTime() - getBookingStartDateTime(right).getTime()),
     [bookings],
   );
 
@@ -150,7 +175,9 @@ const TraineeSessionsPage = () => {
   }, [upcomingBookings]);
 
   const pastBookings = useMemo(
-    () => bookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status)),
+    () => bookings
+      .filter((booking) => ['completed', 'cancelled'].includes(booking.status))
+      .sort((left, right) => getBookingStartDateTime(right).getTime() - getBookingStartDateTime(left).getTime()),
     [bookings],
   );
 
@@ -372,11 +399,11 @@ const TraineeSessionsPage = () => {
           <div className="session-guidance-card__block">
             <small>Booking rules</small>
             <strong>Trainer confirmation required</strong>
-            <p>New requests start as pending. You can cancel only pending or confirmed future sessions.</p>
+            <p>New requests stay pending until your trainer confirms them. Reschedule or cancel only future pending or confirmed sessions.</p>
           </div>
 
           <div className="session-guidance-card__block">
-            <small>Trainer notes</small>
+            <small>Trainer notes and prep</small>
             <strong>{membership?.trainer?.name ?? 'Assigned trainer'}</strong>
             <p>{availabilityNotes || 'Your trainer has not published extra prep notes yet. Add goals in your booking note to shape the session.'}</p>
           </div>
@@ -521,6 +548,16 @@ const TraineeSessionsPage = () => {
                             ? 'Awaiting trainer confirmation'
                             : 'Bring this booking to the floor or your calendar reminder'}
                         </small>
+                        <div className="session-status-timeline">
+                          {buildBookingStatusTimeline(booking.status).map((step) => (
+                            <span
+                              key={`${booking.id}-${step.key}`}
+                              className={`session-status-timeline__pill session-status-timeline__pill--${step.state}`}
+                            >
+                              {step.label}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </td>
                     <td>

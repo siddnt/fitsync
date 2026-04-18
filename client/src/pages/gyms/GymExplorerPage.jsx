@@ -104,11 +104,11 @@ const GymExplorerPage = () => {
   const searchSuggestions = useMemo(() => buildSuggestionList(
     gyms.flatMap((gym) => [
       { id: `name-${gym.id}`, label: gym.name, meta: `${gym.city ?? 'Unknown city'} gym` },
-      { id: `city-${gym.id}`, label: gym.city, meta: `City • ${gym.name ?? 'Unnamed gym'}` },
+      { id: `city-${gym.id}`, label: gym.city, meta: `City | ${gym.name ?? 'Unnamed gym'}` },
       ...((gym.amenities || []).map((amenity, index) => ({
         id: `amenity-${gym.id}-${index}`,
         label: amenity,
-        meta: `Amenity • ${gym.name ?? 'Unnamed gym'}`,
+        meta: `Amenity | ${gym.name ?? 'Unnamed gym'}`,
       }))),
     ]),
     filters.search,

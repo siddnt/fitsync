@@ -5,7 +5,11 @@ export const adminApi = apiSlice.injectEndpoints({
     getAdminToggles: builder.query({
       query: () => '/admin/settings/toggles',
       providesTags: ['AdminSettings'],
-      transformResponse: (response) => response?.data?.adminToggles ?? {},
+      transformResponse: (response) => ({
+        toggles: response?.data?.adminToggles ?? {},
+        updatedAt: response?.data?.updatedAt ?? null,
+        updatedBy: response?.data?.updatedBy ?? null,
+      }),
     }),
     deleteUser: builder.mutation({
       query: (userId) => ({

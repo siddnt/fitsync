@@ -684,6 +684,18 @@ const buildBodyMetricSummaries = (bodyMetrics = []) => {
   return summaries.filter((summary) => summary.latestValue !== undefined && summary.latestValue !== null);
 };
 
+const pricingSnapshotHasPlans = (pricing = {}) => {
+  const plans = Array.isArray(pricing?.plans) ? pricing.plans : [];
+  if (plans.length) {
+    return true;
+  }
+
+  return Boolean(
+    Number(pricing?.monthlyPrice ?? pricing?.price ?? 0)
+      || Number(pricing?.startingAt ?? 0),
+  );
+};
+
 const serializeBodyMetrics = (bodyMetrics = []) => {
   if (!Array.isArray(bodyMetrics) || !bodyMetrics.length) {
     return [];
@@ -1293,7 +1305,7 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
 
   const gyms = await Gym.find({ owner: ownerId })
-    .select('name location status isPublished analytics sponsorship pricing createdAt updatedAt tags keyFeatures')
+    .select('name description location contact schedule status isPublished analytics sponsorship pricing createdAt updatedAt tags keyFeatures gallery')
     .lean();
 
   const gymIds = gyms.map((gym) => gym._id);
@@ -1332,14 +1344,43 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
 
   const data = gyms.map((gym) => {
     const membershipInfo = membershipMap[gym._id.toString()] ?? {};
+    const completenessChecks = [
+      Boolean(String(gym.description ?? '').trim()),
+      Boolean(String(gym.location?.address ?? '').trim()),
+      Boolean(String(gym.contact?.phone ?? '').trim() || String(gym.contact?.email ?? '').trim()),
+      Boolean(Array.isArray(gym.gallery) && gym.gallery.filter(Boolean).length),
+      Boolean(Array.isArray(gym.keyFeatures) && gym.keyFeatures.length),
+      Boolean((pricingSnapshotHasPlans(gym.pricing))),
+    ];
+    const listingCompleteness = Math.round(
+      (completenessChecks.filter(Boolean).length / completenessChecks.length) * 100,
+    );
+
     return {
       id: gym._id,
       name: gym.name,
+      description: gym.description ?? '',
       city: gym.location?.city,
+      location: {
+        address: gym.location?.address ?? '',
+        city: gym.location?.city ?? '',
+        state: gym.location?.state ?? '',
+      },
+      contact: {
+        phone: gym.contact?.phone ?? '',
+        email: gym.contact?.email ?? '',
+        website: gym.contact?.website ?? '',
+      },
+      schedule: {
+        open: gym.schedule?.openTime ?? gym.schedule?.open ?? '',
+        close: gym.schedule?.closeTime ?? gym.schedule?.close ?? '',
+        workingDays: Array.isArray(gym.schedule?.workingDays) ? gym.schedule.workingDays : [],
+      },
       status: gym.status,
       isPublished: gym.isPublished,
       tags: gym.tags,
       keyFeatures: gym.keyFeatures,
+      gallery: Array.isArray(gym.gallery) ? gym.gallery.filter(Boolean) : [],
       analytics: {
         ...gym.analytics,
         impressions30d: getImpressionCountFromMap(impressionCounts30d, gym._id),
@@ -1348,6 +1389,7 @@ export const getGymOwnerGyms = asyncHandler(async (req, res) => {
       pricing: gym.pricing,
       createdAt: gym.createdAt,
       updatedAt: gym.updatedAt,
+      listingCompleteness,
       members: {
         active: membershipInfo.activeMembers ?? 0,
         paused: membershipInfo.pausedMembers ?? 0,

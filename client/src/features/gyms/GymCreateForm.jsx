@@ -206,6 +206,7 @@ const GymCreateForm = reduxForm({
   enableReinitialize: false,
   initialValues: {
     keyFeatures: [],
+    gallery: '',
     pricing: {
       plans: {},
     },

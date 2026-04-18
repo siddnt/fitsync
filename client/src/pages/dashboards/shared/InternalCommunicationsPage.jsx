@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppSelector } from '../../../app/hooks.js';
 import {
   useCreateCommunicationThreadMutation,
   useGetCommunicationRecipientsQuery,
   useGetCommunicationThreadsQuery,
   useReplyCommunicationThreadMutation,
+  useUpdateCommunicationThreadStateMutation,
 } from '../../../services/internalCommunicationApi.js';
 import '../Dashboard.css';
 import './InternalCommunicationsPage.css';
@@ -14,18 +15,46 @@ const formatRoleLabel = (role) => {
   return role.replace(/-/g, ' ');
 };
 
+const getCounterpart = (thread, currentUserId) =>
+  (thread.participants ?? [])
+    .find((participant) => String(participant.user?._id ?? participant.user) !== String(currentUserId))
+    ?? null;
+
+const getLastMessage = (thread) => {
+  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+  return messages[messages.length - 1] ?? null;
+};
+
+const matchesRecipientQuery = (query, recipient) => {
+  const normalized = String(query || '').trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return [recipient.name, recipient.email, recipient.role]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(normalized);
+};
+
 const InternalCommunicationsPage = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   const currentUserId = currentUser?.id ?? currentUser?._id;
   const [recipientId, setRecipientId] = useState('');
   const [recipientQuery, setRecipientQuery] = useState('');
   const [showRecipientSuggestions, setShowRecipientSuggestions] = useState(false);
-  const [gymId, setGymId] = useState('');
+  const [composerGymId, setComposerGymId] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [replyDrafts, setReplyDrafts] = useState({});
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
+  const [selectedThreadId, setSelectedThreadId] = useState('');
+  const [threadSearch, setThreadSearch] = useState('');
+  const [threadGymFilter, setThreadGymFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   const {
     data: recipientResponse,
@@ -39,15 +68,21 @@ const InternalCommunicationsPage = () => {
     isLoading: threadsLoading,
     isError,
     refetch: refetchThreads,
-  } = useGetCommunicationThreadsQuery(undefined, {
+  } = useGetCommunicationThreadsQuery({
+    search: threadSearch.trim() || undefined,
+    gymId: threadGymFilter !== 'all' ? threadGymFilter : undefined,
+    role: roleFilter !== 'all' ? roleFilter : undefined,
+    includeArchived: includeArchived ? 'true' : undefined,
+  }, {
     refetchOnMountOrArgChange: true,
   });
   const [createThread, { isLoading: isCreating }] = useCreateCommunicationThreadMutation();
   const [replyThread, { isLoading: isReplying }] = useReplyCommunicationThreadMutation();
+  const [updateThreadState, { isLoading: isUpdatingState }] = useUpdateCommunicationThreadStateMutation();
 
   const recipients = recipientResponse?.data?.recipients ?? {};
   const ownedGyms = recipientResponse?.data?.ownedGyms ?? [];
-  const threads = threadResponse?.data ?? [];
+  const threads = Array.isArray(threadResponse?.data) ? threadResponse.data : [];
   const normalizedRecipientQuery = recipientQuery.trim().toLowerCase();
 
   const refetchAll = () => {
@@ -57,30 +92,13 @@ const InternalCommunicationsPage = () => {
 
   const recipientGroups = useMemo(() => {
     const groups = [];
-    const filterItems = (items = []) => items.filter((recipient) => {
-      if (!normalizedRecipientQuery) {
-        return true;
-      }
-      const haystack = [recipient.name, recipient.email, recipient.role]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(normalizedRecipientQuery);
-    });
+    const managers = (recipients.managers ?? []).filter((recipient) => matchesRecipientQuery(normalizedRecipientQuery, recipient));
+    const admins = (recipients.admins ?? []).filter((recipient) => matchesRecipientQuery(normalizedRecipientQuery, recipient));
+    const owners = (recipients.owners ?? []).filter((recipient) => matchesRecipientQuery(normalizedRecipientQuery, recipient));
 
-    const managers = filterItems(recipients.managers);
-    const admins = filterItems(recipients.admins);
-    const owners = filterItems(recipients.owners);
-
-    if (managers.length) {
-      groups.push({ label: 'Managers', items: managers });
-    }
-    if (admins.length) {
-      groups.push({ label: 'Admins', items: admins });
-    }
-    if (owners.length) {
-      groups.push({ label: 'Gym Owners', items: owners });
-    }
+    if (managers.length) groups.push({ label: 'Managers', items: managers });
+    if (admins.length) groups.push({ label: 'Admins', items: admins });
+    if (owners.length) groups.push({ label: 'Gym Owners', items: owners });
     return groups;
   }, [normalizedRecipientQuery, recipients]);
 
@@ -94,9 +112,47 @@ const InternalCommunicationsPage = () => {
   );
 
   const selectedRecipient = useMemo(
-    () => recipientSuggestions.find((recipient) => recipient.id === recipientId) ?? null,
-    [recipientId, recipientSuggestions],
+    () => recipientSuggestions.find((recipient) => recipient.id === recipientId)
+      ?? [...(recipients.managers ?? []), ...(recipients.admins ?? []), ...(recipients.owners ?? [])]
+        .find((recipient) => recipient.id === recipientId)
+      ?? null,
+    [recipientId, recipientSuggestions, recipients],
   );
+
+  const threadGymOptions = useMemo(() => {
+    const map = new Map();
+    [...ownedGyms, ...threads.flatMap((thread) => (thread.gym ? [{ id: thread.gym._id ?? thread.gym.id ?? thread.gym, name: thread.gym.name }] : []))]
+      .forEach((gym) => {
+        if (gym?.id && gym?.name) {
+          map.set(String(gym.id), { id: String(gym.id), name: gym.name });
+        }
+      });
+    return [...map.values()].sort((left, right) => left.name.localeCompare(right.name));
+  }, [ownedGyms, threads]);
+
+  const activeThread = useMemo(
+    () => threads.find((thread) => String(thread._id) === String(selectedThreadId)) ?? threads[0] ?? null,
+    [selectedThreadId, threads],
+  );
+
+  useEffect(() => {
+    if (!activeThread) {
+      setSelectedThreadId('');
+      return;
+    }
+    setSelectedThreadId(String(activeThread._id));
+  }, [activeThread?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!activeThread?._id || !activeThread.unreadCount) {
+      return;
+    }
+
+    updateThreadState({ id: activeThread._id, read: true })
+      .unwrap()
+      .then(() => refetchThreads())
+      .catch(() => undefined);
+  }, [activeThread?._id, activeThread?.unreadCount, refetchThreads, updateThreadState]);
 
   const handleRecipientSelect = (recipient) => {
     setRecipientId(recipient.id);
@@ -109,20 +165,24 @@ const InternalCommunicationsPage = () => {
     try {
       setNotice(null);
       setErrorNotice(null);
-      await createThread({
+      const response = await createThread({
         recipientId,
         subject,
         body,
-        gymId: gymId || undefined,
+        gymId: composerGymId || undefined,
       }).unwrap();
+      const createdThreadId = response?.data?._id ?? response?.data?.id ?? '';
       setRecipientId('');
       setRecipientQuery('');
       setShowRecipientSuggestions(false);
-      setGymId('');
+      setComposerGymId('');
       setSubject('');
       setBody('');
       setNotice('Conversation started successfully.');
-      refetchAll();
+      await refetchThreads();
+      if (createdThreadId) {
+        setSelectedThreadId(String(createdThreadId));
+      }
     } catch (error) {
       setErrorNotice(error?.data?.message ?? 'Could not start the conversation.');
     }
@@ -141,9 +201,27 @@ const InternalCommunicationsPage = () => {
       await replyThread({ id: threadId, body: replyBody }).unwrap();
       setReplyDrafts((prev) => ({ ...prev, [threadId]: '' }));
       setNotice('Reply sent successfully.');
-      refetchAll();
+      refetchThreads();
     } catch (error) {
       setErrorNotice(error?.data?.message ?? 'Could not send the reply.');
+    }
+  };
+
+  const handleArchiveToggle = async (thread) => {
+    try {
+      setNotice(null);
+      setErrorNotice(null);
+      await updateThreadState({
+        id: thread._id,
+        archived: !thread.isArchived,
+      }).unwrap();
+      setNotice(thread.isArchived ? 'Thread reopened.' : 'Thread archived.');
+      refetchThreads();
+      if (!thread.isArchived && String(activeThread?._id) === String(thread._id)) {
+        setSelectedThreadId('');
+      }
+    } catch (error) {
+      setErrorNotice(error?.data?.message ?? 'Could not update the thread state.');
     }
   };
 
@@ -160,7 +238,7 @@ const InternalCommunicationsPage = () => {
       <header className="internal-communications__header">
         <div>
           <h1>Communications</h1>
-          <p>Coordinate queries between gym owners, managers, and admins without using support tickets.</p>
+          <p>Track unread threads, filter by gym or counterpart role, and archive closed loops without losing context.</p>
         </div>
         <button type="button" onClick={refetchAll} className="internal-communications__refresh">
           Refresh
@@ -227,7 +305,7 @@ const InternalCommunicationsPage = () => {
             </select>
             {selectedRecipient ? (
               <small className="internal-communications__selected-recipient">
-                Selected: {selectedRecipient.name} ({selectedRecipient.groupLabel})
+                Selected: {selectedRecipient.name} ({selectedRecipient.groupLabel ?? formatRoleLabel(selectedRecipient.role)})
               </small>
             ) : null}
           </label>
@@ -235,7 +313,7 @@ const InternalCommunicationsPage = () => {
           {currentUser?.role === 'gym-owner' ? (
             <label>
               Gym context
-              <select value={gymId} onChange={(event) => setGymId(event.target.value)}>
+              <select value={composerGymId} onChange={(event) => setComposerGymId(event.target.value)}>
                 <option value="">No specific gym</option>
                 {ownedGyms.map((gym) => (
                   <option key={gym.id} value={gym.id}>
@@ -263,30 +341,117 @@ const InternalCommunicationsPage = () => {
       </section>
 
       <section className="internal-communications__threads">
-        <h2>Conversation history</h2>
-        {threads.length ? (
-          <div className="internal-communications__thread-list">
-            {threads.map((thread) => {
-              const counterpart = (thread.participants ?? [])
-                .map((participant) => participant.user)
-                .find((participant) => String(participant?._id) !== String(currentUserId));
+        <div className="internal-communications__threads-header">
+          <h2>Conversation history</h2>
+          <div className="internal-communications__filters">
+            <input
+              value={threadSearch}
+              onChange={(event) => setThreadSearch(event.target.value)}
+              placeholder="Search subject, participant, gym, or message"
+              aria-label="Search threads"
+            />
+            <select value={threadGymFilter} onChange={(event) => setThreadGymFilter(event.target.value)} aria-label="Filter by gym">
+              <option value="all">All gyms</option>
+              {threadGymOptions.map((gym) => (
+                <option key={gym.id} value={gym.id}>{gym.name}</option>
+              ))}
+            </select>
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Filter by role">
+              <option value="all">All roles</option>
+              <option value="admin">Admins</option>
+              <option value="manager">Managers</option>
+              <option value="gym-owner">Gym owners</option>
+            </select>
+            <label className="internal-communications__checkbox">
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(event) => setIncludeArchived(event.target.checked)}
+              />
+              <span>Show archived</span>
+            </label>
+          </div>
+        </div>
 
-              return (
-                <article key={thread._id} className="internal-communications__thread-card">
+        {threads.length ? (
+          <div className="internal-communications__workspace">
+            <aside className="internal-communications__thread-list">
+              {threads.map((thread) => {
+                const counterpart = getCounterpart(thread, currentUserId);
+                const isActive = String(thread._id) === String(activeThread?._id);
+                const lastMessage = getLastMessage(thread);
+
+                return (
+                  <button
+                    key={thread._id}
+                    type="button"
+                    className={`internal-communications__thread-card${isActive ? ' internal-communications__thread-card--active' : ''}`}
+                    onClick={() => setSelectedThreadId(String(thread._id))}
+                  >
+                    <div className="internal-communications__thread-card-top">
+                      <strong>{thread.subject}</strong>
+                      <small>{new Date(thread.lastMessageAt).toLocaleString()}</small>
+                    </div>
+                    <p>
+                      {counterpart?.user?.name ?? 'Unknown'} ({formatRoleLabel(counterpart?.role)})
+                    </p>
+                    {thread.gym?.name ? <small>Gym: {thread.gym.name}</small> : <small>No gym context</small>}
+                    <p className="internal-communications__thread-preview">
+                      {lastMessage?.body || 'No message preview yet.'}
+                    </p>
+                    <div className="internal-communications__thread-card-meta">
+                      {thread.unreadCount ? (
+                        <span className="internal-communications__pill internal-communications__pill--unread">
+                          {thread.unreadCount} unread
+                        </span>
+                      ) : (
+                        <span className="internal-communications__pill">Read</span>
+                      )}
+                      {thread.isArchived ? (
+                        <span className="internal-communications__pill internal-communications__pill--archived">Archived</span>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </aside>
+
+            <div className="internal-communications__thread-panel">
+              {activeThread ? (
+                <>
                   <header className="internal-communications__thread-header">
                     <div>
-                      <h3>{thread.subject}</h3>
+                      <h3>{activeThread.subject}</h3>
                       <p>
-                        With {counterpart?.name ?? 'Unknown'} ({formatRoleLabel(counterpart?.role)})
+                        With {getCounterpart(activeThread, currentUserId)?.user?.name ?? 'Unknown'}
+                        {' '}
+                        ({formatRoleLabel(getCounterpart(activeThread, currentUserId)?.role)})
                       </p>
-                      {thread.gym?.name ? <small>Gym: {thread.gym.name}</small> : null}
+                      {activeThread.gym?.name ? <small>Gym: {activeThread.gym.name}</small> : null}
+                      <small>Last updated {new Date(activeThread.lastMessageAt).toLocaleString()}</small>
                     </div>
-                    <span>{new Date(thread.lastMessageAt).toLocaleString()}</span>
+                    <div className="internal-communications__thread-actions">
+                      <button
+                        type="button"
+                        className="internal-communications__refresh"
+                        onClick={() => handleArchiveToggle(activeThread)}
+                        disabled={isUpdatingState}
+                      >
+                        {activeThread.isArchived ? 'Reopen thread' : 'Archive thread'}
+                      </button>
+                    </div>
                   </header>
 
                   <div className="internal-communications__message-list">
-                    {(thread.messages ?? []).map((message) => (
-                      <div key={message._id} className="internal-communications__message">
+                    {(activeThread.messages ?? []).map((message) => (
+                      <div
+                        key={message._id}
+                        className={`internal-communications__message${
+                          String(message.sender?._id ?? message.sender) === String(currentUserId)
+                            ? ' internal-communications__message--self'
+                            : ''
+                        }`}
+                      >
                         <strong>{message.sender?.name ?? 'Unknown'} ({formatRoleLabel(message.senderRole)})</strong>
                         <small>{new Date(message.createdAt).toLocaleString()}</small>
                         <p>{message.body}</p>
@@ -296,21 +461,28 @@ const InternalCommunicationsPage = () => {
 
                   <div className="internal-communications__reply">
                     <textarea
-                      value={replyDrafts[thread._id] ?? ''}
-                      onChange={(event) => setReplyDrafts((prev) => ({ ...prev, [thread._id]: event.target.value }))}
+                      value={replyDrafts[activeThread._id] ?? ''}
+                      onChange={(event) => setReplyDrafts((prev) => ({ ...prev, [activeThread._id]: event.target.value }))}
                       rows={3}
-                      placeholder="Reply to this conversation"
+                      placeholder={activeThread.isArchived ? 'Reopen this thread to reply' : 'Reply to this conversation'}
+                      disabled={activeThread.isArchived}
                     />
-                    <button type="button" onClick={() => handleReply(thread._id)} disabled={isReplying}>
+                    <button
+                      type="button"
+                      onClick={() => handleReply(activeThread._id)}
+                      disabled={isReplying || activeThread.isArchived}
+                    >
                       {isReplying ? 'Sending...' : 'Reply'}
                     </button>
                   </div>
-                </article>
-              );
-            })}
+                </>
+              ) : (
+                <div className="internal-communications__empty">No conversations yet.</div>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="internal-communications__empty">No conversations yet.</div>
+          <div className="internal-communications__empty">No conversations match the current filters.</div>
         )}
       </section>
     </div>

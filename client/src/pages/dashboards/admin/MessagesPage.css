@@ -209,6 +209,21 @@
     white-space: pre-wrap;
 }
 
+.message-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+}
+
+.message-context span {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 999px;
+    color: var(--muted-text-color);
+    font-size: 0.8rem;
+    padding: 0.3rem 0.75rem;
+}
+
 .message-controls {
     align-items: end;
     display: grid;

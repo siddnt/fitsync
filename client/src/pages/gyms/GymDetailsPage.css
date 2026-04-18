@@ -88,10 +88,68 @@
   color: var(--muted-text-color);
 }
 
+.gym-details__pricing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.gym-details__pricing-actions a {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-color);
+  padding: 0.65rem 0.95rem;
+  text-decoration: none;
+}
+
 .gym-details__hero {
   display: grid;
   gap: 1.25rem;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.7fr);
+}
+
+.gym-details__conversion-strip {
+  align-items: stretch;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  padding: 1.35rem;
+}
+
+.gym-details__conversion-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.gym-details__conversion-copy small,
+.gym-details__plan-card small,
+.gym-details__plan-note,
+.gym-details__hours-row span {
+  color: var(--muted-text-color);
+}
+
+.gym-details__conversion-copy strong,
+.gym-details__hours-row strong,
+.gym-details__plan-card strong {
+  color: var(--text-color);
+}
+
+.gym-details__conversion-copy p {
+  color: var(--muted-text-color);
+  margin: 0;
+}
+
+.gym-details__conversion-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .gym-details__media {
@@ -226,6 +284,19 @@
   padding: 1.35rem;
 }
 
+.gym-details__hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.gym-details__hours-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .gym-details__grid article h2,
 .gym-details__about h2,
 .gym-details__section-header h2,
@@ -266,7 +337,8 @@
 }
 
 .gym-details__trainer-grid,
-.gym-details__session-grid {
+.gym-details__session-grid,
+.gym-details__plan-grid {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -322,6 +394,27 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: 1.1rem;
+}
+
+.gym-details__plan-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.1rem;
+}
+
+.gym-details__plan-price {
+  color: var(--primary-color);
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.gym-details__plan-note {
+  margin: 0;
 }
 
 .gym-details__reviews {
@@ -436,8 +529,16 @@
     grid-template-columns: 1fr;
   }
 
+  .gym-details__conversion-strip {
+    grid-template-columns: 1fr;
+  }
+
   .gym-details__pricing {
     align-items: flex-start;
     text-align: left;
+  }
+
+  .gym-details__pricing-actions {
+    justify-content: flex-start;
   }
 }

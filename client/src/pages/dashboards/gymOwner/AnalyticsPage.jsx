@@ -134,6 +134,49 @@ const GymOwnerAnalyticsPage = () => {
   const funnelSteps = analytics?.conversionFunnel?.steps ?? [];
   const funnelTotals = analytics?.conversionFunnel?.totals ?? {};
 
+  const funnelRateCards = useMemo(
+    () => funnelSteps
+      .slice(1)
+      .map((step, index) => ({
+        id: step.id,
+        label: `${funnelSteps[index]?.label ?? 'Previous'} to ${step.label}`,
+        rate: step.conversionFromPrevious ?? 0,
+        fromValue: funnelSteps[index]?.value ?? 0,
+        toValue: step.value ?? 0,
+      })),
+    [funnelSteps],
+  );
+
+  const gymConversionLeaders = useMemo(() => {
+    if (!Array.isArray(analytics?.gyms)) {
+      return [];
+    }
+
+    return analytics.gyms
+      .map((gym) => {
+        const impressions30d = Number(gym.impressions30d) || 0;
+        const opens30d = Number(gym.opens30d) || 0;
+        const joins30d = Number(gym.joins30d) || 0;
+        const renewals30d = Number(gym.renewals30d) || 0;
+
+        return {
+          ...gym,
+          impressionToOpenRate30d: impressions30d ? Number(((opens30d / impressions30d) * 100).toFixed(1)) : 0,
+          openToJoinRate30d: Number(gym.joinConversionRate30d) || 0,
+          joinToRenewalRate30d: joins30d ? Number(((renewals30d / joins30d) * 100).toFixed(1)) : 0,
+        };
+      })
+      .sort((left, right) => {
+        if (right.openToJoinRate30d !== left.openToJoinRate30d) {
+          return right.openToJoinRate30d - left.openToJoinRate30d;
+        }
+        if (right.joinToRenewalRate30d !== left.joinToRenewalRate30d) {
+          return right.joinToRenewalRate30d - left.joinToRenewalRate30d;
+        }
+        return (right.joins30d ?? 0) - (left.joins30d ?? 0);
+      });
+  }, [analytics?.gyms]);
+
   const handleExportMemberships = async () => {
     setReportNotice(null);
     setReportError(null);
@@ -344,6 +387,50 @@ const GymOwnerAnalyticsPage = () => {
         )}
       </DashboardSection>
 
+      <DashboardSection
+        title="Step conversion rates"
+        className="dashboard-section--span-12"
+        action={<span className="dashboard-timeframe-label">Simple movement between each funnel stage</span>}
+      >
+        {funnelRateCards.length ? (
+          <div className="stat-grid">
+            {funnelRateCards.map((rate) => (
+              <div key={rate.id} className="stat-card">
+                <small>{rate.label}</small>
+                <strong>{formatPercentage(rate.rate)}</strong>
+                <small>
+                  {formatNumber(rate.toValue)} moved from {formatNumber(rate.fromValue)}
+                </small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Conversion rates will appear once there are at least two funnel stages with activity." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
+        title="Top performing gyms by conversion"
+        className="dashboard-section--span-12"
+        action={<span className="dashboard-timeframe-label">Sorted by open to join conversion over the last 30 days</span>}
+      >
+        {gymConversionLeaders.length ? (
+          <div className="stat-grid">
+            {gymConversionLeaders.slice(0, 3).map((gym, index) => (
+              <div key={gym.id} className="stat-card">
+                <small>{`#${index + 1} ${gym.name}`}</small>
+                <strong>{formatPercentage(gym.openToJoinRate30d)}</strong>
+                <small>
+                  Open to join · {formatPercentage(gym.impressionToOpenRate30d)} impression to open · {formatPercentage(gym.joinToRenewalRate30d)} join to renewal
+                </small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Gym conversion leaders will appear once individual gyms start receiving traffic." />
+        )}
+      </DashboardSection>
+
       <DashboardSection title="Gym performance" className="dashboard-section--span-12">
         {analytics?.gyms?.length ? (
           <table className="dashboard-table">
@@ -355,11 +442,13 @@ const GymOwnerAnalyticsPage = () => {
                 <th>Opens (30d)</th>
                 <th>Joins (30d)</th>
                 <th>Renewals (30d)</th>
+                <th>Impression to Open</th>
                 <th>Open to Join</th>
+                <th>Join to Renewal</th>
               </tr>
             </thead>
             <tbody>
-              {analytics.gyms.map((gym) => (
+              {gymConversionLeaders.map((gym) => (
                 <tr key={gym.id}>
                   <td>{gym.name}</td>
                   <td>{gym.city || '-'}</td>
@@ -367,7 +456,9 @@ const GymOwnerAnalyticsPage = () => {
                   <td>{formatNumber(gym.opens30d ?? 0)}</td>
                   <td>{formatNumber(gym.joins30d ?? 0)}</td>
                   <td>{formatNumber(gym.renewals30d ?? 0)}</td>
-                  <td>{formatPercentage(gym.joinConversionRate30d ?? 0)}</td>
+                  <td>{formatPercentage(gym.impressionToOpenRate30d ?? 0)}</td>
+                  <td>{formatPercentage(gym.openToJoinRate30d ?? 0)}</td>
+                  <td>{formatPercentage(gym.joinToRenewalRate30d ?? 0)}</td>
                 </tr>
               ))}
             </tbody>

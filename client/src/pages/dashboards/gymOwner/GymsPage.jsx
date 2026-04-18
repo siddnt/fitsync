@@ -393,7 +393,7 @@ const GymOwnerGymsPage = () => {
                 <tr>
                   <th>Name</th>
                   <th>Status</th>
-                  <th>Members</th>
+                  <th>Quick stats</th>
                   <th>Updated</th>
                   <th>Actions</th>
                 </tr>
@@ -404,6 +404,7 @@ const GymOwnerGymsPage = () => {
                   const toggling = isProcessing && processingGymAction === 'toggle';
                   const deleting = isProcessing && processingGymAction === 'delete';
                   const visibilityLabel = gym.isPublished ? 'Hide' : 'Publish';
+                  const galleryPreview = Array.isArray(gym.gallery) ? gym.gallery.find(Boolean) : '';
                   const featureSummary = (Array.isArray(gym.keyFeatures) ? gym.keyFeatures : [])
                     .slice(0, 3)
                     .join(' | ');
@@ -419,14 +420,35 @@ const GymOwnerGymsPage = () => {
                     <tr key={gym.id}>
                       <td>
                         <strong>{gym.name}</strong>
+                        {galleryPreview ? (
+                          <div className="dashboard-table__meta" style={{ marginTop: '0.5rem' }}>
+                            <img
+                              src={galleryPreview}
+                              alt={`${gym.name} preview`}
+                              style={{ borderRadius: '12px', height: '56px', objectFit: 'cover', width: '88px' }}
+                            />
+                          </div>
+                        ) : null}
                         <div className="dashboard-table__meta">
                           {featureSummary || 'No feature highlights yet'}
+                        </div>
+                        <div className="dashboard-table__meta">
+                          {gym.location?.address || 'Address pending'}
+                        </div>
+                        <div className="dashboard-table__meta">
+                          {[gym.contact?.phone, gym.contact?.email].filter(Boolean).join(' | ') || 'Contact details pending'}
+                        </div>
+                        <div className="dashboard-table__meta">
+                          Listing completeness: {gym.listingCompleteness ?? 0}%
                         </div>
                       </td>
                       <td>
                         <strong>{formatStatus(gym.status)}</strong>
                         <div className="dashboard-table__meta">
                           {gym.isPublished ? 'Marketplace visible' : 'Hidden from marketplace'}
+                        </div>
+                        <div className="dashboard-table__meta">
+                          {gym.status === 'suspended' ? 'Archived listing' : 'Owner controlled listing'}
                         </div>
                       </td>
                       <td>

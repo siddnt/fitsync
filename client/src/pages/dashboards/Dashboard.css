@@ -149,6 +149,109 @@
   color: #4ade80;
 }
 
+.dashboard-link-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-link-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.dashboard-link-card:hover,
+.dashboard-link-card:focus-visible {
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.dashboard-link-card small {
+  color: var(--muted-text-color);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dashboard-link-card strong {
+  color: var(--text-color);
+  font-size: 1.4rem;
+}
+
+.dashboard-link-card span {
+  color: var(--muted-text-color);
+  font-size: 0.85rem;
+}
+
+.dashboard-export-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dashboard-export-shortcuts a {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-color);
+  padding: 0.45rem 0.95rem;
+  text-decoration: none;
+}
+
+.dashboard-export-shortcuts a:hover,
+.dashboard-export-shortcuts a:focus-visible {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dashboard-metric--positive {
+  color: #4ade80;
+}
+
+.dashboard-metric--negative {
+  color: #f87171;
+}
+
+.dashboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dashboard-list__item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+}
+
+.dashboard-list__item small {
+  color: var(--muted-text-color);
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dashboard-list__item strong {
+  color: var(--text-color);
+}
+
+.dashboard-list__meta {
+  text-align: right;
+}
+
 .dashboard-grid--stacked {
   display: flex;
   flex-direction: column;
@@ -2003,6 +2106,18 @@
   font-size: 0.78rem;
 }
 
+.order-item-row__substatus--success {
+  color: #4ade80;
+}
+
+.order-item-row__substatus--info {
+  color: #facc15;
+}
+
+.order-item-row__substatus--warning {
+  color: #f87171;
+}
+
 .order-item-row__actions {
   display: flex;
   flex-wrap: wrap;
@@ -2321,6 +2436,33 @@
   justify-content: flex-end;
 }
 
+.owner-roster-summary {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.owner-roster-summary div {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.owner-roster-summary small {
+  color: var(--muted-text-color);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.owner-roster-summary strong {
+  font-size: 1.15rem;
+}
+
 .owner-roster-tag {
   border-radius: 999px;
   font-size: 0.72rem;
@@ -2393,6 +2535,11 @@
   width: 100%;
 }
 
+.owner-roster-avatar--large {
+  height: 72px;
+  width: 72px;
+}
+
 .owner-roster-meta {
   display: flex;
   flex: 1;
@@ -2459,6 +2606,112 @@
   color: var(--muted-text-color);
   font-size: 0.85rem;
   margin: 0.75rem 0 0;
+}
+
+.owner-roster-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.owner-roster-detail__hero {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.owner-roster-detail__hero h3,
+.owner-roster-detail__panel h4 {
+  margin: 0;
+}
+
+.owner-roster-detail__hero p,
+.owner-roster-detail__hero small,
+.owner-roster-detail__card small,
+.owner-roster-detail__card p,
+.owner-roster-detail__list span {
+  color: var(--muted-text-color);
+}
+
+.owner-roster-detail__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.owner-roster-detail__card,
+.owner-roster-detail__panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+}
+
+.owner-roster-detail__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.owner-roster-detail__list {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 0.85rem;
+}
+
+.owner-roster-detail__list div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.admin-audit-log__metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.admin-audit-log__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.admin-audit-log__links a {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-color);
+  padding: 0.65rem 0.95rem;
+  text-decoration: none;
+}
+
+.admin-audit-log__metadata-row {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+}
+
+.admin-audit-log__metadata-row span {
+  color: var(--muted-text-color);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-audit-log__metadata-row pre {
+  color: var(--text-color);
+  font-family: inherit;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Page Toolbars */

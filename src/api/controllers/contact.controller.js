@@ -280,6 +280,7 @@ export const getContactMessages = asyncHandler(async (req, res) => {
   const messages = await Contact.find(filter)
     .sort({ createdAt: -1 })
     .populate({ path: 'assignedTo', select: 'name email role' })
+    .populate({ path: 'replies.author', select: 'name email role' })
     .populate({
       path: 'gym',
       select: 'name owner',

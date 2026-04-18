@@ -507,6 +507,40 @@
   margin-top: 1rem;
 }
 
+.checkout-success__next-steps {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  width: 100%;
+}
+
+.checkout-success__next-step {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  text-align: left;
+}
+
+.checkout-success__next-step small {
+  color: var(--text-muted-color);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.checkout-success__next-step strong {
+  color: var(--light-text-color);
+}
+
+.checkout-success__next-step p {
+  color: var(--text-muted-color);
+  margin: 0;
+}
+
 .btn {
   display: inline-block;
   padding: 0.75rem 1.6rem;

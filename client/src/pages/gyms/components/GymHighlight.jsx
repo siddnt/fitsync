@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Link } from 'react-router-dom';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './GymMembershipActions.jsx';
 import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
-import { formatDate } from '../../../utils/format.js';
+import { formatDate, formatStatus } from '../../../utils/format.js';
 
 const parseAmount = (value) => {
   const numeric = Number(value);
@@ -142,12 +143,28 @@ const GymHighlight = ({
       : gym.pricing?.mrp,
   );
   const headlinePlanLabel = gym.pricing?.startingPlanLabel ?? gym.pricing?.defaultPlanLabel ?? null;
+  const featureList = Array.isArray(gym.features)
+    ? gym.features.map((feature) => String(feature ?? '').trim()).filter(Boolean)
+    : [];
+  const description = String(gym.description ?? '').trim();
+  const ownerLabel = gym.owner?.name || gym.owner?.email || 'Owner details not published';
+  const contactSummary = [
+    gym.contact?.phone,
+    gym.contact?.email,
+    gym.contact?.website,
+  ].filter(Boolean).join(' | ') || 'Contact details not published';
+  const workingDayLabel = Array.isArray(gym.schedule?.days) && gym.schedule.days.length
+    ? gym.schedule.days.map((day) => formatStatus(day)).join(', ')
+    : 'Working days not published';
+  const timingLabel = gym.schedule?.open && gym.schedule?.close
+    ? `${gym.schedule.open} - ${gym.schedule.close}`
+    : 'Timings not published';
 
   return (
     <article className="gym-highlight">
       {isSponsored && (
         <div className="gym-highlight__sponsored-banner">
-          <span className="gym-highlight__sponsored-icon"></span>
+          <span className="gym-highlight__sponsored-icon" />
           <span>Sponsored Listing</span>
           <span className="gym-highlight__sponsored-tier">{gym.sponsorship.tier}</span>
         </div>
@@ -159,7 +176,7 @@ const GymHighlight = ({
         </div>
         <div className="gym-highlight__pricing">
           <span className="price">
-            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'N/A'}
+            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'Pricing unavailable'}
           </span>
           {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
             <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
@@ -191,36 +208,69 @@ const GymHighlight = ({
       <section className="gym-highlight__meta">
         <div>
           <strong>Owner</strong>
-          <span>{gym.owner?.name}</span>
+          <span>{ownerLabel}</span>
         </div>
         <div>
           <strong>Contact</strong>
-          <span>{gym.contact?.phone}</span>
+          <span>{contactSummary}</span>
         </div>
         <div>
           <strong>Working days</strong>
-          <span>{gym.schedule?.days?.join(', ') ?? 'Mon - Sun'}</span>
+          <span>{workingDayLabel}</span>
         </div>
         <div>
           <strong>Timings</strong>
-          <span>
-            {gym.schedule?.open ?? '06:00'} - {gym.schedule?.close ?? '22:00'}
-          </span>
+          <span>{timingLabel}</span>
         </div>
       </section>
 
       <section className="gym-highlight__features">
         <h2>Key features</h2>
-        <div>
-          {(gym.features?.length ? gym.features : ['AC', 'Locker rooms', 'Certified trainers']).map((feature) => (
-            <span key={feature}>{feature}</span>
-          ))}
-        </div>
+        {featureList.length ? (
+          <div>
+            {featureList.map((feature) => (
+              <span key={feature}>{feature}</span>
+            ))}
+          </div>
+        ) : (
+          <p className="gym-highlight__review-notice">This gym has not published feature badges yet.</p>
+        )}
       </section>
 
       <section className="gym-highlight__about">
         <h2>About</h2>
-        <p>{gym.description ?? 'Gym description coming soon.'}</p>
+        {description ? (
+          <p>{description}</p>
+        ) : (
+          <p className="gym-highlight__review-notice">The owner has not published a gym description yet.</p>
+        )}
+      </section>
+
+      <section className="gym-highlight__meta">
+        <div>
+          <strong>Pricing</strong>
+          <span>
+            {headlinePrice !== null
+              ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}${headlinePlanLabel ? ` starting with ${headlinePlanLabel}` : ''}`
+              : 'Pricing not published'}
+          </span>
+        </div>
+        <div>
+          <strong>Ratings</strong>
+          <span>
+            {gym.analytics?.ratingCount
+              ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from ${gym.analytics.ratingCount} reviews`
+              : 'No ratings yet'}
+          </span>
+        </div>
+        <div>
+          <strong>Membership</strong>
+          <span>{membership ? `Your status: ${formatStatus(membership.status)}` : 'Open to new memberships'}</span>
+        </div>
+        <div>
+          <strong>More details</strong>
+          <span><Link to={`/gyms/${gym.id}`}>Open full gym profile</Link></span>
+        </div>
       </section>
 
       <section className="gym-highlight__reviews">
@@ -331,12 +381,15 @@ GymHighlight.propTypes = {
     }),
     owner: PropTypes.shape({
       name: PropTypes.string,
+      email: PropTypes.string,
     }),
     location: PropTypes.shape({
       address: PropTypes.string,
     }),
     contact: PropTypes.shape({
       phone: PropTypes.string,
+      email: PropTypes.string,
+      website: PropTypes.string,
     }),
     schedule: PropTypes.shape({
       days: PropTypes.arrayOf(PropTypes.string),
