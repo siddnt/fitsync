@@ -40,6 +40,7 @@ const dashboardLinksByRole = {
     { to: '/dashboard/admin/gyms', label: 'Gyms' },
     { to: '/dashboard/admin/revenue', label: 'Revenue' },
     { to: '/dashboard/admin/marketplace', label: 'Marketplace' },
+    { to: '/dashboard/admin/ops', label: 'System Ops' },
     { to: '/dashboard/admin/communications', label: 'Communications' },
     { to: '/dashboard/admin/messages', label: 'Messages' },
     { to: '/dashboard/admin/audit-logs', label: 'Audit Logs' },

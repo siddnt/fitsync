@@ -39,6 +39,51 @@
   box-shadow: 0 35px 65px rgba(0, 0, 0, 0.4);
 }
 
+.gym-explorer__sort-card,
+.gym-explorer__selected-summary {
+  background: rgba(14, 16, 27, 0.9);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1.25rem 1.35rem;
+  box-shadow: 0 22px 45px rgba(0, 0, 0, 0.28);
+}
+
+.gym-explorer__sort-card small,
+.gym-explorer__selected-summary small {
+  color: var(--muted-text-color);
+  display: block;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+}
+
+.gym-explorer__sort-card strong,
+.gym-explorer__selected-summary strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.gym-explorer__sort-card p,
+.gym-explorer__selected-summary p {
+  color: var(--muted-text-color);
+  margin: 0.7rem 0 0;
+}
+
+.gym-explorer__sort-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.gym-explorer__sort-stats span {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-size: 0.76rem;
+  padding: 0.35rem 0.8rem;
+}
 
 .gym-list {
   display: flex;
@@ -64,6 +109,49 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
+.gym-list__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.gym-list__headline {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.gym-list__subline,
+.gym-list__reason {
+  color: var(--muted-text-color);
+  font-size: 0.82rem;
+}
+
+.gym-list__reason {
+  line-height: 1.35;
+}
+
+.gym-list__stats {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-left: 1rem;
+  text-align: right;
+}
+
+.gym-list__stats span,
+.gym-list__stats strong {
+  font-size: 0.82rem;
+}
+
+.gym-list__stats strong {
+  color: var(--light-text-color);
+}
+
 .gym-list__item button:hover {
   transform: translateX(6px);
   box-shadow: 0 14px 32px rgba(229, 9, 20, 0.25);
@@ -83,16 +171,97 @@
   color: var(--muted-text-color);
 }
 
-.gym-list__sponsored-badge {
+.gym-list__badge {
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.22rem 0.58rem;
+  text-transform: uppercase;
+}
+
+.gym-list__badge--sponsored {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.9), rgba(255, 165, 0, 0.9));
-  border-radius: 8px;
-  color: rgba(0, 0, 0, 0.9);
+  color: rgba(0, 0, 0, 0.92);
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.35);
+}
+
+.gym-list__badge--featured {
+  background: rgba(59, 130, 246, 0.22);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  color: #bfdbfe;
+}
+
+.gym-list__badge--trending {
+  background: rgba(244, 114, 182, 0.2);
+  border: 1px solid rgba(244, 114, 182, 0.4);
+  color: #fbcfe8;
+}
+
+.gym-list__badge--standard {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--light-text-color);
+}
+
+.gym-highlight__discovery-banner {
+  align-items: center;
+  border-radius: 18px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1.2rem;
+}
+
+.gym-highlight__discovery-banner small {
+  color: inherit;
+  display: block;
+  margin-bottom: 0.2rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.gym-highlight__discovery-banner strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.gym-highlight__discovery-banner p {
+  color: inherit;
+  margin: 0;
+  max-width: 48rem;
+  opacity: 0.9;
+}
+
+.gym-highlight__discovery-banner--sponsored {
+  background: linear-gradient(120deg, rgba(255, 215, 0, 0.12), rgba(255, 165, 0, 0.15));
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 22px 40px rgba(255, 215, 0, 0.18);
+  color: rgba(255, 215, 0, 1);
+}
+
+.gym-highlight__discovery-banner--featured {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  color: #bfdbfe;
+}
+
+.gym-highlight__discovery-banner--trending {
+  background: rgba(244, 114, 182, 0.14);
+  border: 1px solid rgba(244, 114, 182, 0.32);
+  color: #fbcfe8;
+}
+
+.gym-highlight__discovery-tier {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: inherit;
   font-size: 0.7rem;
   font-weight: 700;
-  padding: 0.25rem 0.6rem;
+  padding: 0.35rem 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
 }
 
 .gym-filters {
@@ -184,34 +353,6 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
-}
-
-
-.gym-highlight__sponsored-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: linear-gradient(120deg, rgba(255, 215, 0, 0.12), rgba(255, 165, 0, 0.15));
-  border: 1px solid rgba(255, 215, 0, 0.5);
-  border-radius: 18px;
-  padding: 0.9rem 1.2rem;
-  font-weight: 600;
-  color: rgba(255, 215, 0, 1);
-  box-shadow: 0 22px 40px rgba(255, 215, 0, 0.25);
-}
-
-.gym-highlight__sponsored-icon {
-  font-size: 1.25rem;
-}
-
-.gym-highlight__sponsored-tier {
-  background: rgba(255, 215, 0, 0.2);
-  border-radius: 6px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-left: auto;
 }
 
 
@@ -400,5 +541,17 @@
 
   .gym-explorer__sidebar {
     position: static;
+  }
+
+  .gym-list__item button,
+  .gym-highlight__discovery-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gym-list__stats {
+    align-items: flex-start;
+    margin-left: 0;
+    text-align: left;
   }
 }

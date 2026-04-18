@@ -8,6 +8,7 @@ import { matchesAcrossFields } from '../../utils/search.js';
 import ProductFilters from './components/ProductFilters.jsx';
 import ProductCard from './components/ProductCard.jsx';
 import { saveBuyNowCheckoutItem } from './checkoutState.js';
+import { readViewedMarketplaceProducts, trackViewedMarketplaceProduct } from './marketplaceStorage.js';
 import './MarketplacePage.css';
 
 const PAGE_SIZE = 24;
@@ -39,6 +40,7 @@ const MarketplacePage = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [viewedProducts, setViewedProducts] = useState(() => readViewedMarketplaceProducts());
 
   useEffect(() => {
     if (!feedback) {
@@ -211,6 +213,62 @@ const MarketplacePage = () => {
     };
   }, [categoryOptions.length, serverProducts]);
 
+  const featuredCollections = useMemo(() => {
+    const grouped = productPool.reduce((acc, product) => {
+      const category = product?.category ?? 'other';
+      const current = acc.get(category) ?? {
+        category,
+        count: 0,
+        totalRating: 0,
+        totalDiscount: 0,
+        sellerIds: new Set(),
+        leader: null,
+      };
+
+      current.count += 1;
+      current.totalRating += Number(product?.reviews?.averageRating ?? 0);
+      current.totalDiscount += Number(product?.discountPercentage ?? 0);
+      if (product?.seller?.id) {
+        current.sellerIds.add(product.seller.id);
+      }
+      if (!current.leader || Number(product?.reviews?.count ?? 0) > Number(current.leader?.reviews?.count ?? 0)) {
+        current.leader = product;
+      }
+
+      acc.set(category, current);
+      return acc;
+    }, new Map());
+
+    return [...grouped.values()]
+      .map((entry) => ({
+        category: entry.category,
+        label: formatCategoryLabel(entry.category),
+        count: entry.count,
+        sellerCount: entry.sellerIds.size,
+        avgRating: entry.count ? (entry.totalRating / entry.count).toFixed(1) : '0.0',
+        avgDiscount: entry.count ? Math.round(entry.totalDiscount / entry.count) : 0,
+        leader: entry.leader,
+      }))
+      .sort((left, right) => (
+        Number(right.avgRating) - Number(left.avgRating)
+        || right.count - left.count
+      ))
+      .slice(0, 3);
+  }, [productPool]);
+
+  const viewedRecommendations = useMemo(() => {
+    if (!viewedProducts.length) {
+      return [];
+    }
+
+    const pool = productPool.length ? productPool : serverProducts;
+    const productMap = new Map(pool.map((product) => [String(product.id), product]));
+    return viewedProducts
+      .map((entry) => productMap.get(String(entry.id)))
+      .filter(Boolean)
+      .slice(0, 4);
+  }, [productPool, serverProducts, viewedProducts]);
+
   const updateFilters = (partial) => {
     setFilters((prev) => ({ ...prev, ...partial }));
   };
@@ -279,6 +337,7 @@ const MarketplacePage = () => {
     if (!product?.id) {
       return;
     }
+    setViewedProducts(trackViewedMarketplaceProduct(product));
     navigate(`/marketplace/products/${product.id}`);
   }, [navigate]);
 
@@ -356,6 +415,65 @@ const MarketplacePage = () => {
         />
 
         <section className="marketplace-results">
+          {featuredCollections.length ? (
+            <section className="marketplace-merchandising">
+              <div className="marketplace-section-header">
+                <div>
+                  <h2>Featured collections</h2>
+                  <p>Browse the strongest live categories based on rating, catalogue depth, and seller variety.</p>
+                </div>
+              </div>
+              <div className="marketplace-collections">
+                {featuredCollections.map((collection) => (
+                  <button
+                    key={collection.category}
+                    type="button"
+                    className="marketplace-collection-card"
+                    onClick={() => {
+                      updateFilters({ category: collection.category, sort: 'featured' });
+                      setSearchInput('');
+                      setSearchQuery('');
+                      setPage(1);
+                    }}
+                  >
+                    <small>{collection.label}</small>
+                    <strong>{collection.count} live products</strong>
+                    <p>
+                      Avg rating {collection.avgRating} · {collection.sellerCount} seller{collection.sellerCount === 1 ? '' : 's'}
+                    </p>
+                    <span>
+                      {collection.avgDiscount > 0
+                        ? `Average discount ${collection.avgDiscount}%`
+                        : `Led by ${collection.leader?.name ?? 'top products'}`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {viewedRecommendations.length ? (
+            <section className="marketplace-merchandising">
+              <div className="marketplace-section-header">
+                <div>
+                  <h2>Because you viewed</h2>
+                  <p>Jump back into recently viewed products without rebuilding your search.</p>
+                </div>
+              </div>
+              <div className="product-grid product-grid--compact">
+                {viewedRecommendations.map((product) => (
+                  <ProductCard
+                    key={`viewed-${product.id}`}
+                    product={product}
+                    onAddToCart={handleAddToCart}
+                    onBuyNow={handleBuyNow}
+                    onViewDetails={handleViewDetails}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="marketplace-results__header">
             <div>
               <h2>Results</h2>

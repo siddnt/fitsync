@@ -118,6 +118,118 @@
   line-height: 1.4;
 }
 
+.gym-membership-actions__benefits {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+}
+
+.gym-membership-actions__benefits header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  justify-content: space-between;
+}
+
+.gym-membership-actions__benefits header strong {
+  color: var(--light-text-color);
+}
+
+.gym-membership-actions__benefits header span {
+  color: var(--muted-text-color);
+  font-size: 0.82rem;
+}
+
+.gym-membership-actions__benefits ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding-left: 1rem;
+}
+
+.gym-membership-actions__benefits li {
+  color: var(--muted-text-color);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.gym-membership-actions__trainer-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.gym-membership-actions__trainer-option {
+  align-items: flex-start;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.gym-membership-actions__trainer-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.gym-membership-actions__trainer-option.is-selected {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.gym-membership-actions__trainer-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gym-membership-actions__trainer-option-top {
+  align-items: baseline;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.gym-membership-actions__trainer-option-top strong {
+  color: var(--light-text-color);
+  font-size: 0.95rem;
+}
+
+.gym-membership-actions__trainer-option-top span {
+  color: var(--muted-text-color);
+  font-size: 0.8rem;
+}
+
+.gym-membership-actions__trainer-option-headline {
+  color: var(--muted-text-color);
+  font-size: 0.84rem;
+  margin: 0;
+}
+
+.gym-membership-actions__trainer-option-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gym-membership-actions__trainer-option-tags span {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  font-size: 0.74rem;
+  padding: 0.22rem 0.55rem;
+}
+
 .gym-membership-actions__label select,
 .gym-membership-actions__label input[type="text"] {
   background: rgba(0, 0, 0, 0.22);

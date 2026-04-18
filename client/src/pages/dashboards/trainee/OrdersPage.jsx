@@ -15,16 +15,10 @@ import {
   formatDateTime,
   formatStatus,
 } from '../../../utils/format.js';
+import { printInvoiceDocument } from '../../../utils/invoice.js';
 import '../Dashboard.css';
 
 const ORDER_TRACKING_STEPS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
-
-const escapeHtml = (value) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;');
 
 const getAmount = (value) => {
   if (value === null || value === undefined) {
@@ -131,86 +125,6 @@ const getReturnWindowCopy = (item) => {
   const deadline = new Date(deliveredEntry.updatedAt);
   deadline.setDate(deadline.getDate() + 7);
   return `Return window closes on ${formatDateTime(deadline)}`;
-};
-
-const buildInvoiceMarkup = (order) => {
-  const itemRows = (order.items ?? [])
-    .map((item) => `
-      <tr>
-        <td>${escapeHtml(item.name)}</td>
-        <td>${escapeHtml(String(item.quantity ?? 0))}</td>
-        <td>${escapeHtml(formatCurrency(item.price))}</td>
-        <td>${escapeHtml(formatCurrency(item.subtotal))}</td>
-      </tr>
-    `)
-    .join('');
-
-  return `
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <title>Invoice ${escapeHtml(order.orderNumber ?? 'Order')}</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
-          h1, h2, h3, p { margin: 0; }
-          .header, .meta, .totals { display: flex; justify-content: space-between; gap: 24px; }
-          .header { align-items: flex-start; margin-bottom: 24px; }
-          .meta, .totals { margin-top: 24px; }
-          .card { border: 1px solid #d1d5db; border-radius: 12px; padding: 16px; flex: 1; }
-          table { border-collapse: collapse; margin-top: 24px; width: 100%; }
-          th, td { border-bottom: 1px solid #e5e7eb; padding: 12px; text-align: left; }
-          th { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
-          .totals-row { display: flex; justify-content: space-between; margin: 8px 0; }
-          .total-strong { font-size: 18px; font-weight: 700; }
-          .muted { color: #6b7280; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1>FitSync Invoice</h1>
-            <p class="muted">Order ${escapeHtml(order.orderNumber ?? '-')}</p>
-          </div>
-          <div>
-            <p><strong>Issued:</strong> ${escapeHtml(formatDateTime(order.createdAt))}</p>
-            <p><strong>Payment:</strong> ${escapeHtml(order.paymentMethod ?? 'N/A')}</p>
-          </div>
-        </div>
-
-        <div class="meta">
-          <div class="card">
-            <h3>Ship to</h3>
-            <p style="margin-top: 8px;">${escapeHtml([
-              [order.shippingAddress?.firstName, order.shippingAddress?.lastName].filter(Boolean).join(' '),
-              order.shippingAddress?.phone,
-              formatShippingAddress(order.shippingAddress),
-              order.shippingAddress?.email,
-            ].filter(Boolean).join('\n'))}</p>
-          </div>
-          <div class="card">
-            <h3>Order summary</h3>
-            <div class="totals-row"><span>Subtotal</span><span>${escapeHtml(formatCurrency(order.subtotal))}</span></div>
-            <div class="totals-row"><span>Tax</span><span>${escapeHtml(formatCurrency(order.tax))}</span></div>
-            <div class="totals-row"><span>Shipping</span><span>${escapeHtml(formatCurrency(order.shippingCost))}</span></div>
-            <div class="totals-row total-strong"><span>Total</span><span>${escapeHtml(formatCurrency(order.total))}</span></div>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Unit price</th>
-              <th>Line total</th>
-            </tr>
-          </thead>
-          <tbody>${itemRows}</tbody>
-        </table>
-      </body>
-    </html>
-  `;
 };
 
 const TraineeOrdersPage = () => {
@@ -353,20 +267,10 @@ const TraineeOrdersPage = () => {
   };
 
   const handlePrintInvoice = (order) => {
-    if (typeof window === 'undefined') {
-      return;
+    const result = printInvoiceDocument(order);
+    if (!result.ok) {
+      setPageError(result.error);
     }
-
-    const invoiceWindow = window.open('', '_blank', 'noopener,noreferrer');
-    if (!invoiceWindow) {
-      setPageError('Allow pop-ups to print the invoice for this order.');
-      return;
-    }
-
-    invoiceWindow.document.write(buildInvoiceMarkup(order));
-    invoiceWindow.document.close();
-    invoiceWindow.focus();
-    invoiceWindow.print();
   };
 
   if (isLoading) {

@@ -64,6 +64,12 @@
   color: #fca5a5;
 }
 
+.internal-communications__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .internal-communications__form {
   display: grid;
   gap: 1rem;
@@ -218,6 +224,17 @@
   margin: 0;
 }
 
+.internal-communications__thread-person {
+  color: var(--light-text-color);
+  font-weight: 600;
+}
+
+.internal-communications__thread-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .internal-communications__thread-preview {
   color: rgba(255, 255, 255, 0.82);
   display: -webkit-box;
@@ -258,6 +275,11 @@
 .internal-communications__pill--archived {
   background: rgba(251, 191, 36, 0.14);
   color: #fde68a;
+}
+
+.internal-communications__pill--reply {
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
 }
 
 .internal-communications__thread-panel {

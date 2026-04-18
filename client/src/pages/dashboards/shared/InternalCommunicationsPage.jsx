@@ -15,6 +15,19 @@ const formatRoleLabel = (role) => {
   return role.replace(/-/g, ' ');
 };
 
+const formatContextLabel = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  return value
+    .replace(/-/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
+};
+
 const getCounterpart = (thread, currentUserId) =>
   (thread.participants ?? [])
     .find((participant) => String(participant.user?._id ?? participant.user) !== String(currentUserId))
@@ -129,6 +142,29 @@ const InternalCommunicationsPage = () => {
       });
     return [...map.values()].sort((left, right) => left.name.localeCompare(right.name));
   }, [ownedGyms, threads]);
+
+  const threadSummary = useMemo(
+    () => threads.reduce((summary, thread) => {
+      const lastMessage = getLastMessage(thread);
+      const lastSenderId = String(lastMessage?.sender?._id ?? lastMessage?.sender ?? '');
+      const isAwaitingReply = !thread.isArchived && lastMessage && lastSenderId !== String(currentUserId);
+
+      return {
+        total: summary.total + 1,
+        unread: summary.unread + (thread.unreadCount ? 1 : 0),
+        archived: summary.archived + (thread.isArchived ? 1 : 0),
+        gymLinked: summary.gymLinked + (thread.gym?.name ? 1 : 0),
+        awaitingReply: summary.awaitingReply + (isAwaitingReply ? 1 : 0),
+      };
+    }, {
+      total: 0,
+      unread: 0,
+      archived: 0,
+      gymLinked: 0,
+      awaitingReply: 0,
+    }),
+    [threads, currentUserId],
+  );
 
   const activeThread = useMemo(
     () => threads.find((thread) => String(thread._id) === String(selectedThreadId)) ?? threads[0] ?? null,
@@ -250,6 +286,31 @@ const InternalCommunicationsPage = () => {
           {errorNotice || notice}
         </div>
       ) : null}
+
+      <section className="internal-communications__summary">
+        <div className="stat-grid">
+          <div className="stat-card">
+            <small>Total threads</small>
+            <strong>{threadSummary.total}</strong>
+            <small>Visible with the current filters</small>
+          </div>
+          <div className="stat-card">
+            <small>Unread threads</small>
+            <strong>{threadSummary.unread}</strong>
+            <small>Need attention from your inbox</small>
+          </div>
+          <div className="stat-card">
+            <small>Awaiting your reply</small>
+            <strong>{threadSummary.awaitingReply}</strong>
+            <small>Open loops where the last message came from the other side</small>
+          </div>
+          <div className="stat-card">
+            <small>Gym-linked threads</small>
+            <strong>{threadSummary.gymLinked}</strong>
+            <small>{threadSummary.archived} archived for record keeping</small>
+          </div>
+        </div>
+      </section>
 
       <section className="internal-communications__composer">
         <h2>Start a conversation</h2>
@@ -380,6 +441,8 @@ const InternalCommunicationsPage = () => {
                 const counterpart = getCounterpart(thread, currentUserId);
                 const isActive = String(thread._id) === String(activeThread?._id);
                 const lastMessage = getLastMessage(thread);
+                const lastSenderId = String(lastMessage?.sender?._id ?? lastMessage?.sender ?? '');
+                const awaitingReply = !thread.isArchived && lastMessage && lastSenderId !== String(currentUserId);
 
                 return (
                   <button
@@ -392,10 +455,24 @@ const InternalCommunicationsPage = () => {
                       <strong>{thread.subject}</strong>
                       <small>{new Date(thread.lastMessageAt).toLocaleString()}</small>
                     </div>
-                    <p>
-                      {counterpart?.user?.name ?? 'Unknown'} ({formatRoleLabel(counterpart?.role)})
+                    <p className="internal-communications__thread-person">
+                      {counterpart?.user?.name ?? 'Unknown'} ({formatRoleLabel(counterpart?.role) || 'unknown'})
                     </p>
-                    {thread.gym?.name ? <small>Gym: {thread.gym.name}</small> : <small>No gym context</small>}
+                    <div className="internal-communications__thread-context">
+                      {counterpart?.role ? (
+                        <span className="internal-communications__pill">
+                          {formatContextLabel(counterpart.role)}
+                        </span>
+                      ) : null}
+                      {thread.category ? (
+                        <span className="internal-communications__pill">
+                          {formatContextLabel(thread.category)}
+                        </span>
+                      ) : null}
+                      <span className="internal-communications__pill">
+                        {thread.gym?.name ? `Gym: ${thread.gym.name}` : 'No gym context'}
+                      </span>
+                    </div>
                     <p className="internal-communications__thread-preview">
                       {lastMessage?.body || 'No message preview yet.'}
                     </p>
@@ -409,6 +486,9 @@ const InternalCommunicationsPage = () => {
                       )}
                       {thread.isArchived ? (
                         <span className="internal-communications__pill internal-communications__pill--archived">Archived</span>
+                      ) : null}
+                      {awaitingReply ? (
+                        <span className="internal-communications__pill internal-communications__pill--reply">Needs reply</span>
                       ) : null}
                     </div>
                   </button>
@@ -427,7 +507,23 @@ const InternalCommunicationsPage = () => {
                         {' '}
                         ({formatRoleLabel(getCounterpart(activeThread, currentUserId)?.role)})
                       </p>
-                      {activeThread.gym?.name ? <small>Gym: {activeThread.gym.name}</small> : null}
+                      <div className="internal-communications__thread-context">
+                        {activeThread.category ? (
+                          <span className="internal-communications__pill">
+                            {formatContextLabel(activeThread.category)}
+                          </span>
+                        ) : null}
+                        {activeThread.gym?.name ? (
+                          <span className="internal-communications__pill">
+                            Gym: {activeThread.gym.name}
+                          </span>
+                        ) : (
+                          <span className="internal-communications__pill">No gym context</span>
+                        )}
+                        {activeThread.isArchived ? (
+                          <span className="internal-communications__pill internal-communications__pill--archived">Archived</span>
+                        ) : null}
+                      </div>
                       <small>Last updated {new Date(activeThread.lastMessageAt).toLocaleString()}</small>
                     </div>
                     <div className="internal-communications__thread-actions">

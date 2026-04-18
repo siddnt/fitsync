@@ -19,7 +19,7 @@ const CheckoutCancelPage = () => {
           If you experienced any issues during checkout, please try again or contact our support team.
         </p>
         <div className="checkout-cancel__actions">
-          <Link to="/marketplace/checkout" className="btn btn-primary">
+          <Link to="/checkout" className="btn btn-primary">
             Return to Checkout
           </Link>
           <Link to="/marketplace" className="btn btn-secondary">

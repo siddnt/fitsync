@@ -38,6 +38,7 @@ const AdminGymsPage = lazy(() => import('../pages/dashboards/admin/GymsPage.jsx'
 const AdminGymDetailsPage = lazy(() => import('../pages/dashboards/admin/GymDetailsPage.jsx'));
 const AdminRevenuePage = lazy(() => import('../pages/dashboards/admin/RevenuePage.jsx'));
 const AdminMarketplacePage = lazy(() => import('../pages/dashboards/admin/MarketplacePage.jsx'));
+const AdminOpsPage = lazy(() => import('../pages/dashboards/admin/OpsPage.jsx'));
 const AdminMessagesPage = lazy(() => import('../pages/dashboards/admin/MessagesPage.jsx'));
 const AdminAuditLogsPage = lazy(() => import('../pages/dashboards/admin/AuditLogsPage.jsx'));
 const AdminSettingsPage = lazy(() => import('../pages/dashboards/admin/SettingsPage.jsx'));
@@ -116,6 +117,7 @@ const AppRouter = () => (
             <Route path="gyms/:gymId" element={<AdminGymDetailsPage />} />
             <Route path="revenue" element={<AdminRevenuePage />} />
             <Route path="marketplace" element={<AdminMarketplacePage />} />
+            <Route path="ops" element={<AdminOpsPage />} />
             <Route path="communications" element={<InternalCommunicationsPage />} />
             <Route path="messages" element={<AdminMessagesPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />

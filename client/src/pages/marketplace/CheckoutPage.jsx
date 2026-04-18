@@ -15,6 +15,13 @@ import {
   saveBuyNowCheckoutItem,
   writePendingOrderSnapshot,
 } from './checkoutState.js';
+import {
+  getMarketplacePromoDefinition,
+  readMarketplacePromoCode,
+  readSavedCheckoutAddresses,
+  saveCheckoutAddress,
+  removeSavedCheckoutAddress,
+} from './marketplaceStorage.js';
 
 const phonePattern = /^[0-9]{10}$/;
 const pinPattern = /^[0-9]{6}$/;
@@ -44,10 +51,17 @@ const CheckoutPage = () => {
   const [formState, setFormState] = useState(() => initialAddressState(user));
   const [error, setError] = useState(null);
   const [order, setOrder] = useState(null);
+  const [saveAddressForLater, setSaveAddressForLater] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState([]);
 
   const isLoading = isCreatingOrder || isCreatingSession;
   const isCardPayment = formState.paymentMethod === 'Credit / Debit Card';
   const isBuyNowMode = searchParams.get('mode') === 'buy-now';
+  const userAddressKey = user?._id ?? user?.id ?? user?.email ?? '';
+  const appliedPromo = useMemo(
+    () => getMarketplacePromoDefinition(readMarketplacePromoCode()),
+    [],
+  );
 
   const buyNowStateItem = useMemo(
     () => normalizeCheckoutItem(location.state?.checkoutMode === 'buy-now' ? location.state?.checkoutItem : null),
@@ -87,6 +101,14 @@ const CheckoutPage = () => {
     }));
   }, [user?.firstName, user?.lastName, user?.email]);
 
+  useEffect(() => {
+    if (!userAddressKey) {
+      setSavedAddresses([]);
+      return;
+    }
+    setSavedAddresses(readSavedCheckoutAddresses(userAddressKey));
+  }, [userAddressKey]);
+
   const totals = useMemo(() => {
     const subtotal = checkoutItems.reduce(
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
@@ -116,6 +138,17 @@ const CheckoutPage = () => {
     }
 
     setFormState((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const applySavedAddress = (address) => {
+    if (!address) {
+      return;
+    }
+    setFormState((prev) => ({
+      ...prev,
+      ...address,
+      paymentMethod: prev.paymentMethod,
+    }));
   };
 
   const handleSubmit = async (event) => {
@@ -154,6 +187,21 @@ const CheckoutPage = () => {
       return;
     }
 
+    const shippingAddress = {
+      firstName: formState.firstName.trim(),
+      lastName: formState.lastName.trim(),
+      email: formState.email.trim(),
+      phone: formState.phone.trim(),
+      address: formState.address.trim(),
+      city: formState.city.trim(),
+      state: formState.state.trim(),
+      zipCode: formState.zipCode.trim(),
+    };
+
+    if (saveAddressForLater && userAddressKey) {
+      setSavedAddresses(saveCheckoutAddress(userAddressKey, shippingAddress));
+    }
+
     try {
       // Handle card payment with Stripe redirect
       if (formState.paymentMethod === 'Credit / Debit Card') {
@@ -162,16 +210,7 @@ const CheckoutPage = () => {
             productId: item.id,
             quantity: item.quantity,
           })),
-          shippingAddress: {
-            firstName: formState.firstName.trim(),
-            lastName: formState.lastName.trim(),
-            email: formState.email.trim(),
-            phone: formState.phone.trim(),
-            address: formState.address.trim(),
-            city: formState.city.trim(),
-            state: formState.state.trim(),
-            zipCode: formState.zipCode.trim(),
-          },
+          shippingAddress,
         };
 
         // Store order snapshot in sessionStorage for success page
@@ -189,6 +228,9 @@ const CheckoutPage = () => {
           shippingCost: totals.shipping,
           total: totals.total,
           shippingAddress: payload.shippingAddress,
+          promoCode: appliedPromo?.code ?? null,
+          promoLabel: appliedPromo?.label ?? null,
+          promoSummary: appliedPromo?.summary ?? null,
         };
         writePendingOrderSnapshot(orderSnapshot);
 
@@ -208,21 +250,17 @@ const CheckoutPage = () => {
             productId: item.id,
             quantity: item.quantity,
           })),
-          shippingAddress: {
-            firstName: formState.firstName.trim(),
-            lastName: formState.lastName.trim(),
-            email: formState.email.trim(),
-            phone: formState.phone.trim(),
-            address: formState.address.trim(),
-            city: formState.city.trim(),
-            state: formState.state.trim(),
-            zipCode: formState.zipCode.trim(),
-          },
+          shippingAddress,
           paymentMethod: formState.paymentMethod,
         };
 
         const response = await createOrder(payload).unwrap();
-        setOrder(response?.data?.order ?? null);
+        setOrder(response?.data?.order ? {
+          ...response.data.order,
+          promoCode: appliedPromo?.code ?? null,
+          promoLabel: appliedPromo?.label ?? null,
+          promoSummary: appliedPromo?.summary ?? null,
+        } : null);
         if (isBuyNowMode) {
           clearBuyNowCheckoutItem();
         } else {
@@ -250,6 +288,9 @@ const CheckoutPage = () => {
         </header>
         <div className="checkout-success">
           <p className="checkout-success__number">Order number: {order.orderNumber}</p>
+          {order.promoSummary ? (
+            <p className="checkout-success__info">Promo perk: {order.promoSummary}</p>
+          ) : null}
           <ul className="checkout-success__items">
             {(order.items ?? []).map((item) => (
               <li key={item.id}>
@@ -307,6 +348,37 @@ const CheckoutPage = () => {
 
       <div className="checkout-layout">
         <form className="checkout-form" onSubmit={handleSubmit}>
+          {savedAddresses.length ? (
+            <div className="checkout-address-book">
+              <div className="checkout-address-book__header">
+                <strong>Saved addresses</strong>
+                <span>Use a previous address instead of typing everything again.</span>
+              </div>
+              <div className="checkout-address-book__list">
+                {savedAddresses.map((entry) => (
+                  <article key={entry.id} className="checkout-address-card">
+                    <p>{entry.address?.address}</p>
+                    <small>
+                      {[entry.address?.city, entry.address?.state, entry.address?.zipCode].filter(Boolean).join(', ')}
+                    </small>
+                    <div className="checkout-address-card__actions">
+                      <button type="button" onClick={() => applySavedAddress(entry.address)}>
+                        Use this address
+                      </button>
+                      <button
+                        type="button"
+                        className="checkout-address-card__remove"
+                        onClick={() => setSavedAddresses(removeSavedCheckoutAddress(userAddressKey, entry.id))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="checkout-form__grid">
             <label>
               First name
@@ -408,6 +480,14 @@ const CheckoutPage = () => {
               <option value="Credit / Debit Card">Credit / Debit Card</option>
             </select>
           </label>
+          <label className="checkout-form__toggle">
+            <input
+              type="checkbox"
+              checked={saveAddressForLater}
+              onChange={(event) => setSaveAddressForLater(event.target.checked)}
+            />
+            <span>Save this address for faster checkout next time.</span>
+          </label>
           <button type="submit" disabled={isLoading || !user}>
             {isLoading ? (isCardPayment ? 'Connecting to payment...' : 'Processing...') : (isCardPayment ? 'Continue to payment' : 'Place order')}
           </button>
@@ -444,6 +524,13 @@ const CheckoutPage = () => {
               <dd>{formatCurrency(totals.total)}</dd>
             </div>
           </dl>
+          {appliedPromo ? (
+            <div className="checkout-summary__promo">
+              <strong>Promo perk: {appliedPromo.label}</strong>
+              <p>{appliedPromo.summary}</p>
+              <small>Live pricing remains unchanged in this demo checkout.</small>
+            </div>
+          ) : null}
         </aside>
       </div>
     </div>

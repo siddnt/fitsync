@@ -16,7 +16,7 @@ import {
 import SponsorshipForm from '../../../features/monetisation/SponsorshipForm.jsx';
 import { setLastReceipt, selectGym, selectSponsorshipTier } from '../../../features/monetisation/monetisationSlice.js';
 import { downloadReport } from '../../../utils/reportDownload.js';
-import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
+import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
 const GymOwnerSponsorshipPage = () => {
@@ -64,6 +64,7 @@ const GymOwnerSponsorshipPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [reportNotice, setReportNotice] = useState(null);
   const [reportError, setReportError] = useState(null);
+  const [sponsorshipDraft, setSponsorshipDraft] = useState(null);
 
   const sponsorshipGymOptions = useMemo(() => {
     const visibleGyms = gymOptions.map((gym) => ({ value: gym.id, label: gym.name ?? 'Unnamed gym' }));
@@ -75,15 +76,40 @@ const GymOwnerSponsorshipPage = () => {
       return sponsorships;
     }
     return sponsorships.filter((item) => item.id === sponsorshipGymFilter);
-  }, [sponsorships, sponsorshipGymFilter]);
+  }, [sponsorshipGymFilter, sponsorships]);
 
-  const isLoading = isSponsorshipLoading || isGymsLoading || isPackagesLoading;
-  const isError = isSponsorshipError || isGymsError || isPackagesError;
+  const initialValues = useMemo(() => ({
+    gymId: sponsorshipDraft?.gymId ?? (gymOptions.length === 1 ? gymOptions[0].id : ''),
+    tier: sponsorshipDraft?.tier ?? (packages[0]?.tier ?? ''),
+  }), [gymOptions, packages, sponsorshipDraft]);
 
-  const initialValues = {
-    gymId: gymOptions.length === 1 ? gymOptions[0].id : '',
-    tier: packages[0]?.tier ?? '',
-  };
+  const packageComparison = useMemo(
+    () => packages.map((pkg) => {
+      const activeGymCount = sponsorships.filter((item) => item.sponsorship?.tier === pkg.tier).length;
+      return {
+        ...pkg,
+        activeGymCount,
+      };
+    }),
+    [packages, sponsorships],
+  );
+
+  const sponsorshipSummary = useMemo(() => {
+    const totalImpressions = filteredSponsorships.reduce((sum, item) => sum + Number(item.impressions30d ?? 0), 0);
+    const totalOpens = filteredSponsorships.reduce((sum, item) => sum + Number(item.opens30d ?? 0), 0);
+    const totalJoins = filteredSponsorships.reduce((sum, item) => sum + Number(item.joins30d ?? 0), 0);
+    const averageReachUtilization = filteredSponsorships.length
+      ? Math.round(filteredSponsorships.reduce((sum, item) => sum + Number(item.reachUtilization30d ?? 0), 0) / filteredSponsorships.length)
+      : 0;
+
+    return {
+      activeCount: filteredSponsorships.length,
+      totalImpressions,
+      totalOpens,
+      totalJoins,
+      averageReachUtilization,
+    };
+  }, [filteredSponsorships]);
 
   const handlePurchase = async (values) => {
     try {
@@ -104,6 +130,7 @@ const GymOwnerSponsorshipPage = () => {
 
       await Promise.all([refetchSponsorships(), refetchGyms()]);
       dispatch(resetForm('sponsorshipPurchase'));
+      setSponsorshipDraft(null);
     } catch (error) {
       const message = error?.data?.message ?? 'We could not activate this sponsorship. Please try again.';
       throw new SubmissionError({ _error: message });
@@ -137,6 +164,16 @@ const GymOwnerSponsorshipPage = () => {
     }
   };
 
+  const handlePrepareSponsorship = (gymId, tier) => {
+    setSponsorshipDraft({ gymId, tier });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const isLoading = isSponsorshipLoading || isGymsLoading || isPackagesLoading;
+  const isError = isSponsorshipError || isGymsError || isPackagesError;
+
   if (isLoading) {
     return (
       <div className="dashboard-grid dashboard-grid--owner">
@@ -166,14 +203,78 @@ const GymOwnerSponsorshipPage = () => {
     <div className="dashboard-grid dashboard-grid--owner">
       <DashboardSection title="Launch sponsorship" className="dashboard-section--span-12">
         {gymOptions.length && packages.length ? (
-          <SponsorshipForm
-            onSubmit={handlePurchase}
-            gymOptions={gymOptions}
-            packages={packages}
-            initialValues={initialValues}
-          />
+          <>
+            {sponsorshipDraft ? (
+              <div className="dashboard-controls" style={{ marginBottom: '1rem' }}>
+                <span className="dashboard-timeframe-label">
+                  Sponsorship preset ready for {gymOptions.find((gym) => gym.id === sponsorshipDraft.gymId)?.name ?? 'selected gym'}
+                  {' | '}
+                  {formatStatus(sponsorshipDraft.tier)}
+                </span>
+                <button type="button" className="ghost-button" onClick={() => setSponsorshipDraft(null)}>
+                  Clear preset
+                </button>
+              </div>
+            ) : null}
+            <SponsorshipForm
+              onSubmit={handlePurchase}
+              gymOptions={gymOptions}
+              packages={packages}
+              initialValues={initialValues}
+            />
+          </>
         ) : (
           <EmptyState message="Add a gym and ensure packages are available to launch sponsorships." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Package comparisons" className="dashboard-section--span-12">
+        {packageComparison.length ? (
+          <div className="owner-plan-grid">
+            {packageComparison.map((pkg) => (
+              <article key={pkg.tier} className="owner-plan-card owner-plan-card--sponsorship">
+                <header className="owner-plan-card__header">
+                  <div>
+                    <p className="owner-plan-card__eyebrow">Tier comparison</p>
+                    <h4>{pkg.label}</h4>
+                    <small>{formatStatus(pkg.tier)}</small>
+                  </div>
+                  <span className="owner-plan-card__status">
+                    {formatCurrency({ amount: pkg.amount })}
+                  </span>
+                </header>
+                <dl className="owner-plan-card__metrics">
+                  <div>
+                    <dt>Monthly budget</dt>
+                    <dd>{formatCurrency({ amount: pkg.monthlyBudget })}</dd>
+                  </div>
+                  <div>
+                    <dt>Estimated reach</dt>
+                    <dd>{formatNumber(pkg.reach)}</dd>
+                  </div>
+                  <div>
+                    <dt>Active gyms</dt>
+                    <dd>{pkg.activeGymCount}</dd>
+                  </div>
+                </dl>
+                <p className="owner-plan-card__note">
+                  Use this tier when you need clearer paid reach without relying only on organic gym discovery.
+                </p>
+                <div className="dashboard-card-link-row">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => handlePrepareSponsorship(gymOptions[0]?.id ?? '', pkg.tier)}
+                    disabled={!gymOptions.length}
+                  >
+                    Use this package
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Sponsorship package options are unavailable right now." />
         )}
       </DashboardSection>
 
@@ -216,6 +317,28 @@ const GymOwnerSponsorshipPage = () => {
       >
         {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
         {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
+        <div className="stat-grid" style={{ marginBottom: '1rem' }}>
+          <div className="stat-card">
+            <small>Active campaigns</small>
+            <strong>{sponsorshipSummary.activeCount}</strong>
+            <small>Visible in the current sponsorship filter</small>
+          </div>
+          <div className="stat-card">
+            <small>30-day impressions</small>
+            <strong>{formatNumber(sponsorshipSummary.totalImpressions)}</strong>
+            <small>{formatNumber(sponsorshipSummary.totalOpens)} gym opens</small>
+          </div>
+          <div className="stat-card">
+            <small>30-day joins</small>
+            <strong>{formatNumber(sponsorshipSummary.totalJoins)}</strong>
+            <small>Attributed to sponsored gyms in the last 30 days</small>
+          </div>
+          <div className="stat-card">
+            <small>Reach utilization</small>
+            <strong>{sponsorshipSummary.averageReachUtilization}%</strong>
+            <small>Average 30-day package reach utilization</small>
+          </div>
+        </div>
         {filteredSponsorships.length ? (
           <div className="owner-plan-grid">
             {filteredSponsorships.map((item) => (
@@ -227,28 +350,45 @@ const GymOwnerSponsorshipPage = () => {
                     <small>{formatStatus(item.sponsorship?.tier)}</small>
                   </div>
                   <span className="owner-plan-card__status">
-                    {item.sponsorship?.monthlyBudget ? `${formatNumber(item.sponsorship.monthlyBudget)} credits` : 'Custom budget'}
+                    {formatCurrency({ amount: item.sponsorship?.monthlyBudget ?? item.sponsorship?.amount ?? 0 })}
                   </span>
                 </header>
                 <dl className="owner-plan-card__metrics">
                   <div>
                     <dt>Impressions (30d)</dt>
-                    <dd>{formatNumber(item.impressions30d ?? item.impressions ?? 0)}</dd>
+                    <dd>{formatNumber(item.impressions30d ?? 0)}</dd>
                   </div>
                   <div>
-                    <dt>Started</dt>
-                    <dd>{formatDate(item.sponsorship?.startDate)}</dd>
+                    <dt>Opens (30d)</dt>
+                    <dd>{formatNumber(item.opens30d ?? 0)}</dd>
                   </div>
                   <div>
-                    <dt>Status</dt>
-                    <dd>{formatStatus(item.sponsorship?.status ?? item.sponsorship?.tier)}</dd>
+                    <dt>Joins (30d)</dt>
+                    <dd>{formatNumber(item.joins30d ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cost / join</dt>
+                    <dd>{item.spendPerJoin ? formatCurrency({ amount: item.spendPerJoin }) : '--'}</dd>
                   </div>
                 </dl>
-                {item.sponsorship?.notes ? (
-                  <p className="owner-plan-card__note">{item.sponsorship.notes}</p>
-                ) : (
-                  <p className="owner-plan-card__note">Keep engagement high by refreshing creatives monthly.</p>
-                )}
+                <p className="owner-plan-card__note">
+                  {formatStatus(item.sponsorship?.tier)} tier drove {item.openToJoinRate30d ?? 0}% open-to-join conversion and used {item.reachUtilization30d ?? 0}% of the package reach in the last 30 days.
+                </p>
+                <details className="owner-plan-card__details">
+                  <summary>Spend outcomes</summary>
+                  <p>Started {formatDate(item.sponsorship?.startDate)} | Status {formatStatus(item.sponsorship?.status ?? item.sponsorship?.tier)}</p>
+                  <p>Cost per open: {item.spendPerOpen ? formatCurrency({ amount: item.spendPerOpen }) : '--'}</p>
+                  <p>Package reach: {formatNumber(item.sponsorship?.reach ?? 0)} | Reach utilization: {item.reachUtilization30d ?? 0}%</p>
+                </details>
+                <div className="dashboard-card-link-row">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => handlePrepareSponsorship(item.id, item.sponsorship?.tier ?? packages[0]?.tier ?? '')}
+                  >
+                    Adjust package
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -268,14 +408,16 @@ const GymOwnerSponsorshipPage = () => {
               const active = sponsorships.find((s) => s.id === gym.id);
               if (active) {
                 return (
-                  <li key={`${gym.id}-active`}>Keep {gym.name} in the spotlight with {formatStatus(active.sponsorship?.tier)} tier placements.</li>
+                  <li key={`${gym.id}-active`}>
+                    {gym.name} is currently {formatStatus(active.sponsorship?.tier)}. Recent performance: {formatNumber(active.impressions30d ?? 0)} impressions, {formatNumber(active.opens30d ?? 0)} opens, {formatNumber(active.joins30d ?? 0)} joins.
+                  </li>
                 );
               }
 
               const recommendedTier = packages.find((pkg) => pkg.tier === 'gold') ?? packages[0];
               return (
                 <li key={`${gym.id}-recommendation`}>
-                  Upgrade {gym.name} with the {recommendedTier?.label ?? 'recommended'} package to convert {formatNumber(gym.analytics?.impressions30d ?? gym.analytics?.impressions ?? 0)} recent impressions.
+                  Upgrade {gym.name} with the {recommendedTier?.label ?? 'recommended'} package to convert {formatNumber(gym.analytics?.impressions30d ?? gym.analytics?.impressions ?? 0)} recent impressions into more gym opens.
                 </li>
               );
             })}

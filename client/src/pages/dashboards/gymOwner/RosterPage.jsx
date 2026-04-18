@@ -8,6 +8,7 @@ import {
   useRemoveGymMemberMutation,
 } from '../../../services/ownerApi.js';
 import { useGetTrainerAvailabilityQuery } from '../../../services/trainerApi.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import { downloadCsvFile } from '../../../utils/csvExport.js';
 import '../Dashboard.css';
@@ -182,6 +183,7 @@ const GymOwnerRosterPage = () => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activePerson, setActivePerson] = useState(null);
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const rosterGyms = useMemo(
     () => (Array.isArray(rosterResponse?.data?.gyms) ? rosterResponse.data.gyms : []),
@@ -204,13 +206,16 @@ const GymOwnerRosterPage = () => {
       return;
     }
 
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(`Remove ${name ?? 'this trainer'} from ${gymName}?`);
-      if (!confirmed) {
-        return;
-      }
+    const confirmed = await confirm({
+      title: 'Remove trainer',
+      message: `Remove ${name ?? 'this trainer'} from ${gymName}? Their assignment history will be preserved, but they will no longer be active for this gym.`,
+      confirmLabel: 'Remove trainer',
+      cancelLabel: 'Keep trainer',
+      tone: 'warning',
+    });
+    if (!confirmed) {
+      return;
     }
-
     resetRosterAlerts();
     setRemovalContext({ type: 'trainer', id: assignmentId });
 
@@ -231,13 +236,16 @@ const GymOwnerRosterPage = () => {
       return;
     }
 
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(`Remove ${name ?? 'this member'} from ${gymName}?`);
-      if (!confirmed) {
-        return;
-      }
+    const confirmed = await confirm({
+      title: 'Remove member',
+      message: `Remove ${name ?? 'this member'} from ${gymName}? Their membership will be ended and they will lose roster access for this gym.`,
+      confirmLabel: 'Remove member',
+      cancelLabel: 'Keep member',
+      tone: 'danger',
+    });
+    if (!confirmed) {
+      return;
     }
-
     resetRosterAlerts();
     setRemovalContext({ type: 'member', id: membershipId });
 
@@ -290,6 +298,38 @@ const GymOwnerRosterPage = () => {
       })
       .filter(Boolean);
   }, [rosterGyms, searchTerm, selectedGymId]);
+
+  const rosterSummary = useMemo(() => {
+    const members = filteredGyms.flatMap((gym) => gym.trainees ?? []);
+    const trainers = filteredGyms.flatMap((gym) => gym.trainers ?? []);
+    const expiringSoon = members.filter((member) => {
+      if (!member.endDate) {
+        return false;
+      }
+      const daysUntilEnd = (new Date(member.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      return daysUntilEnd >= 0 && daysUntilEnd <= 14;
+    }).length;
+    const staleCheckIns = members.filter((member) => {
+      if (!member.checkIn?.lastDate) {
+        return true;
+      }
+      const daysSinceCheckIn = (Date.now() - new Date(member.checkIn.lastDate).getTime()) / (1000 * 60 * 60 * 24);
+      return daysSinceCheckIn > 7;
+    }).length;
+    const averagePresentRate = members.length
+      ? Math.round(
+          members.reduce((sum, member) => sum + Number(member.attendance?.presentPercentage ?? 0), 0) / members.length,
+        )
+      : 0;
+
+    return {
+      members: members.length,
+      trainers: trainers.length,
+      expiringSoon,
+      staleCheckIns,
+      averagePresentRate,
+    };
+  }, [filteredGyms]);
 
   const exportRows = useMemo(() => filteredGyms.flatMap((gym) => {
     const rows = [];
@@ -397,6 +437,29 @@ const GymOwnerRosterPage = () => {
             </div>
           )}
         >
+          <div className="stat-grid" style={{ marginBottom: '1.25rem' }}>
+            <div className="stat-card">
+              <small>Visible members</small>
+              <strong>{rosterSummary.members}</strong>
+              <small>Across the current roster filters</small>
+            </div>
+            <div className="stat-card">
+              <small>Visible trainers</small>
+              <strong>{rosterSummary.trainers}</strong>
+              <small>Assignments active or pending</small>
+            </div>
+            <div className="stat-card">
+              <small>Plans expiring soon</small>
+              <strong>{rosterSummary.expiringSoon}</strong>
+              <small>Members ending within 14 days</small>
+            </div>
+            <div className="stat-card">
+              <small>Attention needed</small>
+              <strong>{rosterSummary.staleCheckIns}</strong>
+              <small>{rosterSummary.averagePresentRate}% average present rate</small>
+            </div>
+          </div>
+
           {rosterMessage && (
             <p className="dashboard-message dashboard-message--success">{rosterMessage}</p>
           )}
@@ -574,6 +637,7 @@ const GymOwnerRosterPage = () => {
       </div>
 
       <PersonDetailDrawer person={activePerson} onClose={() => setActivePerson(null)} />
+      {confirmationModal}
     </>
   );
 };

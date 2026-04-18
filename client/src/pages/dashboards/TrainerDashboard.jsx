@@ -4,7 +4,7 @@ import NotificationsPanel from './components/NotificationsPanel.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import { useGetTrainerFeedbackQuery, useGetTrainerOverviewQuery } from '../../services/dashboardApi.js';
 import { useGetMyNotificationsQuery } from '../../services/userApi.js';
-import { formatCurrency, formatDate } from '../../utils/format.js';
+import { formatCurrency, formatDate, formatStatus } from '../../utils/format.js';
 import './Dashboard.css';
 
 const TrainerDashboard = () => {
@@ -15,8 +15,11 @@ const TrainerDashboard = () => {
     isError: isFeedbackError,
     refetch: refetchFeedback,
   } = useGetTrainerFeedbackQuery();
+
   const overview = data?.data;
   const assignments = overview?.activeAssignments ?? [];
+  const todaySessions = overview?.todaySessions ?? [];
+  const overdueUpdates = overview?.overdueProgressUpdates ?? [];
   const upcoming = overview?.upcomingCheckIns ?? [];
   const feedbackEntries = Array.isArray(feedbackData?.data?.feedback) ? feedbackData.data.feedback : [];
   const { data: notificationsResponse } = useGetMyNotificationsQuery({ limit: 6 });
@@ -25,7 +28,7 @@ const TrainerDashboard = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid">
-        {['Team snapshot', 'Active trainees', 'Upcoming check-ins'].map((title) => (
+        {['Team snapshot', "Today's sessions", 'Overdue progress updates'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
           </DashboardSection>
@@ -69,7 +72,12 @@ const TrainerDashboard = () => {
             <div className="stat-card">
               <small>Pending updates</small>
               <strong>{overview.totals.pendingUpdates}</strong>
-              <small>Need new feedback</small>
+              <small>Overdue coach feedback or progress notes</small>
+            </div>
+            <div className="stat-card">
+              <small>Today's sessions</small>
+              <strong>{overview.totals.todaysSessions ?? todaySessions.length}</strong>
+              <small>Pending or confirmed bookings on your calendar today</small>
             </div>
             <div className="stat-card">
               <small>30-day earnings</small>
@@ -79,6 +87,53 @@ const TrainerDashboard = () => {
           </div>
         ) : (
           <EmptyState message="No trainee assignments yet." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Today's sessions" className="dashboard-section--span-8">
+        {todaySessions.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Trainee</th>
+                <th>Gym</th>
+                <th>Status</th>
+                <th>Session</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todaySessions.map((session) => (
+                <tr key={session.id}>
+                  <td>{session.startTime} - {session.endTime}</td>
+                  <td>{session.trainee?.name ?? 'Trainee'}</td>
+                  <td>{session.gym?.name ?? 'Gym'}</td>
+                  <td>{formatStatus(session.status)}</td>
+                  <td>{formatStatus(session.sessionType ?? 'personal-training')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No trainer bookings scheduled for today." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Overdue progress updates" className="dashboard-section--span-4">
+        {overdueUpdates.length ? (
+          <ul>
+            {overdueUpdates.slice(0, 5).map((item, index) => (
+              <li key={`${item.trainee?.id ?? index}-overdue`}>
+                <strong>{item.trainee?.name ?? 'Trainee'}</strong>
+                {' | '}
+                {item.gym?.name ?? 'Gym'}
+                {' | '}
+                {item.daysSinceUpdate === null ? 'No coach note yet' : `${item.daysSinceUpdate} day(s) since last coach note`}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState message="All assigned trainees have recent coach updates." />
         )}
       </DashboardSection>
 
@@ -96,10 +151,10 @@ const TrainerDashboard = () => {
             <tbody>
               {assignments.map((assignment, index) => (
                 <tr key={`${assignment.trainee}-${index}`}>
-                  <td>{assignment.trainee?.name ?? '—'}</td>
-                  <td>{assignment.gym?.name ?? '—'}</td>
+                  <td>{assignment.trainee?.name ?? '--'}</td>
+                  <td>{assignment.gym?.name ?? '--'}</td>
                   <td>{formatDate(assignment.assignedAt)}</td>
-                  <td>{assignment.goals?.join(', ') || '—'}</td>
+                  <td>{assignment.goals?.join(', ') || '--'}</td>
                 </tr>
               ))}
             </tbody>
@@ -114,7 +169,10 @@ const TrainerDashboard = () => {
           <ul>
             {upcoming.map((item, index) => (
               <li key={`${item.trainee?._id ?? index}-checkin`}>
-                <strong>{item.trainee?.name ?? 'Trainee'}</strong> · Last attendance {formatDate(item.latestAttendance?.date)} ·{' '}
+                <strong>{item.trainee?.name ?? 'Trainee'}</strong>
+                {' | '}
+                Last attendance {formatDate(item.latestAttendance?.date)}
+                {' | '}
                 {item.nextFeedback ? `Feedback logged ${formatDate(item.nextFeedback.createdAt)}` : 'Feedback due'}
               </li>
             ))}
@@ -141,7 +199,7 @@ const TrainerDashboard = () => {
                 <header>
                   <div>
                     <strong>{entry.trainee?.name ?? 'Trainee'}</strong>
-                    <small>{entry.gym?.name ?? '—'}</small>
+                    <small>{entry.gym?.name ?? '--'}</small>
                   </div>
                   <small>{formatDate(entry.createdAt)}</small>
                 </header>

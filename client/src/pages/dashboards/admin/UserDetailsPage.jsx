@@ -6,6 +6,7 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { useGetAdminUserDetailsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation } from '../../../services/adminApi.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import {
   formatCurrency,
   formatDate,
@@ -294,6 +295,7 @@ const AdminUserDetailsPage = () => {
   const [sellerExplorerSearch, setSellerExplorerSearch] = useState('');
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const user = data?.data?.user ?? null;
   const relationships = user?.relationships ?? {};
@@ -842,7 +844,13 @@ const AdminUserDetailsPage = () => {
     if (!targetUserId) return;
     setNotice(null);
     setErrorNotice(null);
-    const confirmed = window.confirm(`Remove ${formatStatus(user?.role ?? 'user').toLowerCase()} ${user.name ?? ''}? This permanently deletes the account.`);
+    const confirmed = await confirm({
+      title: 'Remove account',
+      message: `Remove ${formatStatus(user?.role ?? 'user').toLowerCase()} ${user.name ?? ''}? This permanently deletes the account and deactivates related active records.`,
+      confirmLabel: 'Remove account',
+      cancelLabel: 'Keep account',
+      tone: 'danger',
+    });
     if (!confirmed) return;
     try {
       await deleteUser(targetUserId).unwrap();
@@ -1356,6 +1364,7 @@ const AdminUserDetailsPage = () => {
           </>
         ) : null}
       </DashboardSection>
+      {confirmationModal}
     </div>
   );
 };

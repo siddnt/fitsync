@@ -169,6 +169,13 @@ const AdminDashboard = () => {
           : 'No clustered action detected',
       to: '/dashboard/admin/audit-logs',
     },
+    {
+      id: 'ops',
+      label: 'System ops',
+      value: formatQuickCount(pendingTickets + flaggedGyms, isContactsFetching || isGymsFetching),
+      meta: 'Backlog pressure and service health',
+      to: '/dashboard/admin/ops',
+    },
   ]), [
     auditSpikeSummary.count,
     auditSpikeSummary.dominantAction,
@@ -243,6 +250,7 @@ const AdminDashboard = () => {
           <Link to="/dashboard/admin/revenue">Revenue exports</Link>
           <Link to="/dashboard/admin/marketplace">Marketplace exports</Link>
           <Link to="/dashboard/admin/audit-logs">Audit exports</Link>
+          <Link to="/dashboard/admin/ops">System ops</Link>
         </div>
       </DashboardSection>
 

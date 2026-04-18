@@ -7,6 +7,7 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { useGetAdminGymDetailsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteGymMutation } from '../../../services/adminApi.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import {
   formatCurrency,
   formatDate,
@@ -264,6 +265,7 @@ const AdminGymDetailsPage = () => {
   const [relationshipSearch, setRelationshipSearch] = useState('');
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const gym = data?.data?.gym ?? null;
   const generatedAt = data?.data?.generatedAt ?? null;
@@ -596,7 +598,13 @@ const AdminGymDetailsPage = () => {
     if (!gym) return;
     setNotice(null);
     setErrorNotice(null);
-    const confirmed = window.confirm(`Remove ${gym.name ?? 'this gym'}? This will cancel memberships and listings.`);
+    const confirmed = await confirm({
+      title: 'Remove gym',
+      message: `Remove ${gym.name ?? 'this gym'}? This will cancel memberships, listings, and related monetisation records tied to the gym.`,
+      confirmLabel: 'Remove gym',
+      cancelLabel: 'Keep gym',
+      tone: 'danger',
+    });
     if (!confirmed) return;
     try {
       await deleteGymRecord(getGymId(gym)).unwrap();
@@ -1158,6 +1166,7 @@ const AdminGymDetailsPage = () => {
         )}
 
       </DashboardSection>
+      {confirmationModal}
     </div>
   );
 };

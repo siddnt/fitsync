@@ -5,6 +5,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
@@ -24,6 +25,7 @@ const AdminUsersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const roleOptions = useMemo(() => {
     const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
@@ -119,7 +121,13 @@ const AdminUsersPage = () => {
     setNotice(null);
     setErrorNotice(null);
 
-    const confirmed = window.confirm(`Delete ${user.name ?? 'this user'} permanently?`);
+    const confirmed = await confirm({
+      title: 'Delete user account',
+      message: `Delete ${user.name ?? 'this user'} permanently? This removes the account and related active workspace access.`,
+      confirmLabel: 'Delete user',
+      cancelLabel: 'Keep user',
+      tone: 'danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -334,6 +342,7 @@ const AdminUsersPage = () => {
           <EmptyState message="No users match the current filters." />
         )}
       </DashboardSection>
+      {confirmationModal}
     </div>
   );
 };

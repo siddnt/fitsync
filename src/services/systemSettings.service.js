@@ -4,10 +4,19 @@ export const DEFAULT_ADMIN_TOGGLES = {
   marketplaceEnabled: true,
   autoApproveTrainers: false,
   showBetaDashboards: false,
+  maintenanceMode: false,
+  supportInboxEnabled: true,
+  paymentCheckoutEnabled: true,
+  searchIndexingEnabled: true,
+  cacheWarmupEnabled: true,
+  orderReturnsEnabled: true,
+  gymModerationAlerts: true,
 };
 
 export const loadAdminToggles = async () => {
-  const stored = await SystemSetting.find()
+  const stored = await SystemSetting.find({
+    key: { $in: Object.keys(DEFAULT_ADMIN_TOGGLES) },
+  })
     .select('key value')
     .lean();
 

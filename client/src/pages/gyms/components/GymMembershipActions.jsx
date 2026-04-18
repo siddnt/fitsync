@@ -40,6 +40,22 @@ const resolvePlanDuration = (plan) =>
   || getMembershipPlanDefinition(plan?.code)?.durationMonths
   || 0;
 
+const describePlanFit = (durationMonths) => {
+  if (durationMonths >= 12) {
+    return 'Best value for long-term training consistency.';
+  }
+  if (durationMonths >= 6) {
+    return 'Balanced savings for a sustained fitness cycle.';
+  }
+  if (durationMonths >= 3) {
+    return 'Good for building a routine with measurable progress.';
+  }
+  if (durationMonths >= 1) {
+    return 'Flexible starting plan if you want a shorter commitment.';
+  }
+  return 'Published plan details will appear here once duration is configured.';
+};
+
 const GymMembershipActions = ({
   membership = null,
   isLoading = false,
@@ -114,6 +130,41 @@ const GymMembershipActions = ({
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
   }, [selectedTrainerDetails?.gender]);
+
+  const membershipBenefits = useMemo(() => {
+    if (!selectedPlan) {
+      return [];
+    }
+
+    const durationLabel = selectedPlanDurationMonths
+      ? formatMembershipPlanDuration(selectedPlanDurationMonths)
+      : 'Flexible billing cycle';
+    const trainerBenefit = selectedTrainerDetails
+      ? `Trainer assignment starts with ${selectedTrainerDetails.name}.`
+      : trainers.length
+        ? 'Choose one listed trainer before checkout to personalise your membership.'
+        : 'Trainer selection will open once the gym publishes its roster.';
+    const renewalBenefit = autoRenew
+      ? 'Auto-renew is enabled so access and reminders continue without a manual renewal.'
+      : 'Auto-renew is optional and currently turned off for manual control.';
+    const savingsBenefit = selectedPlanDiscount > 0
+      ? `This plan saves ${selectedPlanDiscount}% against the published MRP.`
+      : 'This plan follows the gym’s current published rate.';
+
+    return [
+      `Access duration: ${durationLabel}.`,
+      trainerBenefit,
+      savingsBenefit,
+      renewalBenefit,
+    ];
+  }, [
+    autoRenew,
+    selectedPlan,
+    selectedPlanDiscount,
+    selectedPlanDurationMonths,
+    selectedTrainerDetails,
+    trainers.length,
+  ]);
 
   useEffect(() => {
     setSelectedPlanCode((currentValue) => {
@@ -364,6 +415,7 @@ const GymMembershipActions = ({
                         ? Math.round(((mrp - price) / mrp) * 100)
                         : 0;
                       const isSelected = normalizePlanCode(selectedPlan?.code) === normalizePlanCode(plan.code);
+                      const planFocus = describePlanFit(durationMonths);
 
                       return (
                         <button
@@ -381,6 +433,9 @@ const GymMembershipActions = ({
                           <span className="gym-membership-actions__plan-card-meta">
                             {durationLabel || 'Membership duration unavailable'}
                           </span>
+                          <span className="gym-membership-actions__plan-card-meta">
+                            {planFocus}
+                          </span>
                           {mrp !== null && price !== null && mrp > price ? (
                             <span className="gym-membership-actions__plan-card-meta">
                               MRP {formatPlanAmount(mrp, currency)} / {discount}% off
@@ -395,38 +450,74 @@ const GymMembershipActions = ({
                 )}
               </div>
 
-              <label className="gym-membership-actions__label" htmlFor="gym-membership-trainer">
-                Select trainer
-                <select
-                  id="gym-membership-trainer"
-                  value={selectedTrainer}
-                  onChange={(event) => setSelectedTrainer(event.target.value)}
-                  disabled={!trainers.length || isJoining}
-                >
-                  <option value="">Choose a trainer</option>
-                  {trainers.map((trainer) => {
-                    const statusTag = trainer.status === 'pending' ? 'pending approval' : null;
-                    const traineeTag = trainer.activeTrainees ? `${trainer.activeTrainees} trainees` : null;
-                    const experienceTag = typeof trainer.experienceYears === 'number' && trainer.experienceYears > 0
-                      ? `${trainer.experienceYears} yrs exp`
-                      : null;
-                    const summary = [statusTag, experienceTag, traineeTag]
-                      .filter(Boolean)
-                      .join(' / ');
+              {selectedPlan ? (
+                <section className="gym-membership-actions__benefits" aria-live="polite">
+                  <header>
+                    <strong>What this membership includes</strong>
+                    <span>{selectedPlanLabel}</span>
+                  </header>
+                  <ul>
+                    {membershipBenefits.map((benefit) => (
+                      <li key={benefit}>{benefit}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
-                    return (
-                      <option key={trainer.id} value={trainer.id}>
-                        {trainer.name}
-                        {summary ? ` / ${summary}` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
+              <div className="gym-membership-actions__label">
+                <span>Compare trainers</span>
+                {trainers.length ? (
+                  <div className="gym-membership-actions__trainer-grid" role="radiogroup" aria-label="Select trainer">
+                    {trainers.map((trainer) => {
+                      const experienceTag = typeof trainer.experienceYears === 'number' && trainer.experienceYears > 0
+                        ? `${trainer.experienceYears} yrs exp`
+                        : null;
+                      const traineeTag = trainer.activeTrainees
+                        ? `${trainer.activeTrainees} active trainees`
+                        : null;
+                      const mentoredTag = trainer.mentoredCount
+                        ? `${trainer.mentoredCount} mentored`
+                        : null;
+                      const specializationPreview = Array.isArray(trainer.specializations)
+                        ? trainer.specializations.slice(0, 2)
+                        : [];
+                      const isSelected = trainer.id === selectedTrainer;
 
-              {!trainers.length ? (
+                      return (
+                        <button
+                          key={trainer.id}
+                          type="button"
+                          className={`gym-membership-actions__trainer-option ${isSelected ? 'is-selected' : ''}`}
+                          onClick={() => setSelectedTrainer(trainer.id)}
+                          disabled={isJoining}
+                          aria-pressed={isSelected}
+                        >
+                          <div className="gym-membership-actions__trainer-option-top">
+                            <strong>{trainer.name}</strong>
+                            {experienceTag ? <span>{experienceTag}</span> : null}
+                          </div>
+                          {trainer.headline ? (
+                            <p className="gym-membership-actions__trainer-option-headline">{trainer.headline}</p>
+                          ) : null}
+                          <div className="gym-membership-actions__trainer-option-tags">
+                            {traineeTag ? <span>{traineeTag}</span> : null}
+                            {mentoredTag ? <span>{mentoredTag}</span> : null}
+                            {specializationPreview.map((specialization) => (
+                              <span key={`${trainer.id}-${specialization}`}>{specialization}</span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="gym-membership-actions__hint">No trainers are currently available for this gym.</p>
+                )}
+              </div>
+
+              {trainers.length ? (
                 <p className="gym-membership-actions__hint">
-                  No trainers are currently available for this gym. Please check back soon.
+                  Pick the trainer whose experience and specialisations match your goal before joining.
                 </p>
               ) : null}
 

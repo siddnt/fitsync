@@ -223,6 +223,60 @@
   gap: 1.5rem;
 }
 
+.marketplace-merchandising {
+  display: grid;
+  gap: 1rem;
+}
+
+.marketplace-section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.marketplace-section-header p {
+  color: var(--muted-text-color);
+  margin: 0.35rem 0 0;
+}
+
+.marketplace-collections {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.marketplace-collection-card {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.marketplace-collection-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.marketplace-collection-card small,
+.marketplace-collection-card span,
+.marketplace-collection-card p {
+  color: var(--muted-text-color);
+}
+
+.product-grid--compact .product-card {
+  min-height: auto;
+}
+
 .marketplace-results__header {
   display: flex;
   justify-content: space-between;

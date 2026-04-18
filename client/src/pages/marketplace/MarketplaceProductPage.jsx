@@ -10,14 +10,23 @@ import { formatCurrency, formatDate, formatNumber } from '../../utils/format.js'
 import { deriveProductPricing, formatRatingLabel, formatSoldCopy } from './utils.js';
 import ProductCard from './components/ProductCard.jsx';
 import { saveBuyNowCheckoutItem } from './checkoutState.js';
+import { trackViewedMarketplaceProduct } from './marketplaceStorage.js';
 import './MarketplacePage.css';
 import './MarketplaceProductPage.css';
+
+const formatMetadataLabel = (value) => String(value ?? '')
+  .split(/[\s-_]+/)
+  .filter(Boolean)
+  .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+  .join(' ');
 
 const MarketplaceProductPage = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [feedback, setFeedback] = useState(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
 
   const {
     data,
@@ -60,13 +69,52 @@ const MarketplaceProductPage = () => {
   const soldCopy = formatSoldCopy(product?.stats?.soldLast30Days ?? 0);
   const inStock = product?.stats?.inStock !== false;
   const totalSold = Number(product?.stats?.totalSold ?? 0);
-  const sellerSummary = product?.seller?.name
-    ? `${product.seller.name}${product.seller.role ? ` | ${product.seller.role}` : ''}`
-    : 'FitSync inventory partner';
+  const sellerSummary = product?.seller?.name ?? 'FitSync inventory partner';
+  const sellerSecondary = [
+    product?.seller?.role,
+    product?.seller?.location,
+  ]
+    .filter(Boolean)
+    .join(' | ');
   const relatedProducts = useMemo(
     () => (relatedResponse?.data?.products ?? []).filter((entry) => String(entry.id) !== String(product?.id)).slice(0, 4),
     [product?.id, relatedResponse?.data?.products],
   );
+  const galleryImages = useMemo(() => {
+    const metadataGallery = [
+      product?.metadata?.gallery,
+      product?.metadata?.galleryImages,
+    ]
+      .filter(Boolean)
+      .flatMap((entry) => String(entry).split(',').map((item) => item.trim()).filter(Boolean));
+
+    return [...new Set([product?.image, ...metadataGallery].filter(Boolean))];
+  }, [product?.image, product?.metadata?.gallery, product?.metadata?.galleryImages]);
+  const selectedImage = galleryImages[selectedImageIndex] ?? galleryImages[0] ?? null;
+  const specEntries = useMemo(() => {
+    const metadata = product?.metadata && typeof product.metadata === 'object'
+      ? Object.entries(product.metadata)
+      : [];
+
+    return metadata
+      .filter(([key, value]) => value && !['imageProvider', 'imagePublicId'].includes(String(key)))
+      .map(([key, value]) => ({
+        key,
+        label: formatMetadataLabel(key),
+        value: String(value),
+      }));
+  }, [product?.metadata]);
+
+  useEffect(() => {
+    if (product?.id) {
+      trackViewedMarketplaceProduct(product);
+    }
+  }, [product]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setIsZoomOpen(false);
+  }, [product?.id]);
 
   const addProductToCart = () => {
     if (!product?.id) {
@@ -207,13 +255,34 @@ const MarketplaceProductPage = () => {
 
       <section className="product-detail__grid">
         <div className="product-detail__media">
-          {product.image ? (
-            <img src={product.image} alt={product.name} loading="eager" decoding="async" />
+          {selectedImage ? (
+            <button
+              type="button"
+              className="product-detail__media-main"
+              onClick={() => setIsZoomOpen(true)}
+            >
+              <img src={selectedImage} alt={product.name} loading="eager" decoding="async" />
+              <span className="product-detail__zoom-hint">Click to zoom</span>
+            </button>
           ) : (
             <div className="product-detail__placeholder">
               {(product.name ?? '?').slice(0, 1)}
             </div>
           )}
+          {galleryImages.length ? (
+            <div className="product-detail__media-strip">
+              {galleryImages.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  className={`product-detail__thumbnail ${index === selectedImageIndex ? 'is-active' : ''}`}
+                  onClick={() => setSelectedImageIndex(index)}
+                >
+                  <img src={image} alt={`${product.name} view ${index + 1}`} loading="lazy" />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="product-detail__content">
@@ -253,6 +322,7 @@ const MarketplaceProductPage = () => {
             <li>Category: <strong>{product.category ?? 'Uncategorised'}</strong></li>
             <li>{inStock ? 'Estimated delivery in 3-5 business days' : 'Delivery resumes once stock is back'}</li>
             <li>Return support is handled from your orders dashboard after delivery.</li>
+            {specEntries.length ? <li>{specEntries.length} published product specifications available below.</li> : null}
           </ul>
 
           <div className="product-detail__actions">
@@ -277,7 +347,31 @@ const MarketplaceProductPage = () => {
 
         <aside className="product-detail__meta">
           <h2>Seller summary</h2>
-          <p className="product-detail__seller-name">{sellerSummary}</p>
+          <div className="product-detail__seller-card">
+            {product?.seller?.avatar ? (
+              <img
+                src={product.seller.avatar}
+                alt={sellerSummary}
+                className="product-detail__seller-avatar"
+              />
+            ) : (
+              <div className="product-detail__seller-avatar product-detail__seller-avatar--placeholder" aria-hidden="true">
+                {sellerSummary.slice(0, 1)}
+              </div>
+            )}
+            <div>
+              <p className="product-detail__seller-name">{sellerSummary}</p>
+              {sellerSecondary ? (
+                <p className="product-detail__seller-role">{sellerSecondary}</p>
+              ) : null}
+              {product?.seller?.headline ? (
+                <p className="product-detail__seller-role">{product.seller.headline}</p>
+              ) : null}
+            </div>
+          </div>
+          {product?.seller?.about ? (
+            <p className="product-detail__seller-about">{product.seller.about}</p>
+          ) : null}
           <dl>
             <div>
               <dt>Status</dt>
@@ -291,6 +385,16 @@ const MarketplaceProductPage = () => {
               <dt>Return policy</dt>
               <dd>Request returns from your orders page after delivery.</dd>
             </div>
+            {product?.seller?.website ? (
+              <div>
+                <dt>Seller site</dt>
+                <dd>
+                  <a href={product.seller.website} target="_blank" rel="noreferrer">
+                    Visit store profile
+                  </a>
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt>Updated</dt>
               <dd>{formatDate(product.updatedAt)}</dd>
@@ -326,6 +430,12 @@ const MarketplaceProductPage = () => {
             <dt>Dispatch</dt>
             <dd>{inStock ? 'Usually within 24 hours' : 'Pending restock confirmation'}</dd>
           </div>
+          {specEntries.map((entry) => (
+            <div key={entry.key}>
+              <dt>{entry.label}</dt>
+              <dd>{entry.value}</dd>
+            </div>
+          ))}
         </dl>
       </section>
 
@@ -375,6 +485,24 @@ const MarketplaceProductPage = () => {
             ))}
           </div>
         </section>
+      ) : null}
+
+      {isZoomOpen && selectedImage ? (
+        <div className="product-detail__zoom-overlay" role="presentation" onClick={() => setIsZoomOpen(false)}>
+          <button
+            type="button"
+            className="product-detail__zoom-close"
+            onClick={() => setIsZoomOpen(false)}
+          >
+            Close
+          </button>
+          <img
+            src={selectedImage}
+            alt={`${product.name} enlarged view`}
+            className="product-detail__zoom-image"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
       ) : null}
     </div>
   );

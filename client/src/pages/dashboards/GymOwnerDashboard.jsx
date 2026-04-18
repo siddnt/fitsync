@@ -1,10 +1,13 @@
+import { Link } from 'react-router-dom';
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
 import {
+  useGetGymOwnerGymsQuery,
   useGetGymOwnerOverviewQuery,
   useGetGymOwnerSubscriptionsQuery,
 } from '../../services/dashboardApi.js';
+import { useGetTrainerRequestsQuery } from '../../services/ownerApi.js';
 import {
   formatCurrency,
   formatDate,
@@ -27,16 +30,68 @@ const GymOwnerDashboard = () => {
     isError: isSubscriptionsError,
     refetch: refetchSubscriptions,
   } = useGetGymOwnerSubscriptionsQuery();
+  const {
+    data: gymsResponse,
+    isLoading: isGymsLoading,
+    isError: isGymsError,
+    refetch: refetchGyms,
+  } = useGetGymOwnerGymsQuery();
+  const {
+    data: trainerRequestsResponse,
+    isLoading: isTrainerRequestsLoading,
+    isError: isTrainerRequestsError,
+    refetch: refetchTrainerRequests,
+  } = useGetTrainerRequestsQuery();
 
-  const isLoading = isOverviewLoading || isSubscriptionsLoading;
-  const isError = isOverviewError || isSubscriptionsError;
+  const isLoading = isOverviewLoading || isSubscriptionsLoading || isGymsLoading || isTrainerRequestsLoading;
+  const isError = isOverviewError || isSubscriptionsError || isGymsError || isTrainerRequestsError;
 
   const overview = overviewResponse?.data;
   const subscriptions = subscriptionsResponse?.data?.subscriptions ?? [];
+  const gyms = gymsResponse?.data?.gyms ?? [];
+  const trainerRequests = trainerRequestsResponse?.data?.requests ?? [];
+  const expiringMembershipsCount = gyms.reduce((sum, gym) => sum + (gym.members?.expiringSoon ?? 0), 0);
+  const incompleteListingCount = gyms.filter((gym) => (
+    Number(gym.listingCompleteness ?? 0) < 85
+    || !gym.isPublished
+    || gym.status !== 'active'
+  )).length;
+  const listingHealthLabel = incompleteListingCount
+    ? `${incompleteListingCount} listing${incompleteListingCount === 1 ? '' : 's'} need attention`
+    : 'All owner listings are healthy';
+  const dashboardActions = [
+    {
+      label: 'Expiring memberships',
+      value: expiringMembershipsCount,
+      description: expiringMembershipsCount
+        ? 'Members with plans ending in the next 14 days.'
+        : 'No member plans are expiring in the next 14 days.',
+      href: '/dashboard/gym-owner/people',
+      cta: 'Review roster',
+    },
+    {
+      label: 'Trainer requests',
+      value: trainerRequests.length,
+      description: trainerRequests.length
+        ? 'Pending trainer approvals are waiting in the gyms workspace.'
+        : 'No pending trainer assignment requests right now.',
+      href: '/dashboard/gym-owner/gyms',
+      cta: 'Open gym workspace',
+    },
+    {
+      label: 'Listing health',
+      value: `${Math.max(0, gyms.length - incompleteListingCount)}/${gyms.length || 0}`,
+      description: listingHealthLabel,
+      href: '/dashboard/gym-owner/gyms',
+      cta: 'Fix listings',
+    },
+  ];
 
   const refetchAll = () => {
     refetchOverview();
     refetchSubscriptions();
+    refetchGyms();
+    refetchTrainerRequests();
   };
 
   if (isLoading) {
@@ -97,6 +152,23 @@ const GymOwnerDashboard = () => {
         ) : (
           <EmptyState message="Add your first gym to start tracking performance." />
         )}
+      </DashboardSection>
+
+      <DashboardSection title="Action center" className="dashboard-section--span-12">
+        <div className="stat-grid">
+          {dashboardActions.map((action) => (
+            <div key={action.label} className="stat-card">
+              <small>{action.label}</small>
+              <strong>{action.value}</strong>
+              <small>{action.description}</small>
+              <div className="dashboard-card-link-row">
+                <Link to={action.href} className="pill dashboard-pill-link">
+                  {action.cta}
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
       </DashboardSection>
 
       <DashboardSection title="Expiring subscriptions" className="dashboard-section--span-6">

@@ -135,6 +135,13 @@ const GymHighlight = ({
   }
 
   const isSponsored = gym.sponsorship?.status === 'active' && gym.sponsorship?.tier !== 'none';
+  const discovery = gym.discovery ?? (isSponsored
+    ? {
+      tone: 'sponsored',
+      label: gym.sponsorship?.tier ? `${gym.sponsorship.tier} sponsor` : 'Sponsored',
+      reason: 'Prioritised placement from an active sponsorship package.',
+    }
+    : null);
   const currencyPrefix = gym.pricing?.currency === 'INR' || !gym.pricing?.currency ? 'Rs ' : `${gym.pricing.currency} `;
   const headlinePrice = parseAmount(gym.pricing?.startingAt ?? gym.pricing?.discounted ?? gym.pricing?.mrp);
   const headlineMrp = parseAmount(
@@ -153,22 +160,35 @@ const GymHighlight = ({
     gym.contact?.email,
     gym.contact?.website,
   ].filter(Boolean).join(' | ') || 'Contact details not published';
-  const workingDayLabel = Array.isArray(gym.schedule?.days) && gym.schedule.days.length
-    ? gym.schedule.days.map((day) => formatStatus(day)).join(', ')
+  const workingDays = Array.isArray(gym.schedule?.workingDays)
+    ? gym.schedule.workingDays
+    : Array.isArray(gym.schedule?.days)
+      ? gym.schedule.days
+      : [];
+  const workingDayLabel = workingDays.length
+    ? workingDays.map((day) => formatStatus(day)).join(', ')
     : 'Working days not published';
   const timingLabel = gym.schedule?.open && gym.schedule?.close
     ? `${gym.schedule.open} - ${gym.schedule.close}`
     : 'Timings not published';
+  const trainerSummary = trainers.length
+    ? `${trainers.length} trainer${trainers.length > 1 ? 's' : ''} available`
+    : 'Trainer roster not published';
 
   return (
     <article className="gym-highlight">
-      {isSponsored && (
-        <div className="gym-highlight__sponsored-banner">
-          <span className="gym-highlight__sponsored-icon" />
-          <span>Sponsored Listing</span>
-          <span className="gym-highlight__sponsored-tier">{gym.sponsorship.tier}</span>
+      {discovery ? (
+        <div className={`gym-highlight__discovery-banner gym-highlight__discovery-banner--${discovery.tone ?? 'standard'}`}>
+          <div>
+            <small>Discovery status</small>
+            <strong>{discovery.label}</strong>
+            <p>{discovery.reason}</p>
+          </div>
+          {isSponsored ? (
+            <span className="gym-highlight__discovery-tier">{gym.sponsorship?.tier ?? 'sponsored'}</span>
+          ) : null}
         </div>
-      )}
+      ) : null}
       <header className="gym-highlight__header">
         <div>
           <h1>{gym.name}</h1>
@@ -221,6 +241,10 @@ const GymHighlight = ({
         <div>
           <strong>Timings</strong>
           <span>{timingLabel}</span>
+        </div>
+        <div>
+          <strong>Trainer roster</strong>
+          <span>{trainerSummary}</span>
         </div>
       </section>
 
@@ -409,6 +433,11 @@ GymHighlight.propTypes = {
     sponsorship: PropTypes.shape({
       status: PropTypes.string,
       tier: PropTypes.string,
+    }),
+    discovery: PropTypes.shape({
+      tone: PropTypes.string,
+      label: PropTypes.string,
+      reason: PropTypes.string,
     }),
     analytics: PropTypes.shape({
       rating: PropTypes.number,

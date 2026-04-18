@@ -3,6 +3,7 @@ import {
   getAdminGyms,
   getAdminMarketplace,
   getAdminOverview,
+  getAdminOpsStatus,
   getAdminRevenue,
   getAdminUsers,
   getAdminUserDetails,
@@ -65,6 +66,7 @@ router.get('/admin/revenue', authorizeRoles('admin'), getAdminRevenue);
 router.get('/admin/revenue/export', authorizeRoles('admin'), exportAdminRevenueReport);
 router.get('/admin/marketplace', authorizeRoles('admin'), getAdminMarketplace);
 router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
+router.get('/admin/ops', authorizeRoles('admin'), getAdminOpsStatus);
 
 router.get('/manager/overview', authorizeRoles('manager'), getManagerOverview);
 

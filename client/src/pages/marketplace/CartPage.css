@@ -170,6 +170,58 @@
   box-shadow: 0 18px 36px rgba(229, 9, 20, 0.38);
 }
 
+.cart-summary__promo {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cart-summary__promo-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cart-summary__promo-header button,
+.cart-summary__promo-row button,
+.cart-summary__promo-chips button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  padding: 0.45rem 0.95rem;
+}
+
+.cart-summary__promo-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.cart-summary__promo-row input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: var(--light-text-color);
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  text-transform: uppercase;
+}
+
+.cart-summary__promo-note {
+  color: var(--muted-text-color);
+  font-size: 0.84rem;
+  margin: 0;
+}
+
+.cart-summary__promo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .cart-empty {
   align-items: center;
   background: rgba(255, 255, 255, 0.03);

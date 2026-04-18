@@ -25,6 +25,41 @@ const TOGGLE_DEFINITIONS = [
     label: 'Show beta dashboards',
     description: 'Expose experimental analytics views to internal roles for validation.',
   },
+  {
+    key: 'maintenanceMode',
+    label: 'Maintenance mode',
+    description: 'Temporarily pause member-facing activity while administrators perform platform maintenance.',
+  },
+  {
+    key: 'supportInboxEnabled',
+    label: 'Support inbox enabled',
+    description: 'Keep the public support and contact intake available for new tickets.',
+  },
+  {
+    key: 'paymentCheckoutEnabled',
+    label: 'Payments enabled',
+    description: 'Allow marketplace checkout and paid flows to proceed for end users.',
+  },
+  {
+    key: 'searchIndexingEnabled',
+    label: 'Search indexing enabled',
+    description: 'Keep marketplace and gym-search indexing jobs active for fresh discovery results.',
+  },
+  {
+    key: 'cacheWarmupEnabled',
+    label: 'Cache warmup enabled',
+    description: 'Prime cache-heavy public experiences so traffic spikes do not hit cold reads first.',
+  },
+  {
+    key: 'orderReturnsEnabled',
+    label: 'Order returns enabled',
+    description: 'Allow buyers to request returns and refunds from delivered marketplace orders.',
+  },
+  {
+    key: 'gymModerationAlerts',
+    label: 'Gym moderation alerts',
+    description: 'Highlight suspicious listing activity for admin and manager review.',
+  },
 ];
 
 const AdminSettingsPage = () => {

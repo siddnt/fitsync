@@ -44,11 +44,61 @@
   overflow: hidden;
   aspect-ratio: 4 / 5;
   display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
   align-items: center;
   justify-content: center;
 }
 
-.product-detail__media img {
+.product-detail__media-main {
+  background: none;
+  border: none;
+  cursor: zoom-in;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0;
+  width: 100%;
+}
+
+.product-detail__media img,
+.product-detail__media-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-detail__zoom-hint {
+  color: var(--muted-text-color);
+  font-size: 0.82rem;
+  padding: 0 0.25rem 0.25rem;
+}
+
+.product-detail__media-strip {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding: 0 0.25rem 0.25rem;
+  width: 100%;
+}
+
+.product-detail__thumbnail {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  cursor: pointer;
+  flex: 0 0 84px;
+  height: 84px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.product-detail__thumbnail.is-active {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.product-detail__thumbnail img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -168,6 +218,33 @@
   margin: 0;
 }
 
+.product-detail__seller-card {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.product-detail__seller-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.product-detail__seller-avatar--placeholder {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.product-detail__seller-about {
+  margin: 0;
+  color: var(--muted-text-color);
+  line-height: 1.6;
+}
+
 .product-detail__section {
   background: rgba(255, 255, 255, 0.02);
   border-radius: 24px;
@@ -254,4 +331,35 @@
 
 .product-detail__state--error {
   border-color: rgba(255, 138, 138, 0.4);
+}
+
+.product-detail__zoom-overlay {
+  align-items: center;
+  background: rgba(4, 6, 12, 0.92);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 2rem;
+  position: fixed;
+  z-index: 90;
+}
+
+.product-detail__zoom-image {
+  border-radius: 20px;
+  max-height: calc(100vh - 120px);
+  max-width: min(100%, 980px);
+  object-fit: contain;
+  width: auto;
+}
+
+.product-detail__zoom-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: var(--light-text-color);
+  cursor: pointer;
+  padding: 0.6rem 1.2rem;
+  position: absolute;
+  right: 2rem;
+  top: 2rem;
 }

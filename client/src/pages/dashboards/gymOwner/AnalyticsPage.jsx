@@ -16,6 +16,12 @@ const TIMEFRAME_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
+const FUNNEL_GOALS = [
+  { id: 'impression-to-open', label: 'Impression to open', target: 18, stepIndex: 1 },
+  { id: 'open-to-join', label: 'Open to join', target: 12, stepIndex: 2 },
+  { id: 'join-to-renewal', label: 'Join to renewal', target: 35, stepIndex: 3 },
+];
+
 const buildTrendArray = (trendSource) => {
   if (Array.isArray(trendSource)) {
     return trendSource;
@@ -33,6 +39,7 @@ const toCumulativeTrend = (trend, valueAccessor, valueKey) => {
   if (!Array.isArray(trend)) {
     return [];
   }
+
   let runningTotal = 0;
   return trend.map((entry) => {
     const value = Number(valueAccessor(entry)) || 0;
@@ -60,11 +67,13 @@ const GymOwnerAnalyticsPage = () => {
     const rawTrend = buildTrendArray(preferredTrend ?? trendSource);
     let cumulativeEarnings = 0;
     let cumulativeExpenses = 0;
+
     return rawTrend.map((entry) => {
       const earningsDelta = Number(entry.revenue ?? entry.profit ?? entry.value ?? entry.amount ?? 0);
       const expensesDelta = Number(entry.expenses ?? entry.spend ?? entry.cost ?? 0);
       cumulativeEarnings += earningsDelta;
       cumulativeExpenses += expensesDelta;
+
       return {
         label: entry.label ?? entry.fullLabel ?? entry.date ?? entry.week ?? '',
         earnings: cumulativeEarnings,
@@ -84,23 +93,35 @@ const GymOwnerAnalyticsPage = () => {
     );
   }, [analytics, timeframe]);
 
+  const revenuePeriods = useMemo(() => {
+    const trendSource = analytics?.revenueTrend;
+    const preferredTrend = trendSource?.[timeframe];
+    const rawTrend = buildTrendArray(preferredTrend ?? trendSource);
+
+    return rawTrend.map((entry) => ({
+      label: entry.fullLabel ?? entry.label ?? entry.date ?? entry.week ?? '',
+      revenue: Number(entry.revenue ?? entry.value ?? entry.amount ?? 0),
+      expenses: Number(entry.expenses ?? entry.spend ?? entry.cost ?? 0),
+      profit: Number(
+        entry.profit
+        ?? (Number(entry.revenue ?? entry.value ?? entry.amount ?? 0)
+          - Number(entry.expenses ?? entry.spend ?? entry.cost ?? 0)),
+      ),
+    }));
+  }, [analytics, timeframe]);
+
   const revenueSummary = useMemo(() => {
-    const summarySource = analytics?.revenueSummary?.[timeframe]
-      ?? analytics?.revenueSummary;
+    const summarySource = analytics?.revenueSummary?.[timeframe] ?? analytics?.revenueSummary;
 
-    const baseSummary = summarySource
-      ? {
-          netProfit: summarySource.totalProfit ?? summarySource.netProfit ?? 0,
-          revenue: summarySource.totalRevenue ?? summarySource.revenue ?? 0,
-          marketplaceSpend: summarySource.totalExpenses ?? summarySource.expenses ?? 0,
-        }
-      : null;
-
-    if (baseSummary) {
-      return baseSummary;
+    if (summarySource) {
+      return {
+        netProfit: summarySource.totalProfit ?? summarySource.netProfit ?? 0,
+        revenue: summarySource.totalRevenue ?? summarySource.revenue ?? 0,
+        marketplaceSpend: summarySource.totalExpenses ?? summarySource.expenses ?? 0,
+      };
     }
 
-    if (!revenueTrend?.length) {
+    if (!revenueTrend.length) {
       return null;
     }
 
@@ -116,7 +137,7 @@ const GymOwnerAnalyticsPage = () => {
     () => analytics?.gyms?.map((gym) => ({
       name: gym.name,
       value: gym.impressions30d ?? 0,
-    })),
+    })) ?? [],
     [analytics?.gyms],
   );
 
@@ -135,47 +156,93 @@ const GymOwnerAnalyticsPage = () => {
   const funnelTotals = analytics?.conversionFunnel?.totals ?? {};
 
   const funnelRateCards = useMemo(
-    () => funnelSteps
-      .slice(1)
-      .map((step, index) => ({
-        id: step.id,
-        label: `${funnelSteps[index]?.label ?? 'Previous'} to ${step.label}`,
-        rate: step.conversionFromPrevious ?? 0,
-        fromValue: funnelSteps[index]?.value ?? 0,
-        toValue: step.value ?? 0,
-      })),
+    () => funnelSteps.slice(1).map((step, index) => ({
+      id: step.id,
+      label: `${funnelSteps[index]?.label ?? 'Previous'} to ${step.label}`,
+      rate: step.conversionFromPrevious ?? 0,
+      fromValue: funnelSteps[index]?.value ?? 0,
+      toValue: step.value ?? 0,
+    })),
     [funnelSteps],
   );
 
-  const gymConversionLeaders = useMemo(() => {
+  const periodBenchmarks = useMemo(() => {
+    if (!revenuePeriods.length) {
+      return { best: null, worst: null };
+    }
+
+    return revenuePeriods.reduce(
+      (acc, period) => ({
+        best: !acc.best || period.profit > acc.best.profit ? period : acc.best,
+        worst: !acc.worst || period.profit < acc.worst.profit ? period : acc.worst,
+      }),
+      { best: null, worst: null },
+    );
+  }, [revenuePeriods]);
+
+  const gymConversionMetrics = useMemo(() => {
     if (!Array.isArray(analytics?.gyms)) {
       return [];
     }
 
-    return analytics.gyms
-      .map((gym) => {
-        const impressions30d = Number(gym.impressions30d) || 0;
-        const opens30d = Number(gym.opens30d) || 0;
-        const joins30d = Number(gym.joins30d) || 0;
-        const renewals30d = Number(gym.renewals30d) || 0;
+    return analytics.gyms.map((gym) => {
+      const impressions30d = Number(gym.impressions30d) || 0;
+      const opens30d = Number(gym.opens30d) || 0;
+      const joins30d = Number(gym.joins30d) || 0;
+      const renewals30d = Number(gym.renewals30d) || 0;
 
-        return {
-          ...gym,
-          impressionToOpenRate30d: impressions30d ? Number(((opens30d / impressions30d) * 100).toFixed(1)) : 0,
-          openToJoinRate30d: Number(gym.joinConversionRate30d) || 0,
-          joinToRenewalRate30d: joins30d ? Number(((renewals30d / joins30d) * 100).toFixed(1)) : 0,
-        };
-      })
-      .sort((left, right) => {
-        if (right.openToJoinRate30d !== left.openToJoinRate30d) {
-          return right.openToJoinRate30d - left.openToJoinRate30d;
-        }
-        if (right.joinToRenewalRate30d !== left.joinToRenewalRate30d) {
-          return right.joinToRenewalRate30d - left.joinToRenewalRate30d;
-        }
-        return (right.joins30d ?? 0) - (left.joins30d ?? 0);
-      });
+      return {
+        ...gym,
+        impressionToOpenRate30d: impressions30d ? Number(((opens30d / impressions30d) * 100).toFixed(1)) : 0,
+        openToJoinRate30d: Number(gym.joinConversionRate30d) || 0,
+        joinToRenewalRate30d: joins30d ? Number(((renewals30d / joins30d) * 100).toFixed(1)) : 0,
+      };
+    });
   }, [analytics?.gyms]);
+
+  const gymConversionLeaders = useMemo(
+    () => [...gymConversionMetrics].sort((left, right) => {
+      if (right.openToJoinRate30d !== left.openToJoinRate30d) {
+        return right.openToJoinRate30d - left.openToJoinRate30d;
+      }
+      if (right.joinToRenewalRate30d !== left.joinToRenewalRate30d) {
+        return right.joinToRenewalRate30d - left.joinToRenewalRate30d;
+      }
+      return (right.joins30d ?? 0) - (left.joins30d ?? 0);
+    }),
+    [gymConversionMetrics],
+  );
+
+  const gymConversionLaggards = useMemo(
+    () => [...gymConversionMetrics].sort((left, right) => {
+      if (left.openToJoinRate30d !== right.openToJoinRate30d) {
+        return left.openToJoinRate30d - right.openToJoinRate30d;
+      }
+      if (left.joinToRenewalRate30d !== right.joinToRenewalRate30d) {
+        return left.joinToRenewalRate30d - right.joinToRenewalRate30d;
+      }
+      return (left.joins30d ?? 0) - (right.joins30d ?? 0);
+    }),
+    [gymConversionMetrics],
+  );
+
+  const goalThresholds = useMemo(
+    () => FUNNEL_GOALS.map((goal) => {
+      const step = funnelSteps[goal.stepIndex];
+      const previousStep = funnelSteps[goal.stepIndex - 1];
+      const actual = Number(step?.conversionFromPrevious ?? 0);
+      const delta = Number((actual - goal.target).toFixed(1));
+
+      return {
+        ...goal,
+        actual,
+        delta,
+        fromValue: previousStep?.value ?? 0,
+        toValue: step?.value ?? 0,
+      };
+    }),
+    [funnelSteps],
+  );
 
   const handleExportMemberships = async () => {
     setReportNotice(null);
@@ -271,14 +338,12 @@ const GymOwnerAnalyticsPage = () => {
                   {formatCurrency(revenueSummary.netProfit)}
                 </strong>
               </div>
-
               <div className="owner-revenue-chart__metric">
                 <span>Revenue</span>
                 <strong className="owner-revenue-chart__value owner-revenue-chart__value--positive">
                   {formatCurrency(revenueSummary.revenue)}
                 </strong>
               </div>
-
               <div className="owner-revenue-chart__metric">
                 <span>Marketplace spend</span>
                 <strong className="owner-revenue-chart__value owner-revenue-chart__value--negative">
@@ -289,7 +354,7 @@ const GymOwnerAnalyticsPage = () => {
           </div>
         ) : null}
 
-        {revenueTrend?.length ? (
+        {revenueTrend.length ? (
           <RevenueSummaryChart
             role="gym-owner"
             data={revenueTrend}
@@ -306,6 +371,7 @@ const GymOwnerAnalyticsPage = () => {
 
       <DashboardSection
         title="Membership trend"
+        className="dashboard-section--span-12"
         action={(
           <div className="dashboard-controls">
             <span className="dashboard-timeframe-label">
@@ -330,11 +396,10 @@ const GymOwnerAnalyticsPage = () => {
             </button>
           </div>
         )}
-        className="dashboard-section--span-12"
       >
         {reportNotice ? <p className="dashboard-message dashboard-message--success">{reportNotice}</p> : null}
         {reportError ? <p className="dashboard-message dashboard-message--error">{reportError}</p> : null}
-        {membershipTrend?.length ? (
+        {membershipTrend.length ? (
           <GrowthLineChart
             role="gym-owner"
             data={membershipTrend}
@@ -388,6 +453,55 @@ const GymOwnerAnalyticsPage = () => {
       </DashboardSection>
 
       <DashboardSection
+        title="Benchmark context"
+        className="dashboard-section--span-12"
+        action={<span className="dashboard-timeframe-label">Best and weakest periods for the selected timeframe</span>}
+      >
+        {(periodBenchmarks.best || gymConversionLeaders.length) ? (
+          <div className="stat-grid">
+            <div className="stat-card">
+              <small>Best profit period</small>
+              <strong>{periodBenchmarks.best?.label ?? '--'}</strong>
+              <small>
+                {periodBenchmarks.best
+                  ? `${formatCurrency(periodBenchmarks.best.profit)} net profit | ${formatCurrency(periodBenchmarks.best.revenue)} revenue`
+                  : 'We need more revenue history to identify a best period.'}
+              </small>
+            </div>
+            <div className="stat-card">
+              <small>Weakest profit period</small>
+              <strong>{periodBenchmarks.worst?.label ?? '--'}</strong>
+              <small>
+                {periodBenchmarks.worst
+                  ? `${formatCurrency(periodBenchmarks.worst.profit)} net profit | ${formatCurrency(periodBenchmarks.worst.expenses)} spend`
+                  : 'We need more revenue history to identify a weakest period.'}
+              </small>
+            </div>
+            <div className="stat-card">
+              <small>Best gym conversion</small>
+              <strong>{gymConversionLeaders[0]?.name ?? '--'}</strong>
+              <small>
+                {gymConversionLeaders[0]
+                  ? `${formatPercentage(gymConversionLeaders[0].openToJoinRate30d)} open to join | ${formatPercentage(gymConversionLeaders[0].joinToRenewalRate30d)} join to renewal`
+                  : 'No gym traffic yet.'}
+              </small>
+            </div>
+            <div className="stat-card">
+              <small>Weakest gym conversion</small>
+              <strong>{gymConversionLaggards[0]?.name ?? '--'}</strong>
+              <small>
+                {gymConversionLaggards[0]
+                  ? `${formatPercentage(gymConversionLaggards[0].openToJoinRate30d)} open to join | ${formatPercentage(gymConversionLaggards[0].impressionToOpenRate30d)} impression to open`
+                  : 'No gym traffic yet.'}
+              </small>
+            </div>
+          </div>
+        ) : (
+          <EmptyState message="Benchmark cards will appear once revenue periods and gym traffic are available." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
         title="Step conversion rates"
         className="dashboard-section--span-12"
         action={<span className="dashboard-timeframe-label">Simple movement between each funnel stage</span>}
@@ -410,6 +524,33 @@ const GymOwnerAnalyticsPage = () => {
       </DashboardSection>
 
       <DashboardSection
+        title="Goal thresholds"
+        className="dashboard-section--span-12"
+        action={<span className="dashboard-timeframe-label">Reference targets for a healthy paid-growth funnel</span>}
+      >
+        {funnelSteps.length ? (
+          <div className="stat-grid">
+            {goalThresholds.map((goal) => (
+              <div key={goal.id} className="stat-card">
+                <small>{goal.label}</small>
+                <strong>{formatPercentage(goal.actual)}</strong>
+                <small>
+                  Target {formatPercentage(goal.target)} | {goal.delta >= 0
+                    ? `${formatPercentage(goal.delta)} above target`
+                    : `${formatPercentage(Math.abs(goal.delta))} below target`}
+                </small>
+                <small>
+                  {formatNumber(goal.toValue)} converted from {formatNumber(goal.fromValue)}
+                </small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState message="Goal thresholds will appear once the funnel has at least one tracked movement." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
         title="Top performing gyms by conversion"
         className="dashboard-section--span-12"
         action={<span className="dashboard-timeframe-label">Sorted by open to join conversion over the last 30 days</span>}
@@ -421,7 +562,7 @@ const GymOwnerAnalyticsPage = () => {
                 <small>{`#${index + 1} ${gym.name}`}</small>
                 <strong>{formatPercentage(gym.openToJoinRate30d)}</strong>
                 <small>
-                  Open to join · {formatPercentage(gym.impressionToOpenRate30d)} impression to open · {formatPercentage(gym.joinToRenewalRate30d)} join to renewal
+                  Open to join | {formatPercentage(gym.impressionToOpenRate30d)} impression to open | {formatPercentage(gym.joinToRenewalRate30d)} join to renewal
                 </small>
               </div>
             ))}
@@ -432,7 +573,7 @@ const GymOwnerAnalyticsPage = () => {
       </DashboardSection>
 
       <DashboardSection title="Gym performance" className="dashboard-section--span-12">
-        {analytics?.gyms?.length ? (
+        {gymConversionLeaders.length ? (
           <table className="dashboard-table">
             <thead>
               <tr>
@@ -469,7 +610,7 @@ const GymOwnerAnalyticsPage = () => {
       </DashboardSection>
 
       <DashboardSection title="30-day impression share" className="dashboard-section--span-6">
-        {impressionsSplit?.length ? (
+        {impressionsSplit.length ? (
           <DistributionPieChart
             role="gym-owner"
             data={impressionsSplit}
@@ -483,7 +624,7 @@ const GymOwnerAnalyticsPage = () => {
       </DashboardSection>
 
       <DashboardSection title="Marketplace spend" className="dashboard-section--span-6">
-        {expenseBreakdown?.length ? (
+        {expenseBreakdown.length ? (
           <DistributionPieChart
             role="gym-owner"
             data={expenseBreakdown}

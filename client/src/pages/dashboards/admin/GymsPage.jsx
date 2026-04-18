@@ -5,6 +5,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminGymsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteGymMutation } from '../../../services/adminApi.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
@@ -16,6 +17,7 @@ const AdminGymsPage = () => {
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const filteredGyms = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -41,7 +43,13 @@ const AdminGymsPage = () => {
     setNotice(null);
     setErrorNotice(null);
 
-    const confirmed = window.confirm(`Remove ${gym.name}? This will cancel memberships and listings.`);
+    const confirmed = await confirm({
+      title: 'Remove gym listing',
+      message: `Remove ${gym.name}? This will cancel memberships and listing billing tied to this gym.`,
+      confirmLabel: 'Remove gym',
+      cancelLabel: 'Keep gym',
+      tone: 'danger',
+    });
     if (!confirmed) return;
 
     try {
@@ -213,6 +221,7 @@ const AdminGymsPage = () => {
           <EmptyState message="No gyms to review right now." />
         )}
       </DashboardSection>
+      {confirmationModal}
     </div>
   );
 };

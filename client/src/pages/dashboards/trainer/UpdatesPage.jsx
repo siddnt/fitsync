@@ -2,7 +2,10 @@ import { useState, useMemo, useEffect } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
-import { useGetTrainerTraineesQuery } from '../../../services/dashboardApi.js';
+import {
+  useGetTrainerTraineesQuery,
+  useGetTrainerUpdatesQuery,
+} from '../../../services/dashboardApi.js';
 import {
   useLogAttendanceMutation,
   useRecordProgressMutation,
@@ -65,7 +68,9 @@ const defaultAvailabilitySlot = () => ({
 
 const TrainerUpdatesPage = () => {
   const { data, isLoading, isError, refetch } = useGetTrainerTraineesQuery();
+  const { data: trainerUpdatesResponse } = useGetTrainerUpdatesQuery();
   const rawAssignments = data?.data?.assignments;
+  const trainerUpdates = Array.isArray(trainerUpdatesResponse?.data?.updates) ? trainerUpdatesResponse.data.updates : [];
 
   const assignments = useMemo(
     () => (Array.isArray(rawAssignments) ? rawAssignments : []),
@@ -137,6 +142,16 @@ const TrainerUpdatesPage = () => {
     [trainerBookingsResponse?.data?.bookings],
   );
   const bookingSummary = trainerBookingsResponse?.data?.summary ?? {};
+  const trainerUpdatesByTraineeId = useMemo(
+    () => trainerUpdates.reduce((acc, update) => {
+      const traineeId = String(update?.trainee?._id ?? update?.trainee?.id ?? '');
+      if (traineeId) {
+        acc[traineeId] = update;
+      }
+      return acc;
+    }, {}),
+    [trainerUpdates],
+  );
 
   const selectedAvailabilityEntry = useMemo(
     () => availabilityEntries.find((entry) => entry.gym?._id === availabilityForm.gymId || entry.gym?.id === availabilityForm.gymId),
@@ -153,6 +168,27 @@ const TrainerUpdatesPage = () => {
   const recentBookingHistory = useMemo(
     () => trainerBookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status)).slice(0, 6),
     [trainerBookings],
+  );
+  const todaysTrainerBookings = useMemo(() => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return trainerBookings.filter((booking) => {
+      if (!booking.bookingDate) {
+        return false;
+      }
+      return new Date(booking.bookingDate).toISOString().slice(0, 10) === todayKey;
+    });
+  }, [trainerBookings]);
+  const availabilitySlotCount = useMemo(
+    () => availabilityEntries.reduce((sum, entry) => sum + ((entry.slots ?? []).length), 0),
+    [availabilityEntries],
+  );
+  const traineesWithPendingFeedback = useMemo(
+    () => trainerUpdates.filter((update) => (update.pendingFeedback?.length ?? 0) > 0),
+    [trainerUpdates],
+  );
+  const selectedTraineeUpdate = useMemo(
+    () => trainerUpdatesByTraineeId[String(selectedTrainee?.id ?? selectedTrainee?._id ?? '')] ?? null,
+    [selectedTrainee, trainerUpdatesByTraineeId],
   );
 
   const bmiPreview = useMemo(() => {
@@ -434,6 +470,91 @@ const TrainerUpdatesPage = () => {
 
       {selectedTrainee || trainerGyms.length ? (
         <div className="forms-grid">
+          <section className="record-form-card record-form-card--full">
+            <div className="card-header">
+              <h3>Operations snapshot</h3>
+              <p>Use today's queue, availability coverage, and pending feedback to stay ahead of trainee updates.</p>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card">
+                <small>Today's bookings</small>
+                <strong>{todaysTrainerBookings.length}</strong>
+                <small>{todaysTrainerBookings.length ? 'Sessions currently on your calendar today' : 'No sessions booked for today'}</small>
+              </div>
+              <div className="stat-card">
+                <small>Pending requests</small>
+                <strong>{bookingSummary.pending ?? pendingBookings.length}</strong>
+                <small>Waiting for trainer confirmation</small>
+              </div>
+              <div className="stat-card">
+                <small>Saved availability slots</small>
+                <strong>{availabilitySlotCount}</strong>
+                <small>Across {availabilityEntries.length} gym schedule{availabilityEntries.length === 1 ? '' : 's'}</small>
+              </div>
+              <div className="stat-card">
+                <small>Feedback follow-up</small>
+                <strong>{traineesWithPendingFeedback.length}</strong>
+                <small>Trainees with pending feedback review items</small>
+              </div>
+            </div>
+            {todaysTrainerBookings.length ? (
+              <div className="dashboard-list">
+                {todaysTrainerBookings.map((booking) => (
+                  <div key={`${booking.id}-today`} className="dashboard-list__item">
+                    <div>
+                      <small>{booking.startTime} - {booking.endTime}</small>
+                      <strong>{booking.trainee?.name ?? 'Trainee'}</strong>
+                      <span>{booking.gym?.name ?? 'Gym'} | {formatStatus(booking.sessionType ?? 'personal-training')}</span>
+                    </div>
+                    <div className="dashboard-list__meta">
+                      <strong>{formatStatus(booking.status)}</strong>
+                      <small>{booking.notes || 'No trainer notes added yet'}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          {selectedTrainee ? (
+            <section className="record-form-card record-form-card--full">
+              <div className="card-header">
+                <h3>Selected trainee pulse</h3>
+                <p>Review the latest attendance, progress metrics, and pending feedback before you log the next update.</p>
+              </div>
+              <div className="stat-grid">
+                <div className="stat-card">
+                  <small>Last attendance</small>
+                  <strong>{selectedTraineeUpdate?.attendance?.[0] ? formatStatus(selectedTraineeUpdate.attendance[0].status) : '--'}</strong>
+                  <small>{selectedTraineeUpdate?.attendance?.[0] ? formatDate(selectedTraineeUpdate.attendance[0].date) : 'No attendance logged yet'}</small>
+                </div>
+                <div className="stat-card">
+                  <small>Latest metric</small>
+                  <strong>
+                    {selectedTraineeUpdate?.metrics?.[0]
+                      ? `${formatStatus(selectedTraineeUpdate.metrics[0].metric)}`
+                      : '--'}
+                  </strong>
+                  <small>
+                    {selectedTraineeUpdate?.metrics?.[0]
+                      ? `${selectedTraineeUpdate.metrics[0].latestValue}${selectedTraineeUpdate.metrics[0].unit ? ` ${selectedTraineeUpdate.metrics[0].unit}` : ''}`
+                      : 'No performance metrics yet'}
+                  </small>
+                </div>
+                <div className="stat-card">
+                  <small>Pending feedback review</small>
+                  <strong>{selectedTraineeUpdate?.pendingFeedback?.length ?? 0}</strong>
+                  <small>{selectedTraineeUpdate?.pendingFeedback?.length ? 'Entries still awaiting review' : 'Nothing waiting for review'}</small>
+                </div>
+                <div className="stat-card">
+                  <small>Recent records</small>
+                  <strong>{selectedTraineeUpdate?.metrics?.length ?? 0}</strong>
+                  <small>{selectedTraineeUpdate?.attendance?.length ?? 0} recent attendance records</small>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <section className="record-form-card record-form-card--full">
             <div className="card-header">
               <h3>Session bookings</h3>

@@ -18,6 +18,7 @@ import {
   buildMembershipPlanFormValues,
   transformGymPayload,
 } from '../../../features/gyms/helpers.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import '../Dashboard.css';
 
@@ -33,6 +34,7 @@ const GymOwnerGymsPage = () => {
   const [gymActionError, setGymActionError] = useState(null);
   const [processingGymId, setProcessingGymId] = useState(null);
   const [processingGymAction, setProcessingGymAction] = useState(null);
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const {
     data,
@@ -299,7 +301,13 @@ const GymOwnerGymsPage = () => {
       return;
     }
 
-    const confirmed = window.confirm(`Archive ${gym.name}? This will hide the listing from members and preserve its history.`);
+    const confirmed = await confirm({
+      title: 'Archive gym listing',
+      message: `Archive ${gym.name}? The listing will be hidden from members, while its history and metrics stay preserved.`,
+      confirmLabel: 'Archive gym',
+      cancelLabel: 'Keep active',
+      tone: 'warning',
+    });
     if (!confirmed) {
       return;
     }
@@ -687,6 +695,7 @@ const GymOwnerGymsPage = () => {
           </div>
         </div>
       ) : null}
+      {confirmationModal}
     </>
   );
 };

@@ -4,7 +4,8 @@ import './CheckoutPage.css';
 import { useAppDispatch } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
 import { useGetOrderByStripeSessionQuery } from '../../services/marketplaceApi.js';
-import { formatCurrency } from '../../utils/format.js';
+import { formatCurrency, formatDateTime } from '../../utils/format.js';
+import { downloadInvoicePdf, printInvoiceDocument } from '../../utils/invoice.js';
 import {
   clearBuyNowCheckoutItem,
   clearPendingOrderSnapshot,
@@ -25,6 +26,7 @@ const CheckoutSuccessPage = () => {
   );
   const [pollCount, setPollCount] = useState(0);
   const pendingOrderSnapshot = readPendingOrderSnapshot();
+  const promoSummary = orderData?.promoSummary ?? pendingOrderSnapshot?.promoSummary ?? null;
 
   const {
     data: orderResponse,
@@ -105,6 +107,24 @@ const CheckoutSuccessPage = () => {
 
   const showLoading = !orderData && (isLoading || isFetching || shouldPoll);
 
+  const handlePrintReceipt = () => {
+    const result = printInvoiceDocument(orderData);
+    if (!result.ok) {
+      setFetchError(result.error);
+      return;
+    }
+    setFetchError(null);
+  };
+
+  const handleDownloadReceipt = () => {
+    const result = downloadInvoicePdf(orderData);
+    if (!result.ok) {
+      setFetchError(result.error);
+      return;
+    }
+    setFetchError(null);
+  };
+
   if (showLoading) {
     return (
       <div className="checkout-page">
@@ -167,6 +187,12 @@ const CheckoutSuccessPage = () => {
           </p>
         </div>
 
+        {fetchError ? (
+          <div className="checkout-success__error" role="alert">
+            {fetchError}
+          </div>
+        ) : null}
+
         <div className="checkout-success__order-number">
           <span className="label">Order Number</span>
           <span className="value">{orderData.orderNumber}</span>
@@ -218,6 +244,59 @@ const CheckoutSuccessPage = () => {
             <span>{formatCurrency(orderData.total)}</span>
           </div>
         </div>
+
+        <div className="checkout-success__receipt">
+          <div className="checkout-success__receipt-header">
+            <div>
+              <small>Receipt preview</small>
+              <strong>{orderData.orderNumber}</strong>
+            </div>
+            <div className="checkout-success__receipt-actions">
+              <button type="button" className="btn btn-secondary" onClick={handleDownloadReceipt}>
+                Download PDF
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={handlePrintReceipt}>
+                Print receipt
+              </button>
+            </div>
+          </div>
+          <div className="checkout-success__receipt-grid">
+            <div>
+              <span>Issued</span>
+              <strong>{formatDateTime(orderData.createdAt)}</strong>
+            </div>
+            <div>
+              <span>Payment</span>
+              <strong>{orderData.paymentMethod || 'Online payment'}</strong>
+            </div>
+            <div>
+              <span>Items</span>
+              <strong>{orderData.items?.length ?? 0}</strong>
+            </div>
+            <div>
+              <span>Total</span>
+              <strong>{formatCurrency(orderData.total)}</strong>
+            </div>
+          </div>
+          <ul className="checkout-success__receipt-items">
+            {(orderData.items ?? []).map((item) => (
+              <li key={item.id}>
+                <span>{item.name} x {item.quantity}</span>
+                <strong>{formatCurrency((item.quantity ?? 0) * (item.price ?? 0))}</strong>
+              </li>
+            ))}
+          </ul>
+          <p className="checkout-success__receipt-note">
+            A downloadable PDF and printable receipt are ready now, and the full invoice remains available from your orders dashboard.
+          </p>
+        </div>
+
+        {promoSummary ? (
+          <div className="checkout-success__address">
+            <h3>Promo perk applied</h3>
+            <p>{promoSummary}</p>
+          </div>
+        ) : null}
 
         <div className="checkout-success__address">
           <h3>Payment confirmation</h3>

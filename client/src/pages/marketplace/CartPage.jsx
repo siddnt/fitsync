@@ -1,15 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './CartPage.css';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
 import { formatCurrency } from '../../utils/format.js';
+import {
+  MARKETPLACE_PROMO_CODES,
+  clearMarketplacePromoCode,
+  getMarketplacePromoDefinition,
+  readMarketplacePromoCode,
+  writeMarketplacePromoCode,
+} from './marketplaceStorage.js';
 
 const CartPage = () => {
   const items = useAppSelector((state) => state.cart.items);
   const { user } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [promoInput, setPromoInput] = useState(() => readMarketplacePromoCode());
+  const [promoCode, setPromoCode] = useState(() => readMarketplacePromoCode());
+  const [promoMessage, setPromoMessage] = useState(null);
+  const appliedPromo = useMemo(() => getMarketplacePromoDefinition(promoCode), [promoCode]);
 
   const totals = useMemo(() => {
     const subtotal = items.reduce(
@@ -38,6 +49,26 @@ const CartPage = () => {
 
   const handleCheckout = () => {
     navigate('/checkout');
+  };
+
+  const handleApplyPromo = () => {
+    const normalized = promoInput.trim().toUpperCase();
+    const promo = getMarketplacePromoDefinition(normalized);
+    if (!promo) {
+      setPromoMessage('That promo code is not available in this demo checkout.');
+      return;
+    }
+    writeMarketplacePromoCode(normalized);
+    setPromoCode(normalized);
+    setPromoInput(normalized);
+    setPromoMessage(`${promo.label} applied.`);
+  };
+
+  const handleClearPromo = () => {
+    clearMarketplacePromoCode();
+    setPromoCode('');
+    setPromoInput('');
+    setPromoMessage(null);
   };
 
   if (!items.length) {
@@ -130,6 +161,44 @@ const CartPage = () => {
               <dd>{formatCurrency(totals.total)}</dd>
             </div>
           </dl>
+          <div className="cart-summary__promo">
+            <div className="cart-summary__promo-header">
+              <strong>Promo code</strong>
+              {appliedPromo ? (
+                <button type="button" onClick={handleClearPromo}>
+                  Remove
+                </button>
+              ) : null}
+            </div>
+            <div className="cart-summary__promo-row">
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(event) => setPromoInput(event.target.value.toUpperCase())}
+                placeholder="Enter promo code"
+              />
+              <button type="button" onClick={handleApplyPromo}>
+                Apply
+              </button>
+            </div>
+            {promoMessage ? <p className="cart-summary__promo-note">{promoMessage}</p> : null}
+            {appliedPromo ? (
+              <p className="cart-summary__promo-note">
+                <strong>{appliedPromo.label}:</strong> {appliedPromo.summary}
+              </p>
+            ) : (
+              <div className="cart-summary__promo-chips">
+                {MARKETPLACE_PROMO_CODES.map((promo) => (
+                  <button key={promo.code} type="button" onClick={() => setPromoInput(promo.code)}>
+                    {promo.code}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="cart-summary__promo-note">
+              Demo promos unlock fulfillment perks and support cues without changing the live checkout total.
+            </p>
+          </div>
           <button
             type="button"
             className="cart-summary__checkout"

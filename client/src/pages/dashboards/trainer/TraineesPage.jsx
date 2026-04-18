@@ -4,6 +4,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import {
   useGetTrainerTraineesQuery,
+  useGetTrainerUpdatesQuery,
 } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
@@ -12,7 +13,9 @@ import '../Dashboard.css';
 
 const TrainerTraineesPage = () => {
   const { data, isLoading, isError, refetch } = useGetTrainerTraineesQuery();
+  const { data: updatesResponse } = useGetTrainerUpdatesQuery();
   const rawAssignments = data?.data?.assignments;
+  const updates = Array.isArray(updatesResponse?.data?.updates) ? updatesResponse.data.updates : [];
 
   const assignments = useMemo(
     () => (Array.isArray(rawAssignments) ? rawAssignments : []),
@@ -20,19 +23,27 @@ const TrainerTraineesPage = () => {
   );
 
   const trainees = useMemo(
-    () =>
-      assignments.flatMap((assignment) =>
-        (assignment.trainees || []).map((trainee, index) => {
-          const resolvedId = trainee.id ?? trainee._id ?? `${assignment.id}-trainee-${index}`;
-          return {
-            ...trainee,
-            assignmentId: assignment.id,
-            gym: assignment.gym,
-            internalId: String(resolvedId),
-          };
-        }),
-      ),
-    [assignments],
+    () => assignments.flatMap((assignment) =>
+      (assignment.trainees || []).map((trainee, index) => {
+        const resolvedId = trainee.id ?? trainee._id ?? `${assignment.id}-trainee-${index}`;
+        return {
+          ...trainee,
+          assignmentId: assignment.id,
+          gym: assignment.gym,
+          internalId: String(resolvedId),
+        };
+      })), [assignments],
+  );
+
+  const updatesByTraineeId = useMemo(
+    () => updates.reduce((acc, update) => {
+      const traineeId = String(update?.trainee?._id ?? update?.trainee?.id ?? '');
+      if (traineeId) {
+        acc[traineeId] = update;
+      }
+      return acc;
+    }, {}),
+    [updates],
   );
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,12 +76,10 @@ const TrainerTraineesPage = () => {
       const gymId = trainee.gym?._id ?? trainee.gym?.id;
       const matchesGym = filters.gym === 'all' || gymId === filters.gym;
       const matchesStatus = filters.status === 'all' || trainee.status === filters.status;
-      const matchesQuery =
-        !normalizedQuery ||
-        matchesAcrossFields(
-          [trainee.name, trainee.email, trainee.gym?.name, trainee.status, ...(trainee.goals ?? [])],
-          normalizedQuery,
-        );
+      const matchesQuery = !normalizedQuery || matchesAcrossFields(
+        [trainee.name, trainee.email, trainee.gym?.name, trainee.status, ...(trainee.goals ?? [])],
+        normalizedQuery,
+      );
       return matchesGym && matchesStatus && matchesQuery;
     });
   }, [trainees, filters, searchTerm]);
@@ -88,15 +97,15 @@ const TrainerTraineesPage = () => {
       [
         {
           value: trainee.name,
-          meta: `${trainee.gym?.name ?? 'No gym'} • ${formatStatus(trainee.status ?? 'active')}`,
+          meta: `${trainee.gym?.name ?? 'No gym'} | ${formatStatus(trainee.status ?? 'active')}`,
         },
         {
           value: trainee.gym?.name,
-          meta: `Gym • ${trainee.name ?? 'Unnamed trainee'}`,
+          meta: `Gym | ${trainee.name ?? 'Unnamed trainee'}`,
         },
         ...((trainee.goals ?? []).map((goal) => ({
           value: goal,
-          meta: `Goal • ${trainee.name ?? 'Unnamed trainee'}`,
+          meta: `Goal | ${trainee.name ?? 'Unnamed trainee'}`,
         }))),
       ].forEach((entry, index) => {
         const normalized = entry.value?.toString().trim();
@@ -222,7 +231,12 @@ const TrainerTraineesPage = () => {
                 {filteredTrainees.map((trainee) => {
                   const traineeGymId = trainee.gym?._id ?? trainee.gym?.id ?? trainee.assignmentId;
                   const plannedSessions =
-                    trainee.sessionsPerWeek ?? trainee.trainingPlan?.sessionsPerWeek ?? '—';
+                    trainee.sessionsPerWeek ?? trainee.trainingPlan?.sessionsPerWeek ?? '--';
+                  const traineeUpdate = updatesByTraineeId[String(trainee.id ?? trainee._id ?? '')] ?? null;
+                  const latestAttendance = traineeUpdate?.attendance?.[0] ?? null;
+                  const latestMetric = traineeUpdate?.metrics?.[0] ?? null;
+                  const pendingFeedbackCount = traineeUpdate?.pendingFeedback?.length ?? 0;
+
                   return (
                     <li
                       key={`${trainee.internalId}-${traineeGymId}`}
@@ -237,10 +251,11 @@ const TrainerTraineesPage = () => {
                           {formatStatus(trainee.status)}
                         </span>
                       </div>
+
                       <div className="trainer-trainee-card__meta">
                         <div>
                           <small>Gym</small>
-                          <span>{trainee.gym?.name ?? '—'}</span>
+                          <span>{trainee.gym?.name ?? '--'}</span>
                         </div>
                         <div>
                           <small>Assigned</small>
@@ -251,6 +266,34 @@ const TrainerTraineesPage = () => {
                           <span>{plannedSessions}</span>
                         </div>
                       </div>
+
+                      <div className="trainer-trainee-card__summary">
+                        <div className="trainer-trainee-card__summary-item">
+                          <small>Last attendance</small>
+                          <span>
+                            {latestAttendance
+                              ? `${formatStatus(latestAttendance.status)} | ${formatDate(latestAttendance.date)}`
+                              : 'No attendance logged'}
+                          </span>
+                        </div>
+                        <div className="trainer-trainee-card__summary-item">
+                          <small>Latest metric</small>
+                          <span>
+                            {latestMetric
+                              ? `${formatStatus(latestMetric.metric)} ${latestMetric.latestValue}${latestMetric.unit ? ` ${latestMetric.unit}` : ''}`
+                              : 'No progress metric yet'}
+                          </span>
+                        </div>
+                        <div className="trainer-trainee-card__summary-item">
+                          <small>Coach feedback</small>
+                          <span>
+                            {pendingFeedbackCount
+                              ? `${pendingFeedbackCount} pending review`
+                              : 'Feedback cadence healthy'}
+                          </span>
+                        </div>
+                      </div>
+
                       <div className="trainer-trainee-card__tags">
                         {trainee.goals?.length ? (
                           trainee.goals.map((goal) => (

@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import AuditLog from '../../models/auditLog.model.js';
+import Booking from '../../models/booking.model.js';
 import Gym from '../../models/gym.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
@@ -14,7 +16,11 @@ import Contact from '../../models/contact.model.js';
 import {
   loadAdminToggles,
 } from '../../services/systemSettings.service.js';
+import { listAuditLogs } from '../../services/audit.service.js';
+import { getCacheStatus } from '../../services/cache.service.js';
 import { getGymImpressionCountsSince } from '../../services/gymImpression.service.js';
+import { getObservabilitySnapshot } from '../../services/observability.service.js';
+import { getSearchStatus } from '../../services/search.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
@@ -1159,9 +1165,9 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
           publishedGyms: 0,
           pendingGyms: 0,
           activeMemberships: 0,
-          revenue30d: formatCurrency(0),
-          expenses30d: formatCurrency(0),
-          profit30d: formatCurrency(0),
+          revenue30d: 0,
+          expenses30d: 0,
+          profit30d: 0,
           impressions30d: 0,
           sponsoredGyms: 0,
         },
@@ -1274,9 +1280,9 @@ export const getGymOwnerOverview = asyncHandler(async (req, res) => {
     publishedGyms: gyms.filter((gym) => gym.isPublished).length,
     pendingGyms: gyms.filter((gym) => gym.status !== 'active').length,
     activeMemberships: membershipAggregates.reduce((sum, item) => sum + item.activeMembers, 0),
-    revenue30d: formatCurrency(revenue30d),
-    expenses30d: formatCurrency(expenses30d),
-    profit30d: formatCurrency(profit30d),
+    revenue30d,
+    expenses30d,
+    profit30d,
     impressions30d: enrichedGyms.reduce((sum, gym) => sum + (gym.impressions ?? 0), 0),
     sponsoredGyms,
   };
@@ -1549,7 +1555,10 @@ export const getGymOwnerSubscriptions = asyncHandler(async (req, res) => {
   const data = subscriptions.map((subscription) => ({
     id: subscription._id,
     planCode: subscription.planCode,
-    amount: formatCurrency(subscription.amount, subscription.currency),
+    amount: {
+      amount: Number(subscription.amount) || 0,
+      currency: subscription.currency ?? 'INR',
+    },
     periodStart: subscription.periodStart,
     periodEnd: subscription.periodEnd,
     status: subscription.status,
@@ -1577,18 +1586,58 @@ export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
     .lean();
   const gymIds = gyms.map((gym) => gym._id);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const impressionCounts30d = await getGymImpressionCountsSince(gymIds, thirtyDaysAgo);
+  const [impressionCounts30d, membershipHistoryDocs] = await Promise.all([
+    getGymImpressionCountsSince(gymIds, thirtyDaysAgo),
+    GymMembership.find({
+      gym: { $in: gymIds },
+      plan: { $nin: TRAINER_PLAN_CODES },
+    })
+      .select('gym trainee startDate createdAt')
+      .lean(),
+  ]);
+
+  const joinsByGym = {};
+  membershipHistoryDocs.forEach((membership) => {
+    const when = toDate(membership.startDate) || toDate(membership.createdAt);
+    if (!when || when < thirtyDaysAgo) {
+      return;
+    }
+
+    const gymKey = String(membership.gym);
+    joinsByGym[gymKey] = (joinsByGym[gymKey] || 0) + 1;
+  });
+
+  const toRate = (value, previous) => {
+    if (!previous) {
+      return 0;
+    }
+    return Number(((Number(value) / Number(previous)) * 100).toFixed(1));
+  };
 
   const data = gyms
     .filter((gym) => gym.sponsorship && gym.sponsorship.tier && gym.sponsorship.tier !== 'none')
-    .map((gym) => ({
-      id: gym._id,
-      name: gym.name,
-      city: gym.location?.city,
-      impressions: gym.analytics?.impressions ?? 0,
-      impressions30d: getImpressionCountFromMap(impressionCounts30d, gym._id),
-      sponsorship: gym.sponsorship,
-    }));
+    .map((gym) => {
+      const impressions30d = getImpressionCountFromMap(impressionCounts30d, gym._id);
+      const opens30d = getOpenCountFromMap(impressionCounts30d, gym._id);
+      const joins30d = joinsByGym[String(gym._id)] || 0;
+      const monthlySpend = Number(gym.sponsorship?.monthlyBudget) || Number(gym.sponsorship?.amount) || 0;
+
+      return {
+        id: gym._id,
+        name: gym.name,
+        city: gym.location?.city,
+        impressions: gym.analytics?.impressions ?? 0,
+        impressions30d,
+        opens30d,
+        joins30d,
+        impressionToOpenRate30d: toRate(opens30d, impressions30d),
+        openToJoinRate30d: toRate(joins30d, opens30d),
+        spendPerOpen: opens30d ? Math.round(monthlySpend / opens30d) : 0,
+        spendPerJoin: joins30d ? Math.round(monthlySpend / joins30d) : 0,
+        reachUtilization30d: toRate(impressions30d, gym.sponsorship?.reach ?? 0),
+        sponsorship: gym.sponsorship,
+      };
+    });
 
   return res
     .status(200)
@@ -1926,8 +1975,13 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
   const trainerObjectId = toObjectId(trainerId);
   const trainerFilter = trainerObjectId ?? trainerId;
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setHours(23, 59, 59, 999);
+  const overdueFeedbackThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [memberships, assignmentDocs, progressDocs, revenueAggregate] = await Promise.all([
+  const [memberships, assignmentDocs, progressDocs, revenueAggregate, todayBookings] = await Promise.all([
     GymMembership.find({ trainer: trainerId, status: { $in: ['active', 'paused'] } })
       .populate({ path: 'gym', select: 'name location' })
       .populate({ path: 'trainee', select: 'name profilePicture role' })
@@ -1935,6 +1989,7 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     TrainerAssignment.find({ trainer: trainerId }).lean(),
     TrainerProgress.find({ trainer: trainerId })
       .populate({ path: 'trainee', select: 'name profilePicture role' })
+      .populate({ path: 'gym', select: 'name location' })
       .lean(),
     Revenue.aggregate([
       {
@@ -1946,6 +2001,15 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
       },
       { $group: { _id: null, totalAmount: { $sum: '$amount' } } },
     ]),
+    Booking.find({
+      trainer: trainerFilter,
+      bookingDate: { $gte: todayStart, $lte: todayEnd },
+      status: { $in: ['pending', 'confirmed'] },
+    })
+      .populate({ path: 'user', select: 'name profilePicture role' })
+      .populate({ path: 'gym', select: 'name location' })
+      .sort({ bookingDate: 1, startTime: 1 })
+      .lean(),
   ]);
 
   const assignmentByGym = assignmentDocs.reduce((acc, doc) => {
@@ -2005,6 +2069,69 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     })
     .filter(Boolean);
 
+  const overdueProgressUpdates = progressDocs
+    .map((doc) => {
+      const latestFeedback = (doc.feedback || [])
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+      const latestAttendance = (doc.attendance || [])
+        .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      const latestMetric = groupProgressMetrics(doc.progressMetrics || [], doc.bodyMetrics || [])[0] ?? null;
+      const latestCoachUpdateDate = latestFeedback?.createdAt ? new Date(latestFeedback.createdAt) : null;
+      const isOverdue = !latestCoachUpdateDate || latestCoachUpdateDate < overdueFeedbackThreshold;
+      const referenceDate = latestCoachUpdateDate ?? latestAttendance?.date ?? doc.updatedAt ?? doc.createdAt ?? null;
+      const daysSinceUpdate = referenceDate
+        ? Math.max(0, Math.floor((Date.now() - new Date(referenceDate).getTime()) / (1000 * 60 * 60 * 24)))
+        : null;
+
+      return {
+        trainee: doc.trainee
+          ? {
+            id: doc.trainee._id,
+            name: doc.trainee.name,
+            profilePicture: doc.trainee.profilePicture,
+          }
+          : null,
+        gym: doc.gym
+          ? {
+            id: doc.gym._id,
+            name: doc.gym.name,
+            city: doc.gym.location?.city,
+          }
+          : null,
+        latestFeedbackAt: latestFeedback?.createdAt ?? null,
+        latestAttendance,
+        latestMetric,
+        daysSinceUpdate,
+        isOverdue,
+      };
+    })
+    .filter((item) => item.isOverdue)
+    .sort((left, right) => (right.daysSinceUpdate ?? 0) - (left.daysSinceUpdate ?? 0));
+
+  const todaysSessions = todayBookings.map((booking) => ({
+    id: booking._id,
+    trainee: booking.user
+      ? {
+        id: booking.user._id,
+        name: booking.user.name,
+        profilePicture: booking.user.profilePicture,
+      }
+      : null,
+    gym: booking.gym
+      ? {
+        id: booking.gym._id,
+        name: booking.gym.name,
+        city: booking.gym.location?.city,
+      }
+      : null,
+    bookingDate: booking.bookingDate,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    status: booking.status,
+    sessionType: booking.sessionType,
+    notes: booking.notes,
+  }));
+
   const derivedTrainerRevenue30d = memberships.reduce((sum, membership) => {
     const referenceDate = membership.startDate || membership.createdAt;
     if (!referenceDate || new Date(referenceDate) < thirtyDaysAgo) {
@@ -2022,11 +2149,14 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
     totals: {
       gyms: new Set(memberships.map((membership) => String(membership.gym?._id))).size,
       activeTrainees: activeTrainees.length,
-      pendingUpdates: upcomingCheckIns.filter((item) => !item.nextFeedback).length,
-      earnings30d: formatCurrency(trainerRevenue30d),
+      pendingUpdates: overdueProgressUpdates.length,
+      earnings30d: trainerRevenue30d,
+      todaysSessions: todaysSessions.length,
     },
     activeAssignments: activeTrainees,
     upcomingCheckIns,
+    todaySessions: todaysSessions,
+    overdueProgressUpdates,
   };
 
   return res
@@ -3756,6 +3886,175 @@ export const getAdminInsights = asyncHandler(async (_req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, insights, 'Admin insights fetched successfully'));
+});
+
+export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const observability = getObservabilitySnapshot();
+  const cache = getCacheStatus();
+  const search = getSearchStatus();
+
+  const [
+    openSupportTickets,
+    staleSupportTickets,
+    pendingBookings,
+    todaysBookings,
+    sellerShipmentBacklog,
+    pendingReturnRequests,
+    recentAuditLogs,
+    auditLast24Hours,
+    auditPrevious24Hours,
+    adminToggles,
+  ] = await Promise.all([
+    Contact.countDocuments({ status: { $in: ['new', 'read', 'in-progress', 'responded'] } }),
+    Contact.countDocuments({
+      status: { $in: ['new', 'read', 'in-progress', 'responded'] },
+      updatedAt: { $lte: oneDayAgo },
+    }),
+    Booking.countDocuments({ status: 'pending' }),
+    Booking.countDocuments({
+      bookingDate: {
+        $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        $lte: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1),
+      },
+    }),
+    Order.countDocuments({
+      createdAt: { $lte: twoDaysAgo },
+      'orderItems.status': 'processing',
+    }),
+    Order.countDocuments({ 'orderItems.returnRequest.status': 'requested' }),
+    listAuditLogs({ limit: 10 }),
+    AuditLog.countDocuments({ createdAt: { $gte: oneDayAgo } }),
+    AuditLog.countDocuments({ createdAt: { $gte: twoDaysAgo, $lt: oneDayAgo } }),
+    loadAdminToggles(),
+  ]);
+
+  const uptimeHours = Math.max(
+    0,
+    Math.round((Date.now() - new Date(observability.startedAt).getTime()) / (1000 * 60 * 60)),
+  );
+
+  const topRoutes = Object.entries(observability.requests?.byRoute ?? {})
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+    .map(([route, count]) => ({ route, count }));
+
+  const topQueryOperations = Object.entries(observability.queries?.byOperation ?? {})
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+    .map(([operation, count]) => ({ operation, count }));
+
+  const auditDelta = auditLast24Hours - auditPrevious24Hours;
+  const alerts = [];
+
+  if (search.configured && !search.ready) {
+    alerts.push({
+      id: 'search-down',
+      severity: 'critical',
+      title: 'Search indexing offline',
+      message: 'Meilisearch is configured but not ready. Search-based discovery is degraded.',
+    });
+  }
+
+  if (cache.redisConfigured && cache.provider === 'memory') {
+    alerts.push({
+      id: 'cache-fallback',
+      severity: 'warning',
+      title: 'Cache fallback active',
+      message: 'Redis is configured but the platform is currently serving from memory cache.',
+    });
+  }
+
+  if (staleSupportTickets > 0) {
+    alerts.push({
+      id: 'support-backlog',
+      severity: 'warning',
+      title: 'Support follow-up backlog',
+      message: `${staleSupportTickets} support ticket${staleSupportTickets === 1 ? ' is' : 's are'} idle for more than 24 hours.`,
+    });
+  }
+
+  if (sellerShipmentBacklog > 0) {
+    alerts.push({
+      id: 'shipment-backlog',
+      severity: 'warning',
+      title: 'Seller shipment backlog',
+      message: `${sellerShipmentBacklog} order${sellerShipmentBacklog === 1 ? '' : 's'} still have processing items older than 48 hours.`,
+    });
+  }
+
+  if ((observability.queries?.slowSamples?.length ?? 0) > 0) {
+    alerts.push({
+      id: 'slow-queries',
+      severity: 'info',
+      title: 'Slow query samples captured',
+      message: `${observability.queries.slowSamples.length} recent slow query sample${observability.queries.slowSamples.length === 1 ? '' : 's'} are available for inspection.`,
+    });
+  }
+
+  if ((search.queue?.depth ?? 0) > 0) {
+    alerts.push({
+      id: 'search-queue',
+      severity: 'info',
+      title: 'Search sync queue active',
+      message: `${search.queue.depth} search sync job${search.queue.depth === 1 ? '' : 's'} waiting or processing.`,
+    });
+  }
+
+  return res.status(200).json(new ApiResponse(200, {
+    generatedAt: now,
+    adminToggles,
+    services: {
+      uptimeHours,
+      cache,
+      search,
+      requests: {
+        total: observability.requests?.total ?? 0,
+        averageDurationMs: observability.requests?.averageDurationMs ?? 0,
+        maxDurationMs: observability.requests?.durationMsMax ?? 0,
+        topRoutes,
+      },
+      queries: {
+        total: observability.queries?.total ?? 0,
+        averageDurationMs: observability.queries?.averageDurationMs ?? 0,
+        maxDurationMs: observability.queries?.durationMsMax ?? 0,
+        topOperations: topQueryOperations,
+        slowSamples: observability.queries?.slowSamples ?? [],
+      },
+      httpCache: observability.httpCache ?? { freshResponses: 0, notModifiedResponses: 0 },
+    },
+    backlog: {
+      openSupportTickets,
+      staleSupportTickets,
+      pendingBookings,
+      todaysBookings,
+      sellerShipmentBacklog,
+      pendingReturnRequests,
+    },
+    audit: {
+      last24Hours: auditLast24Hours,
+      previous24Hours: auditPrevious24Hours,
+      delta: auditDelta,
+      recent: recentAuditLogs.map((log) => ({
+        id: log._id,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        summary: log.summary,
+        actor: log.actor ? {
+          id: log.actor._id,
+          name: log.actor.name,
+          email: log.actor.email,
+          role: log.actor.role,
+        } : null,
+        createdAt: log.createdAt,
+      })),
+    },
+    alerts,
+  }, 'Admin ops status fetched successfully'));
 });
 
 const ensureManagerDashboard = (req) => {

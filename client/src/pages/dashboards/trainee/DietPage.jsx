@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
@@ -51,6 +52,19 @@ const MacroList = ({ macros }) => (
 
 const mealDisplayLabel = (meal) => meal.label ?? meal.mealType ?? meal.name ?? 'Meal';
 
+const summarizeDietPlan = (plan) => {
+  const meals = Array.isArray(plan?.meals) ? plan.meals : [];
+  const macros = combineMacros(meals);
+  const uniqueMeals = new Set(meals.map((meal) => mealDisplayLabel(meal)).filter(Boolean));
+
+  return {
+    mealsCount: meals.length,
+    mealVariety: uniqueMeals.size,
+    calories: Math.round(macros.calories ?? 0),
+    protein: Math.round(macros.protein ?? 0),
+  };
+};
+
 const DietPlanCard = ({ plan }) => {
   if (!plan) {
     return null;
@@ -61,7 +75,7 @@ const DietPlanCard = ({ plan }) => {
   return (
     <div className="diet-plan-card">
       <div className="pill-row">
-        <span className="pill">Week of {plan.weekOf ? formatDate(plan.weekOf) : '—'}</span>
+        <span className="pill">Week of {plan.weekOf ? formatDate(plan.weekOf) : '--'}</span>
         <span className="pill">Meals {plan.meals?.length ?? 0}</span>
       </div>
       <div className="diet-plan-grid">
@@ -73,17 +87,18 @@ const DietPlanCard = ({ plan }) => {
           <span>Fat</span>
         </div>
         {(plan.meals ?? []).map((meal) => (
-          <div key={`${meal.mealType ?? meal.name ?? meal.label}`}
+          <div
+            key={`${meal.mealType ?? meal.name ?? meal.label}`}
             className="diet-plan-grid__row"
           >
             <strong>{mealDisplayLabel(meal)}</strong>
             <div className="diet-plan-grid__item">
-              {meal.item ? <span>{meal.item}</span> : <span className="muted">—</span>}
+              {meal.item ? <span>{meal.item}</span> : <span className="muted">--</span>}
               {meal.notes ? <small>{meal.notes}</small> : null}
             </div>
-            <span>{meal.calories !== undefined && meal.calories !== null ? `${meal.calories} kcal` : '—'}</span>
-            <span>{meal.protein !== undefined && meal.protein !== null ? `${meal.protein} g` : '—'}</span>
-            <span>{meal.fat !== undefined && meal.fat !== null ? `${meal.fat} g` : '—'}</span>
+            <span>{meal.calories !== undefined && meal.calories !== null ? `${meal.calories} kcal` : '--'}</span>
+            <span>{meal.protein !== undefined && meal.protein !== null ? `${meal.protein} g` : '--'}</span>
+            <span>{meal.fat !== undefined && meal.fat !== null ? `${meal.fat} g` : '--'}</span>
           </div>
         ))}
       </div>
@@ -98,6 +113,23 @@ const TraineeDietPage = () => {
   const dietPlans = data?.data;
   const latest = dietPlans?.latest;
   const history = dietPlans?.history ?? [];
+
+  const latestSummary = useMemo(
+    () => (latest ? summarizeDietPlan(latest) : null),
+    [latest],
+  );
+
+  const historySummary = useMemo(() => {
+    if (!history.length) {
+      return null;
+    }
+
+    const earliestPlan = history[history.length - 1];
+    return {
+      revisions: history.length,
+      earliestWeek: earliestPlan?.weekOf ?? null,
+    };
+  }, [history]);
 
   if (isLoading) {
     return (
@@ -133,7 +165,33 @@ const TraineeDietPage = () => {
     <div className="dashboard-grid dashboard-grid--stacked">
       <DashboardSection title="Current meal plan">
         {latest ? (
-          <DietPlanCard plan={latest} />
+          <>
+            {latestSummary ? (
+              <div className="stat-grid">
+                <div className="stat-card">
+                  <small>Meals mapped</small>
+                  <strong>{latestSummary.mealsCount}</strong>
+                  <small>Week of {formatDate(latest.weekOf)}</small>
+                </div>
+                <div className="stat-card">
+                  <small>Daily calories</small>
+                  <strong>{latestSummary.calories} kcal</strong>
+                  <small>Protein {latestSummary.protein} g</small>
+                </div>
+                <div className="stat-card">
+                  <small>Meal rotation</small>
+                  <strong>{latestSummary.mealVariety}</strong>
+                  <small>Unique meal blocks in this plan</small>
+                </div>
+                <div className="stat-card">
+                  <small>Plan revisions</small>
+                  <strong>{history.length + 1}</strong>
+                  <small>{historySummary?.earliestWeek ? `Tracked since ${formatDate(historySummary.earliestWeek)}` : 'First nutrition cycle logged'}</small>
+                </div>
+              </div>
+            ) : null}
+            <DietPlanCard plan={latest} />
+          </>
         ) : (
           <EmptyState message="Your trainer has not assigned a meal plan yet." />
         )}
@@ -141,13 +199,24 @@ const TraineeDietPage = () => {
 
       <DashboardSection title="Previous plans">
         {history.length ? (
-          <div className="diet-plan-history">
-            {history.map((entry) => (
-              <div key={entry._id ?? entry.weekOf ?? entry.id} className="diet-plan-history__card">
-                <DietPlanCard plan={entry} />
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="pill-row">
+              <span className="pill">
+                {historySummary?.revisions ?? history.length} prior revision
+                {(historySummary?.revisions ?? history.length) === 1 ? '' : 's'}
+              </span>
+              {historySummary?.earliestWeek ? (
+                <span className="pill">Oldest saved week {formatDate(historySummary.earliestWeek)}</span>
+              ) : null}
+            </div>
+            <div className="diet-plan-history">
+              {history.map((entry) => (
+                <div key={entry._id ?? entry.weekOf ?? entry.id} className="diet-plan-history__card">
+                  <DietPlanCard plan={entry} />
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <EmptyState message="Prior plans will appear here after your next revision." />
         )}

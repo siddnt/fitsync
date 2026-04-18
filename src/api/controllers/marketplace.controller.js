@@ -101,9 +101,9 @@ const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
 
 const ORDER_NUMBER_PREFIX = 'FS';
 const MARKETPLACE_LIST_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished createdAt updatedAt seller metrics';
-const MARKETPLACE_DETAIL_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished updatedAt seller metrics';
+const MARKETPLACE_DETAIL_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished updatedAt seller metrics metadata';
 const MARKETPLACE_ORDER_PRODUCT_SELECT = 'seller name price image stock status isPublished metrics';
-const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role';
+const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role profile profilePicture bio';
 const MARKETPLACE_REVIEW_SELECT = 'rating title comment createdAt isVerifiedPurchase user';
 const MARKETPLACE_REVIEW_USER_SELECT = 'name profilePicture role';
 
@@ -317,6 +317,11 @@ const buildMarketplaceOutboxEvents = ({ productId, productIds = [], deleted = fa
 const mapCatalogueProduct = (product) => {
   const sellerDoc = product.seller ?? null;
   let sellerName = null;
+  const metadata = product?.metadata instanceof Map
+    ? Object.fromEntries(product.metadata.entries())
+    : product?.metadata && typeof product.metadata === 'object'
+      ? { ...product.metadata }
+      : undefined;
 
   if (sellerDoc) {
     const fullName = [sellerDoc.firstName, sellerDoc.lastName].filter(Boolean).join(' ').trim();
@@ -336,11 +341,17 @@ const mapCatalogueProduct = (product) => {
     status: product.status,
     isPublished: product.isPublished,
     updatedAt: product.updatedAt,
+    metadata,
     seller: sellerDoc
       ? {
         id: sellerDoc._id,
         name: sellerName,
         role: sellerDoc.role ?? null,
+        avatar: sellerDoc.profilePicture ?? null,
+        headline: sellerDoc.profile?.headline ?? '',
+        location: sellerDoc.profile?.location ?? '',
+        website: sellerDoc.profile?.socialLinks?.website ?? '',
+        about: sellerDoc.bio || sellerDoc.profile?.about || '',
       }
       : null,
   };

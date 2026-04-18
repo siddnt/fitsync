@@ -26,6 +26,7 @@ import {
 import { reset } from 'redux-form';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
 import { matchesPrefix, matchesAcrossFields } from '../../../utils/search.js';
+import useConfirmationModal from '../../../hooks/useConfirmationModal.js';
 import '../Dashboard.css';
 
 const filters = [
@@ -170,6 +171,7 @@ const InventoryPage = () => {
   const [minStock, setMinStock] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const { confirm, confirmationModal } = useConfirmationModal();
 
   const filteredProducts = useMemo(() => {
     let list = products.slice();
@@ -340,7 +342,13 @@ const InventoryPage = () => {
     }
     setNotice(null);
     setErrorNotice(null);
-    const confirmed = window.confirm(`Remove ${product.name}? This cannot be undone.`);
+    const confirmed = await confirm({
+      title: 'Delete product',
+      message: `Remove ${product.name}? This deletes the listing from your inventory and cannot be undone.`,
+      confirmLabel: 'Delete product',
+      cancelLabel: 'Keep product',
+      tone: 'danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -746,6 +754,7 @@ const InventoryPage = () => {
           />
         </DashboardSection>
       ) : null}
+      {confirmationModal}
     </div>
   );
 };
