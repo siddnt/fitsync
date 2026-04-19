@@ -32,10 +32,19 @@ const orderSnapshotSchema = new mongoose.Schema(
                 name: String,
                 quantity: Number,
                 price: Number,
+                mrp: Number,
                 image: String
             }
         ],
         subtotal: Number,
+        originalSubtotal: {
+            type: Number,
+            default: 0
+        },
+        catalogDiscountAmount: {
+            type: Number,
+            default: 0
+        },
         tax: Number,
         shippingCost: Number,
         discountAmount: {

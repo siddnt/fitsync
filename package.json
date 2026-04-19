@@ -17,6 +17,7 @@
     "load:test": "node src/scripts/loadTestPerformance.js",
     "db:analyze": "node src/scripts/analyzeQueryPlans.js",
     "db:backfill:gym-plans": "node src/scripts/backfillGymMembershipPlans.js",
+    "db:backfill:marketplace-order-mrp": "node src/scripts/backfillMarketplaceOrderMrp.js",
     "search:sync": "node src/scripts/syncSearchIndexes.js",
     "docs:uml": "node src/scripts/renderUmlDiagrams.mjs",
     "docs:pdf": "python src/scripts/exportDddPdf.py",

@@ -24,11 +24,13 @@ const cartSlice = createSlice({
       const existing = state.items.find((item) => item.id === id);
       if (existing) {
         existing.quantity += quantityToAdd;
+        existing.mrp = payload.mrp ?? existing.mrp ?? existing.price;
       } else {
         state.items.push({
           id,
           name: payload.name ?? 'Unnamed product',
           price: payload.price ?? 0,
+          mrp: payload.mrp ?? payload.price ?? 0,
           image: payload.image ?? null,
           seller: payload.seller ?? null,
           quantity: quantityToAdd,

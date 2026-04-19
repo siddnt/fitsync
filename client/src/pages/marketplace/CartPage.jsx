@@ -13,16 +13,24 @@ import {
   readMarketplacePromoCode,
   writeMarketplacePromoCode,
 } from './marketplaceStorage.js';
+import { deriveProductPricing } from './utils.js';
 
 const buildLocalTotals = (items = []) => {
+  const originalSubtotal = items.reduce((sum, item) => {
+    const unitMrp = Math.max(Number(item.mrp ?? item.price) || 0, Number(item.price) || 0);
+    return sum + unitMrp * (Number(item.quantity) || 0);
+  }, 0);
   const subtotal = items.reduce(
     (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
     0,
   );
   const tax = 0;
   const shipping = 0;
+  const catalogDiscountAmount = Math.max(0, originalSubtotal - subtotal);
 
   return {
+    originalSubtotal,
+    catalogDiscountAmount,
     subtotal,
     tax,
     shippingCost: shipping,
@@ -47,22 +55,19 @@ const CartPage = () => {
   const localTotals = useMemo(() => buildLocalTotals(items), [items]);
   const displayPricing = pricing ?? localTotals;
   const appliedPromo = displayPricing.promo ?? null;
+  const totalSavings = (Number(displayPricing.catalogDiscountAmount) || 0) + (Number(displayPricing.discountAmount) || 0);
 
   useEffect(() => {
     if (!user || !items.length) {
       setPricing(null);
+      setPromoMessage(null);
       return;
     }
 
     const savedPromoCode = readMarketplacePromoCode();
-    if (!savedPromoCode) {
-      setPricing(null);
-      return;
-    }
-
     let ignore = false;
 
-    previewMarketplacePricing({ items, promoCode: savedPromoCode })
+    previewMarketplacePricing(savedPromoCode ? { items, promoCode: savedPromoCode } : { items })
       .unwrap()
       .then((response) => {
         if (ignore) {
@@ -70,6 +75,11 @@ const CartPage = () => {
         }
 
         setPricing(response?.data?.pricing ?? null);
+        if (!savedPromoCode) {
+          setPromoMessage(null);
+          return;
+        }
+
         setPromoInput(savedPromoCode);
         if (response?.data?.pricing?.discountAmount > 0) {
           setPromoMessage(`${savedPromoCode} applied. You saved ${formatCurrency(response.data.pricing.discountAmount)}.`);
@@ -142,9 +152,17 @@ const CartPage = () => {
 
   const handleClearPromo = () => {
     clearMarketplacePromoCode();
-    setPricing(null);
     setPromoInput('');
     setPromoMessage(null);
+
+    previewMarketplacePricing({ items })
+      .unwrap()
+      .then((response) => {
+        setPricing(response?.data?.pricing ?? null);
+      })
+      .catch(() => {
+        setPricing(null);
+      });
   };
 
   if (!user) {
@@ -196,52 +214,83 @@ const CartPage = () => {
       <div className="cart-layout">
         <section className="cart-items">
           {items.map((item) => (
-            <article key={item.id} className="cart-item">
-              <div className="cart-item__media">
-                {item.image ? (
-                  <img src={item.image} alt={item.name} loading="lazy" />
-                ) : (
-                  <div className="cart-item__placeholder" aria-hidden>
-                    {(item.name ?? '?').slice(0, 1)}
+            (() => {
+              const pricingDetails = deriveProductPricing(item);
+              const lineTotal = pricingDetails.price * (Number(item.quantity) || 0);
+              const lineOriginal = pricingDetails.mrp * (Number(item.quantity) || 0);
+              const lineSavings = Math.max(0, lineOriginal - lineTotal);
+
+              return (
+                <article key={item.id} className="cart-item">
+                  <div className="cart-item__media">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} loading="lazy" />
+                    ) : (
+                      <div className="cart-item__placeholder" aria-hidden>
+                        {(item.name ?? '?').slice(0, 1)}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="cart-item__content">
-                <div>
-                  <h3>{item.name}</h3>
-                  {item.seller?.name ? (
-                    <p className="cart-item__seller">Seller: {item.seller.name}</p>
-                  ) : null}
-                </div>
-                <div className="cart-item__pricing">
-                  <span>{formatCurrency(item.price)}</span>
-                </div>
-                <div className="cart-item__controls">
-                  <div className="cart-item__quantity">
-                    <button type="button" onClick={() => handleQuantityChange(item.id, -1)}>
-                      -
-                    </button>
-                    <span>{item.quantity}</span>
-                    <button type="button" onClick={() => handleQuantityChange(item.id, 1)}>
-                      +
-                    </button>
+                  <div className="cart-item__content">
+                    <div>
+                      <h3>{item.name}</h3>
+                      {item.seller?.name ? (
+                        <p className="cart-item__seller">Seller: {item.seller.name}</p>
+                      ) : null}
+                    </div>
+                    <div className="cart-item__pricing">
+                      <div className="cart-item__price-row">
+                        <span className="cart-item__price-current">{formatCurrency(pricingDetails.price)}</span>
+                        {pricingDetails.hasDiscount ? (
+                          <>
+                            <span className="cart-item__price-mrp">{formatCurrency(pricingDetails.mrp)}</span>
+                            <span className="cart-item__price-badge">-{pricingDetails.discountPercentage}%</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <small>
+                        Line total {formatCurrency(lineTotal)}
+                        {lineSavings > 0 ? ` | You save ${formatCurrency(lineSavings)}` : ''}
+                      </small>
+                    </div>
+                    <div className="cart-item__controls">
+                      <div className="cart-item__quantity">
+                        <button type="button" onClick={() => handleQuantityChange(item.id, -1)}>
+                          -
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button type="button" onClick={() => handleQuantityChange(item.id, 1)}>
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="cart-item__remove"
+                        onClick={() => handleRemove(item.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="cart-item__remove"
-                    onClick={() => handleRemove(item.id)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            </article>
+                </article>
+              );
+            })()
           ))}
         </section>
 
         <aside className="cart-summary">
           <h2>Order summary</h2>
           <dl>
+            <div>
+              <dt>Original price</dt>
+              <dd>{formatCurrency(displayPricing.originalSubtotal ?? displayPricing.subtotal)}</dd>
+            </div>
+            {displayPricing.catalogDiscountAmount > 0 ? (
+              <div className="cart-summary__discount">
+                <dt>Product discount</dt>
+                <dd>-{formatCurrency(displayPricing.catalogDiscountAmount)}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Subtotal</dt>
               <dd>{formatCurrency(displayPricing.subtotal)}</dd>
@@ -265,6 +314,11 @@ const CartPage = () => {
               <dd>{formatCurrency(displayPricing.total)}</dd>
             </div>
           </dl>
+          {totalSavings > 0 ? (
+            <p className="cart-summary__savings-note">
+              You save {formatCurrency(totalSavings)} on this order.
+            </p>
+          ) : null}
           <div className="cart-summary__promo">
             <div className="cart-summary__promo-header">
               <strong>Promo code</strong>

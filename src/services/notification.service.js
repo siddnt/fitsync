@@ -1,5 +1,6 @@
 import Booking from '../models/booking.model.js';
 import Contact from '../models/contact.model.js';
+import '../models/gym.model.js';
 import Notification from '../models/notification.model.js';
 import Order from '../models/order.model.js';
 import GymMembership from '../models/gymMembership.model.js';

@@ -25,6 +25,8 @@ import {
   getTraineeProgress,
   submitTrainerFeedback,
   getManagerOverview,
+  getManagerSellers,
+  getManagerGymOwners,
 } from '../controllers/dashboard.controller.js';
 import {
   exportAdminRevenueReport,
@@ -69,5 +71,7 @@ router.get('/admin/insights', authorizeRoles('admin'), getAdminInsights);
 router.get('/admin/ops', authorizeRoles('admin'), getAdminOpsStatus);
 
 router.get('/manager/overview', authorizeRoles('manager'), getManagerOverview);
+router.get('/manager/sellers', authorizeRoles('manager'), getManagerSellers);
+router.get('/manager/gym-owners', authorizeRoles('manager'), getManagerGymOwners);
 
 export default router;

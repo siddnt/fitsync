@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -30,6 +30,33 @@ const getAmount = (value) => {
   }
 
   return Number(value) || 0;
+};
+
+const getSavingsAmount = (order) =>
+  getAmount(order?.catalogDiscountAmount) + getAmount(order?.discountAmount);
+
+const getItemPricingDetails = (item) => {
+  const quantity = Number(item?.quantity) || 0;
+  const unitMrp = getAmount(item?.mrp ?? item?.price);
+  const unitPrice = getAmount(item?.price);
+  const lineOriginal = getAmount(item?.originalSubtotal) || unitMrp * quantity;
+  const lineTotal = getAmount(item?.subtotal) || unitPrice * quantity;
+  const lineSavings = Math.max(0, lineOriginal - lineTotal);
+  const hasDiscount = unitMrp > unitPrice;
+  const discountPercentage = hasDiscount && unitMrp > 0
+    ? Math.round(((unitMrp - unitPrice) / unitMrp) * 100)
+    : 0;
+
+  return {
+    quantity,
+    unitMrp,
+    unitPrice,
+    lineOriginal,
+    lineTotal,
+    lineSavings,
+    hasDiscount,
+    discountPercentage,
+  };
 };
 
 const groupByStatus = (orders = []) =>
@@ -258,6 +285,7 @@ const TraineeOrdersPage = () => {
         name: item.name,
         image: item.image ?? null,
         price: getAmount(item.price),
+        mrp: getAmount(item.mrp ?? item.price),
         quantity: item.quantity ?? 1,
         seller: item.seller ?? null,
       }));
@@ -359,6 +387,13 @@ const TraineeOrdersPage = () => {
 
                   <tr className="order-items-row">
                     <td colSpan={5}>
+                      {(() => {
+                        const orderSavings = getSavingsAmount(order);
+                        const originalSubtotal = getAmount(order.originalSubtotal) || getAmount(order.subtotal);
+                        const catalogDiscount = getAmount(order.catalogDiscountAmount);
+                        const promoDiscount = getAmount(order.discountAmount);
+
+                        return (
                       <div className="order-info-grid">
                         <div className="order-info-card">
                           <small>Ship to</small>
@@ -373,16 +408,38 @@ const TraineeOrdersPage = () => {
                           <small>Payment and totals</small>
                           <strong>{order.paymentMethod ?? 'Cash on Delivery'}</strong>
                           <p>
+                            Original {formatCurrency(order.originalSubtotal ?? order.subtotal)}
+                            {' | '}
                             Subtotal {formatCurrency(order.subtotal)}
                             {' | '}
                             Tax {formatCurrency(order.tax)}
                             {' | '}
                             Shipping {formatCurrency(order.shippingCost)}
                           </p>
+                          {catalogDiscount > 0 || promoDiscount > 0 ? (
+                            <small>
+                              {catalogDiscount > 0 ? `Product discount ${formatCurrency(order.catalogDiscountAmount)}` : null}
+                              {catalogDiscount > 0 && promoDiscount > 0 ? ' | ' : null}
+                              {promoDiscount > 0 ? `Promo discount ${formatCurrency(order.discountAmount)}` : null}
+                            </small>
+                          ) : null}
                           <small>Total charged {formatCurrency(order.total)}</small>
+                          {orderSavings > 0 ? (
+                            <small>
+                              You saved {formatCurrency(orderSavings)}
+                              {originalSubtotal > 0 ? ` from ${formatCurrency(order.originalSubtotal ?? order.subtotal)}` : ''}
+                            </small>
+                          ) : null}
+                          {order.promo?.code ? (
+                            <small>
+                              Promo {order.promo.code}: {order.promo.description || order.promo.label || 'Additional discount applied.'}
+                            </small>
+                          ) : null}
                           <small>{order.paymentMethod === 'Cash on Delivery' ? 'Payment due on delivery.' : 'Payment confirmation completed.'}</small>
                         </div>
                       </div>
+                        );
+                      })()}
 
                       {(order.items?.length ?? 0) > 0 ? (
                         <div className="order-items-list">
@@ -393,6 +450,7 @@ const TraineeOrdersPage = () => {
                             const sellerNote = getLatestStatusNote(item);
                             const estimatedDelivery = getEstimatedDeliveryCopy(item, order);
                             const returnWindowCopy = getReturnWindowCopy(item);
+                            const pricingDetails = getItemPricingDetails(item);
 
                             return (
                               <div key={item.id} className="order-item-card order-item-card--detailed">
@@ -407,12 +465,23 @@ const TraineeOrdersPage = () => {
                                   <div>
                                     <strong>{item.name}</strong>
                                     <small>
-                                      Qty {item.quantity ?? 0}
+                                      Qty {pricingDetails.quantity}
                                       {' | '}
-                                      Unit {formatCurrency(item.price)}
+                                      {pricingDetails.hasDiscount
+                                        ? `Now ${formatCurrency(item.price)}`
+                                        : `Unit ${formatCurrency(item.price)}`}
                                       {' | '}
                                       Line total {formatCurrency(item.subtotal)}
                                     </small>
+                                    {pricingDetails.hasDiscount ? (
+                                      <small>
+                                        Original {formatCurrency(item.mrp)}
+                                        {' | '}
+                                        Save {formatCurrency(pricingDetails.lineSavings)}
+                                        {' | '}
+                                        {pricingDetails.discountPercentage}% off
+                                      </small>
+                                    ) : null}
                                     <small>{item.seller?.name ? `Seller: ${item.seller.name}` : 'Seller information pending'}</small>
                                     <small>{estimatedDelivery}</small>
                                   </div>

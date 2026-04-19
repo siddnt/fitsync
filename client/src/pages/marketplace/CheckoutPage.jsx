@@ -23,6 +23,7 @@ import {
   saveCheckoutAddress,
   removeSavedCheckoutAddress,
 } from './marketplaceStorage.js';
+import { deriveProductPricing } from './utils.js';
 
 const phonePattern = /^[0-9]{10}$/;
 const pinPattern = /^[0-9]{6}$/;
@@ -41,14 +42,21 @@ const initialAddressState = (user) => ({
 });
 
 const buildBasePricing = (items = []) => {
+  const originalSubtotal = items.reduce((sum, item) => {
+    const unitMrp = Math.max(Number(item.mrp ?? item.price) || 0, Number(item.price) || 0);
+    return sum + unitMrp * (Number(item.quantity) || 0);
+  }, 0);
   const subtotal = items.reduce(
     (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
     0,
   );
   const tax = 0;
   const shippingCost = 0;
+  const catalogDiscountAmount = Math.max(0, originalSubtotal - subtotal);
 
   return {
+    originalSubtotal,
+    catalogDiscountAmount,
     subtotal,
     tax,
     shippingCost,
@@ -112,6 +120,8 @@ const CheckoutPage = () => {
 
   const basePricing = useMemo(() => buildBasePricing(checkoutItems), [checkoutItems]);
   const displayPricing = pricing ?? basePricing;
+  const totalSavings = (Number(displayPricing.catalogDiscountAmount) || 0) + (Number(displayPricing.discountAmount) || 0);
+  const orderSavings = (Number(order?.catalogDiscountAmount) || 0) + (Number(order?.discountAmount) || 0);
 
   useEffect(() => {
     setFormState((prev) => ({
@@ -138,15 +148,9 @@ const CheckoutPage = () => {
     }
 
     const promoCode = readMarketplacePromoCode();
-    if (!promoCode) {
-      setPricing(null);
-      setPromoNotice(null);
-      return;
-    }
-
     let ignore = false;
 
-    previewMarketplacePricing({ items: checkoutItems, promoCode })
+    previewMarketplacePricing(promoCode ? { items: checkoutItems, promoCode } : { items: checkoutItems })
       .unwrap()
       .then((response) => {
         if (ignore) {
@@ -154,6 +158,11 @@ const CheckoutPage = () => {
         }
 
         setPricing(response?.data?.pricing ?? null);
+        if (!promoCode) {
+          setPromoNotice(null);
+          return;
+        }
+
         if (response?.data?.pricing?.discountAmount > 0) {
           setPromoNotice(`${promoCode} saved ${formatCurrency(response.data.pricing.discountAmount)} on this order.`);
         } else {
@@ -165,9 +174,11 @@ const CheckoutPage = () => {
           return;
         }
 
-        clearMarketplacePromoCode();
+        if (promoCode) {
+          clearMarketplacePromoCode();
+        }
         setPricing(null);
-        setPromoNotice(apiError?.data?.message || 'The saved promo code no longer applies.');
+        setPromoNotice(promoCode ? (apiError?.data?.message || 'The saved promo code no longer applies.') : null);
       });
 
     return () => {
@@ -276,8 +287,11 @@ const CheckoutPage = () => {
             name: item.name,
             quantity: item.quantity,
             price: item.price,
+            mrp: item.mrp,
             image: item.image,
           })),
+          originalSubtotal: displayPricing.originalSubtotal,
+          catalogDiscountAmount: displayPricing.catalogDiscountAmount,
           subtotal: displayPricing.subtotal,
           tax: displayPricing.tax,
           shippingCost: displayPricing.shippingCost,
@@ -341,18 +355,59 @@ const CheckoutPage = () => {
             <p className="checkout-success__info">Promo applied: {order.promo.description}</p>
           ) : null}
           <ul className="checkout-success__items">
-            {(order.items ?? []).map((item) => (
-              <li key={item.id}>
-                <span>{item.name}</span>
-                <span>x{item.quantity}</span>
-                <span>{formatCurrency(item.price * item.quantity)}</span>
-              </li>
-            ))}
+            {(order.items ?? []).map((item) => {
+              const pricingDetails = deriveProductPricing(item);
+
+              return (
+                <li key={item.id}>
+                  <span>
+                    {item.name}
+                    <small> x{item.quantity}</small>
+                    {pricingDetails.hasDiscount ? (
+                      <small>
+                        {' '}
+                        {formatCurrency(pricingDetails.mrp)}
+                        {' -> '}
+                        {formatCurrency(pricingDetails.price)}
+                      </small>
+                    ) : null}
+                  </span>
+                  <span>{formatCurrency(item.price * item.quantity)}</span>
+                </li>
+              );
+            })}
           </ul>
-          <div className="checkout-success__total">
-            <span>Total paid</span>
-            <strong>{formatCurrency(order.total)}</strong>
+          <div className="checkout-success__totals">
+            <div className="checkout-success__total-row">
+              <span>Original price</span>
+              <span>{formatCurrency(order.originalSubtotal ?? order.subtotal)}</span>
+            </div>
+            {order.catalogDiscountAmount > 0 ? (
+              <div className="checkout-success__total-row checkout-success__total-row--discount">
+                <span>Product discount</span>
+                <span>-{formatCurrency(order.catalogDiscountAmount)}</span>
+              </div>
+            ) : null}
+            <div className="checkout-success__total-row">
+              <span>Subtotal</span>
+              <span>{formatCurrency(order.subtotal)}</span>
+            </div>
+            {order.discountAmount > 0 ? (
+              <div className="checkout-success__total-row checkout-success__total-row--discount">
+                <span>Promo discount</span>
+                <span>-{formatCurrency(order.discountAmount)}</span>
+              </div>
+            ) : null}
+            <div className="checkout-success__total-row checkout-success__total-row--grand">
+              <span>Total paid</span>
+              <span>{formatCurrency(order.total)}</span>
+            </div>
           </div>
+          {orderSavings > 0 ? (
+            <p className="checkout-success__info">
+              Total savings: {formatCurrency(orderSavings)}
+            </p>
+          ) : null}
           <button type="button" onClick={handleContinueShopping}>
             Back to marketplace
           </button>
@@ -545,17 +600,39 @@ const CheckoutPage = () => {
         <aside className="checkout-summary">
           <h2>Order summary</h2>
           <ul>
-            {checkoutItems.map((item) => (
-              <li key={item.id}>
-                <span>
-                  {item.name}
-                  <small> x{item.quantity}</small>
-                </span>
-                <span>{formatCurrency(item.price * item.quantity)}</span>
-              </li>
-            ))}
+            {checkoutItems.map((item) => {
+              const pricingDetails = deriveProductPricing(item);
+
+              return (
+                <li key={item.id}>
+                  <span>
+                    {item.name}
+                    <small> x{item.quantity}</small>
+                    {pricingDetails.hasDiscount ? (
+                      <small>
+                        {' '}
+                        {formatCurrency(pricingDetails.mrp)}
+                        {' -> '}
+                        {formatCurrency(pricingDetails.price)}
+                      </small>
+                    ) : null}
+                  </span>
+                  <span>{formatCurrency(item.price * item.quantity)}</span>
+                </li>
+              );
+            })}
           </ul>
           <dl>
+            <div>
+              <dt>Original price</dt>
+              <dd>{formatCurrency(displayPricing.originalSubtotal ?? displayPricing.subtotal)}</dd>
+            </div>
+            {displayPricing.catalogDiscountAmount > 0 ? (
+              <div className="checkout-summary__discount">
+                <dt>Product discount</dt>
+                <dd>-{formatCurrency(displayPricing.catalogDiscountAmount)}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Subtotal</dt>
               <dd>{formatCurrency(displayPricing.subtotal)}</dd>
@@ -579,6 +656,11 @@ const CheckoutPage = () => {
               <dd>{formatCurrency(displayPricing.total)}</dd>
             </div>
           </dl>
+          {totalSavings > 0 ? (
+            <p className="checkout-summary__savings-note">
+              You save {formatCurrency(totalSavings)} on this order.
+            </p>
+          ) : null}
           {displayPricing.promo ? (
             <div className="checkout-summary__promo">
               <strong>Promo applied: {displayPricing.promo.code}</strong>

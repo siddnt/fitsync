@@ -31,6 +31,10 @@ const orderItemSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    mrp: {
+        type: Number,
+        min: 0
+    },
     image: {
         type: String
     },
@@ -212,6 +216,17 @@ const orderSchema = new mongoose.Schema(
         subtotal: {
             type: Number,
             required: true
+        },
+        originalSubtotal: {
+            type: Number,
+            required: true,
+            default: 0
+        },
+        catalogDiscountAmount: {
+            type: Number,
+            required: true,
+            default: 0,
+            min: 0
         },
         tax: {
             type: Number,

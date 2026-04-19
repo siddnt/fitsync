@@ -15,6 +15,7 @@ export const normalizeCheckoutItem = (item) => {
     id: String(id),
     name: item?.name ?? 'Unnamed product',
     price: Number(item?.price) || 0,
+    mrp: Number(item?.mrp ?? item?.price) || 0,
     image: item?.image ?? null,
     seller: item?.seller ?? null,
     quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,

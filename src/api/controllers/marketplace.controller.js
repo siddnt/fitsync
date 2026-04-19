@@ -108,7 +108,7 @@ const STATUS_INDEX = STATUS_SEQUENCE.reduce((acc, status, index) => {
 const ORDER_NUMBER_PREFIX = 'FS';
 const MARKETPLACE_LIST_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished createdAt updatedAt seller metrics';
 const MARKETPLACE_DETAIL_PRODUCT_SELECT = 'name description price mrp image category stock status isPublished updatedAt seller metrics metadata';
-const MARKETPLACE_ORDER_PRODUCT_SELECT = 'seller name price image stock status isPublished metrics';
+const MARKETPLACE_ORDER_PRODUCT_SELECT = 'seller name price mrp image stock status isPublished metrics';
 const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role profile profilePicture bio';
 const MARKETPLACE_REVIEW_SELECT = 'rating title comment createdAt isVerifiedPurchase user';
 const MARKETPLACE_REVIEW_USER_SELECT = 'name profilePicture role';
@@ -742,11 +742,18 @@ const releaseMarketplaceInventoryReservations = async (reservations = [], { sess
 };
 
 const calculateMarketplaceOrderPricing = (orderItems = [], promo = null) => {
+  const originalSubtotal = roundMarketplaceAmount(
+    orderItems.reduce((sum, item) => {
+      const unitMrp = Math.max(Number(item.mrp ?? item.price) || 0, Number(item.price) || 0);
+      return sum + unitMrp * (Number(item.quantity) || 0);
+    }, 0),
+  );
   const subtotal = roundMarketplaceAmount(
     orderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0),
   );
   const tax = 0;
   const shippingCost = 0;
+  const catalogDiscountAmount = roundMarketplaceAmount(Math.max(0, originalSubtotal - subtotal));
   const discountAmount = Math.min(
     subtotal,
     roundMarketplaceAmount(Number(promo?.discountAmount) || 0),
@@ -754,6 +761,8 @@ const calculateMarketplaceOrderPricing = (orderItems = [], promo = null) => {
   const total = roundMarketplaceAmount(Math.max(0, subtotal - discountAmount + tax + shippingCost));
 
   return {
+    originalSubtotal,
+    catalogDiscountAmount,
     subtotal,
     tax,
     shippingCost,
@@ -1025,6 +1034,8 @@ const prepareMarketplaceOrderItems = (items = []) => {
 const mapBuyerOrder = (order) => ({
   id: order._id,
   orderNumber: order.orderNumber,
+  originalSubtotal: Number(order.originalSubtotal) || Number(order.subtotal) || 0,
+  catalogDiscountAmount: Number(order.catalogDiscountAmount) || 0,
   subtotal: order.subtotal,
   tax: order.tax,
   shippingCost: order.shippingCost,
@@ -1048,6 +1059,9 @@ const mapBuyerOrder = (order) => ({
       name: item.name,
       quantity: item.quantity,
       price: item.price,
+      mrp: Number(item.mrp ?? item.price) || 0,
+      subtotal: (Number(item.price) || 0) * (Number(item.quantity) || 0),
+      originalSubtotal: (Number(item.mrp ?? item.price) || 0) * (Number(item.quantity) || 0),
       image: item.image ?? item.product?.image ?? null,
       status: normaliseItemStatus(item.status),
       tracking: buildTrackingSnapshot(item),
@@ -1082,6 +1096,7 @@ const buildMarketplaceOrderItemsFromSnapshot = (orderSnapshot = {}, initialStatu
     name: item.name,
     quantity: item.quantity,
     price: item.price,
+    mrp: item.mrp ?? item.price,
     image: item.image,
     status: 'processing',
     lastStatusAt: initialStatusTimestamp,
@@ -1204,6 +1219,8 @@ export const finalizeMarketplacePaymentSession = async ({
     orderItems,
     shippingAddress: orderSnapshot.shippingAddress,
     paymentMethod: 'Credit / Debit Card',
+    originalSubtotal: orderSnapshot.originalSubtotal ?? orderSnapshot.subtotal,
+    catalogDiscountAmount: orderSnapshot.catalogDiscountAmount ?? 0,
     subtotal: orderSnapshot.subtotal,
     tax: orderSnapshot.tax,
     shippingCost: orderSnapshot.shippingCost,
@@ -1692,6 +1709,7 @@ export const previewMarketplacePricing = asyncHandler(async (req, res) => {
     name: product.name,
     quantity,
     price: product.price,
+    mrp: product.mrp ?? product.price,
     image: product.image,
   }));
 
@@ -2027,6 +2045,7 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
         name: product.name,
         quantity,
         price: product.price,
+        mrp: product.mrp ?? product.price,
         image: product.image,
         status: 'processing',
         lastStatusAt: initialStatusTimestamp,
@@ -2056,6 +2075,8 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
         orderItems,
         shippingAddress,
         paymentMethod,
+        originalSubtotal: pricing.originalSubtotal,
+        catalogDiscountAmount: pricing.catalogDiscountAmount,
         subtotal: pricing.subtotal,
         tax: pricing.tax,
         shippingCost: pricing.shippingCost,
@@ -2123,6 +2144,7 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
         name: product.name,
         quantity,
         price: product.price,
+        mrp: product.mrp ?? product.price,
         image: product.image,
       }));
 
@@ -2148,6 +2170,8 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
         type: 'shop',
         orderSnapshot: {
           items: orderItems,
+          originalSubtotal: pricing.originalSubtotal,
+          catalogDiscountAmount: pricing.catalogDiscountAmount,
           subtotal: pricing.subtotal,
           tax: pricing.tax,
           shippingCost: pricing.shippingCost,

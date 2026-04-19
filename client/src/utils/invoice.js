@@ -36,6 +36,10 @@ const escapePdfText = (value) => String(value ?? '')
   .replace(/\r?\n/g, ' ');
 
 const byteLength = (value) => new TextEncoder().encode(value).length;
+const PRINT_FRAME_ID = 'fitsync-invoice-print-frame';
+
+const getTotalSavings = (order) =>
+  (Number(order?.catalogDiscountAmount) || 0) + (Number(order?.discountAmount) || 0);
 
 export const buildInvoiceMarkup = (order) => {
   const itemRows = (order?.items ?? [])
@@ -48,6 +52,8 @@ export const buildInvoiceMarkup = (order) => {
       </tr>
     `)
     .join('');
+
+  const totalSavings = getTotalSavings(order);
 
   return `
     <!doctype html>
@@ -95,12 +101,15 @@ export const buildInvoiceMarkup = (order) => {
           </div>
           <div class="card">
             <h3>Order summary</h3>
+            <div class="totals-row"><span>Original price</span><span>${escapeHtml(formatCurrency(order?.originalSubtotal ?? order?.subtotal))}</span></div>
+            ${Number(order?.catalogDiscountAmount ?? 0) > 0 ? `<div class="totals-row"><span>Product discount</span><span>-${escapeHtml(formatCurrency(order?.catalogDiscountAmount))}</span></div>` : ''}
             <div class="totals-row"><span>Subtotal</span><span>${escapeHtml(formatCurrency(order?.subtotal))}</span></div>
             ${Number(order?.discountAmount ?? 0) > 0 ? `<div class="totals-row"><span>Promo discount</span><span>-${escapeHtml(formatCurrency(order?.discountAmount))}</span></div>` : ''}
             <div class="totals-row"><span>Tax</span><span>${escapeHtml(formatCurrency(order?.tax))}</span></div>
             <div class="totals-row"><span>Shipping</span><span>${escapeHtml(formatCurrency(order?.shippingCost))}</span></div>
             <div class="totals-row total-strong"><span>Total</span><span>${escapeHtml(formatCurrency(order?.total))}</span></div>
-            ${order?.promo?.code ? `<p class="muted" style="margin-top: 8px;">Promo ${escapeHtml(order.promo.code)}${order?.promo?.description ? ` • ${escapeHtml(order.promo.description)}` : ''}</p>` : ''}
+            ${totalSavings > 0 ? `<p class="muted" style="margin-top: 8px;">Total savings: ${escapeHtml(formatCurrency(totalSavings))}</p>` : ''}
+            ${order?.promo?.code ? `<p class="muted" style="margin-top: 8px;">Promo ${escapeHtml(order.promo.code)}${order?.promo?.description ? ` - ${escapeHtml(order.promo.description)}` : ''}</p>` : ''}
           </div>
         </div>
 
@@ -133,6 +142,8 @@ const buildInvoicePdfString = (order) => {
     `  Unit ${formatPdfAmount(item.price)} | Line ${formatPdfAmount(item.subtotal ?? ((item.quantity ?? 0) * (item.price ?? 0)))}`,
   ]));
 
+  const totalSavings = getTotalSavings(order);
+
   const lines = [
     'FitSync Invoice',
     `Order: ${order?.orderNumber ?? 'Order'}`,
@@ -143,11 +154,14 @@ const buildInvoicePdfString = (order) => {
     ...shippingLines,
     '',
     'Summary',
+    `Original price: ${formatPdfAmount(order?.originalSubtotal ?? order?.subtotal)}`,
+    ...(Number(order?.catalogDiscountAmount ?? 0) > 0 ? [`Product discount: -${formatPdfAmount(order?.catalogDiscountAmount)}`] : []),
     `Subtotal: ${formatPdfAmount(order?.subtotal)}`,
     ...(Number(order?.discountAmount ?? 0) > 0 ? [`Promo discount: -${formatPdfAmount(order?.discountAmount)}`] : []),
     `Tax: ${formatPdfAmount(order?.tax)}`,
     `Shipping: ${formatPdfAmount(order?.shippingCost)}`,
     `Total: ${formatPdfAmount(order?.total)}`,
+    ...(totalSavings > 0 ? [`Total savings: ${formatPdfAmount(totalSavings)}`] : []),
     ...(order?.promo?.code ? [`Promo: ${order.promo.code}${order?.promo?.description ? ` - ${order.promo.description}` : ''}`] : []),
     '',
     'Items',
@@ -191,22 +205,123 @@ const buildInvoicePdfString = (order) => {
   return pdf;
 };
 
-export const printInvoiceDocument = (order) => {
-  if (typeof window === 'undefined') {
-    return { ok: false, error: 'Printing is unavailable outside the browser.' };
+const cleanupPrintFrame = (frame) => {
+  if (!frame?.parentNode) {
+    return;
   }
 
+  frame.parentNode.removeChild(frame);
+};
+
+const printInvoiceWithPopup = (markup) => {
   const invoiceWindow = window.open('', '_blank', 'noopener,noreferrer');
   if (!invoiceWindow) {
-    return { ok: false, error: 'Allow pop-ups to open the invoice preview.' };
+    return { ok: false, error: 'Could not open the invoice preview. Try downloading the PDF instead.' };
   }
 
-  invoiceWindow.document.write(buildInvoiceMarkup(order));
+  invoiceWindow.document.write(markup);
   invoiceWindow.document.close();
   invoiceWindow.focus();
   invoiceWindow.print();
 
   return { ok: true };
+};
+
+const printInvoiceWithIframe = (markup) => {
+  if (typeof document === 'undefined') {
+    return { ok: false, error: 'Printing is unavailable outside the browser.' };
+  }
+
+  const existingFrame = document.getElementById(PRINT_FRAME_ID);
+  if (existingFrame) {
+    cleanupPrintFrame(existingFrame);
+  }
+
+  const frame = document.createElement('iframe');
+  frame.id = PRINT_FRAME_ID;
+  frame.setAttribute('aria-hidden', 'true');
+  frame.tabIndex = -1;
+  frame.style.position = 'fixed';
+  frame.style.right = '0';
+  frame.style.bottom = '0';
+  frame.style.width = '0';
+  frame.style.height = '0';
+  frame.style.border = '0';
+  frame.style.opacity = '0';
+  frame.style.pointerEvents = 'none';
+
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    window.setTimeout(() => cleanupPrintFrame(frame), 1000);
+  };
+
+  frame.onload = () => {
+    const frameWindow = frame.contentWindow;
+    if (!frameWindow) {
+      cleanup();
+      return;
+    }
+
+    const handleAfterPrint = () => {
+      frameWindow.removeEventListener?.('afterprint', handleAfterPrint);
+      cleanup();
+    };
+
+    frameWindow.addEventListener?.('afterprint', handleAfterPrint, { once: true });
+
+    window.setTimeout(() => {
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+      } catch (_error) {
+        cleanup();
+        return;
+      }
+
+      // Some browsers do not reliably emit afterprint for hidden frames.
+      window.setTimeout(cleanup, 4000);
+    }, 50);
+  };
+
+  if ('srcdoc' in frame) {
+    frame.srcdoc = markup;
+  }
+
+  document.body.appendChild(frame);
+
+  if (!('srcdoc' in frame)) {
+    const frameDocument = frame.contentWindow?.document;
+    if (!frameDocument) {
+      cleanup();
+      return { ok: false, error: 'Could not prepare the invoice preview.' };
+    }
+
+    frameDocument.open();
+    frameDocument.write(markup);
+    frameDocument.close();
+  }
+
+  return { ok: true };
+};
+
+export const printInvoiceDocument = (order) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { ok: false, error: 'Printing is unavailable outside the browser.' };
+  }
+
+  const markup = buildInvoiceMarkup(order);
+  const iframeResult = printInvoiceWithIframe(markup);
+
+  if (iframeResult.ok) {
+    return iframeResult;
+  }
+
+  return printInvoiceWithPopup(markup);
 };
 
 export const downloadInvoicePdf = (order) => {

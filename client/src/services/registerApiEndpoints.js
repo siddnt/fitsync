@@ -10,3 +10,4 @@ import './gymsApi.js';
 import './ownerApi.js';
 import './marketplaceApi.js';
 import './trainerApi.js';
+import './managerApi.js';

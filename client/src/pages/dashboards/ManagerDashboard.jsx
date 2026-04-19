@@ -73,14 +73,14 @@ const ManagerDashboard = () => {
       label: 'Review flagged gyms',
       value: formatNumber(stats?.flaggedGyms ?? 0),
       meta: 'Draft, suspended, or unpublished listings need attention',
-      to: '/dashboard/admin/gyms',
+      to: '/dashboard/manager/gyms',
     },
     {
       id: 'approvals',
       label: 'Approve pending accounts',
       value: formatNumber(stats?.pendingApprovals ?? 0),
-      meta: 'Seller and manager applications waiting for review',
-      to: '/dashboard/admin/users',
+      meta: 'Seller and gym owner applications waiting for review',
+      to: '/dashboard/manager/approvals',
     },
     {
       id: 'communications',
@@ -98,7 +98,7 @@ const ManagerDashboard = () => {
           <div className="stat-card stat-card--manager-accent">
             <small>Pending approvals</small>
             <strong>{formatNumber(stats?.pendingApprovals ?? 0)}</strong>
-            <small>Sellers and managers waiting for review</small>
+            <small>Sellers and gym owners waiting for review</small>
           </div>
           <div className="stat-card">
             <small>Active sellers</small>

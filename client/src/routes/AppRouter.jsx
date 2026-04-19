@@ -22,6 +22,15 @@ const TrainerDashboard = lazy(() => import('../pages/dashboards/TrainerDashboard
 const AdminDashboard = lazy(() => import('../pages/dashboards/AdminDashboard.jsx'));
 const SellerDashboard = lazy(() => import('../pages/dashboards/SellerDashboard.jsx'));
 const ManagerDashboard = lazy(() => import('../pages/dashboards/ManagerDashboard.jsx'));
+const ManagerApprovalsPage = lazy(() => import('../pages/dashboards/manager/ApprovalsPage.jsx'));
+const ManagerSellersPage = lazy(() => import('../pages/dashboards/manager/SellersPage.jsx'));
+const ManagerGymOwnersPage = lazy(() => import('../pages/dashboards/manager/GymOwnersPage.jsx'));
+const ManagerGymsPage = lazy(() => import('../pages/dashboards/manager/GymsPage.jsx'));
+const ManagerGymDetailPage = lazy(() => import('../pages/dashboards/manager/GymDetailPage.jsx'));
+const ManagerProductsPage = lazy(() => import('../pages/dashboards/manager/ProductsPage.jsx'));
+const ManagerProductBuyersPage = lazy(() => import('../pages/dashboards/manager/ProductBuyersPage.jsx'));
+const ManagerMarketplacePage = lazy(() => import('../pages/dashboards/manager/MarketplacePage.jsx'));
+const ManagerUserDetailPage = lazy(() => import('../pages/dashboards/manager/UserDetailPage.jsx'));
 const ManagerMessagesPage = lazy(() => import('../pages/dashboards/admin/MessagesPage.jsx'));
 const InternalCommunicationsPage = lazy(() => import('../pages/dashboards/shared/InternalCommunicationsPage.jsx'));
 const TraineeProgressPage = lazy(() => import('../pages/dashboards/trainee/ProgressPage.jsx'));
@@ -121,6 +130,15 @@ const AppRouter = () => (
           </Route>
           <Route path="manager">
             <Route index element={<ManagerDashboard />} />
+            <Route path="approvals" element={<ManagerApprovalsPage />} />
+            <Route path="sellers" element={<ManagerSellersPage />} />
+            <Route path="gym-owners" element={<ManagerGymOwnersPage />} />
+            <Route path="gyms" element={<ManagerGymsPage />} />
+            <Route path="gyms/:gymId" element={<ManagerGymDetailPage />} />
+            <Route path="products" element={<ManagerProductsPage />} />
+            <Route path="products/:productId" element={<ManagerProductBuyersPage />} />
+            <Route path="marketplace" element={<ManagerMarketplacePage />} />
+            <Route path="users/:userId" element={<ManagerUserDetailPage />} />
             <Route path="communications" element={<InternalCommunicationsPage />} />
             <Route path="messages" element={<ManagerMessagesPage />} />
           </Route>

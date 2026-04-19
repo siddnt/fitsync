@@ -46,6 +46,10 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,
+      immutableCheck: {
+        ignoredPaths: [apiSlice.reducerPath],
+        warnAfter: 128,
+      },
     }).concat(apiSlice.middleware),
 });
 

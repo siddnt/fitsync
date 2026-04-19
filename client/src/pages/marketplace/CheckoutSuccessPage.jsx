@@ -28,6 +28,7 @@ const CheckoutSuccessPage = () => {
   const [pollCount, setPollCount] = useState(0);
   const pendingOrderSnapshot = readPendingOrderSnapshot();
   const promo = orderData?.promo ?? pendingOrderSnapshot?.promo ?? null;
+  const totalSavingsAmount = (Number(orderData?.catalogDiscountAmount) || 0) + (Number(orderData?.discountAmount) || 0);
 
   const {
     data: orderResponse,
@@ -226,11 +227,21 @@ const CheckoutSuccessPage = () => {
 
         <div className="checkout-success__totals">
           <div className="checkout-success__total-row">
+            <span>Original price</span>
+            <span>{formatCurrency(orderData.originalSubtotal ?? orderData.subtotal)}</span>
+          </div>
+          {orderData.catalogDiscountAmount > 0 ? (
+            <div className="checkout-success__total-row checkout-success__total-row--discount">
+              <span>Product discount</span>
+              <span>-{formatCurrency(orderData.catalogDiscountAmount)}</span>
+            </div>
+          ) : null}
+          <div className="checkout-success__total-row">
             <span>Subtotal</span>
             <span>{formatCurrency(orderData.subtotal)}</span>
           </div>
           {orderData.discountAmount > 0 ? (
-            <div className="checkout-success__total-row">
+            <div className="checkout-success__total-row checkout-success__total-row--discount">
               <span>Promo discount</span>
               <span>-{formatCurrency(orderData.discountAmount)}</span>
             </div>
@@ -252,6 +263,11 @@ const CheckoutSuccessPage = () => {
             <span>{formatCurrency(orderData.total)}</span>
           </div>
         </div>
+        {totalSavingsAmount > 0 ? (
+          <p className="checkout-success__info">
+            Total savings: {formatCurrency(totalSavingsAmount)}
+          </p>
+        ) : null}
 
         <div className="checkout-success__receipt">
           <div className="checkout-success__receipt-header">
@@ -305,7 +321,7 @@ const CheckoutSuccessPage = () => {
             <p>
               {promo?.code ? `${promo.code}: ` : ''}
               {promo?.description || promo?.label || 'Promo discount applied to this order.'}
-              {promo?.discountAmount > 0 ? ` You saved ${formatCurrency(promo.discountAmount)}.` : ''}
+              {promo?.discountAmount > 0 ? ` Additional promo savings: ${formatCurrency(promo.discountAmount)}.` : ''}
             </p>
           </div>
         ) : null}
