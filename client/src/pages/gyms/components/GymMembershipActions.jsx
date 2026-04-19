@@ -548,7 +548,7 @@ const GymMembershipActions = ({
                   onClick={handleJoinClick}
                   disabled={isJoining || !trainers.length || selectedPlanAmount === null}
                 >
-                  {isJoining ? 'Joining...' : 'Join this gym'}
+                  {isJoining ? 'Preparing checkout...' : 'Continue to payment'}
                 </button>
               </div>
 

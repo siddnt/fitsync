@@ -130,18 +130,18 @@ const GymOwnerSubscriptionsPage = () => {
       };
 
       const response = await checkoutSubscription(payload).unwrap();
+      const checkoutUrl = response?.data?.checkoutUrl;
 
-      const paymentReference =
-        response?.data?.subscription?.invoices?.[0]?.paymentReference ||
-        response?.data?.subscription?._id;
+      if (!checkoutUrl) {
+        throw new Error('Checkout URL missing from response.');
+      }
 
-      dispatch(setLastReceipt(paymentReference));
+      dispatch(setLastReceipt(null));
       dispatch(selectPlan(null));
       dispatch(selectGym(null));
-
-      await Promise.all([refetchSubscriptions(), refetchGyms()]);
       dispatch(resetForm('listingSubscription'));
       setSubscriptionDraft(null);
+      window.location.assign(checkoutUrl);
     } catch (error) {
       const message = error?.data?.message ?? 'We could not activate this subscription. Please try again.';
       throw new SubmissionError({ _error: message });

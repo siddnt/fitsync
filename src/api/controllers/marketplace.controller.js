@@ -10,6 +10,11 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import stripe from '../../services/stripe.service.js';
 import {
+  finalizeListingSubscriptionPaymentSession,
+  finalizeSponsorshipPaymentSession,
+} from './monetisation.controller.js';
+import { finalizeGymMembershipPaymentSession } from './gymMembership.controller.js';
+import {
   buildCacheKey,
   getOrSetCache,
   invalidateCacheByTags,
@@ -897,7 +902,7 @@ const buildMarketplaceOrderNotifications = (order) => {
   return notifications;
 };
 
-const finalizeMarketplacePaymentSession = async ({
+export const finalizeMarketplacePaymentSession = async ({
   paymentSessionId,
   stripeSessionId,
   paymentIntentId,
@@ -1674,40 +1679,58 @@ export const handleStripeWebhook = asyncHandler(async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle the event
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
-      
-      // Only process marketplace order sessions
-      if (session.metadata?.type !== 'marketplace-order') {
-        return res.json({ received: true });
-      }
-
-      const paymentSessionId = session.metadata.paymentSessionId;
-      const userId = session.metadata.userId;
+      const paymentSessionId = session.metadata?.paymentSessionId;
+      const userId = session.metadata?.userId;
+      const paymentType = session.metadata?.type;
 
       if (!paymentSessionId || !userId) {
         console.error('Missing metadata in Stripe session');
         return res.status(400).json({ error: 'Missing metadata' });
       }
 
-      const session_db = await mongoose.startSession();
-
       try {
-        await session_db.withTransaction(async () => {
-          await finalizeMarketplacePaymentSession({
+        if (paymentType === 'marketplace-order') {
+          const sessionDb = await mongoose.startSession();
+
+          try {
+            await sessionDb.withTransaction(async () => {
+              await finalizeMarketplacePaymentSession({
+                paymentSessionId,
+                stripeSessionId: session.id,
+                paymentIntentId: session.payment_intent,
+                session: sessionDb,
+              });
+            });
+          } finally {
+            await sessionDb.endSession();
+          }
+        } else if (paymentType === 'listing-subscription') {
+          await finalizeListingSubscriptionPaymentSession({
             paymentSessionId,
             stripeSessionId: session.id,
             paymentIntentId: session.payment_intent,
-            session: session_db,
           });
-        });
+        } else if (paymentType === 'gym-sponsorship') {
+          await finalizeSponsorshipPaymentSession({
+            paymentSessionId,
+            stripeSessionId: session.id,
+            paymentIntentId: session.payment_intent,
+          });
+        } else if (paymentType === 'gym-membership') {
+          await finalizeGymMembershipPaymentSession({
+            paymentSessionId,
+            stripeSessionId: session.id,
+            paymentIntentId: session.payment_intent,
+          });
+        } else {
+          return res.json({ received: true });
+        }
       } catch (error) {
         console.error('Error processing webhook:', error);
         throw error;
-      } finally {
-        await session_db.endSession();
       }
 
       break;
@@ -1715,43 +1738,55 @@ export const handleStripeWebhook = asyncHandler(async (req, res) => {
 
     case 'checkout.session.expired': {
       const session = event.data.object;
-      
-      if (session.metadata?.type === 'marketplace-order') {
-        const paymentSessionId = session.metadata.paymentSessionId;
-        
-        if (paymentSessionId) {
-          const paymentSession = await PaymentSession.findById(paymentSessionId).lean();
+      const paymentType = session.metadata?.type;
+      const paymentSessionId = session.metadata?.paymentSessionId;
 
-          if (paymentSession && !paymentSession.processed) {
-            const reservations = (paymentSession.orderSnapshot?.items ?? [])
-              .map((item) => ({
-                product: item?.product ? { _id: item.product } : null,
-                quantity: Number(item?.quantity) || 0,
-              }))
-              .filter((entry) => entry.product?._id && entry.quantity > 0);
+      if (!paymentSessionId) {
+        break;
+      }
 
-            const expirySession = await mongoose.startSession();
+      if (paymentType === 'marketplace-order') {
+        const paymentSession = await PaymentSession.findById(paymentSessionId).lean();
 
-            try {
-              await expirySession.withTransaction(async () => {
-                await PaymentSession.findByIdAndUpdate(
-                  paymentSessionId,
-                  {
-                    'stripe.status': 'expired',
-                    processed: true,
-                  },
-                  { session: expirySession },
-                );
+        if (paymentSession && !paymentSession.processed) {
+          const reservations = (paymentSession.orderSnapshot?.items ?? [])
+            .map((item) => ({
+              product: item?.product ? { _id: item.product } : null,
+              quantity: Number(item?.quantity) || 0,
+            }))
+            .filter((entry) => entry.product?._id && entry.quantity > 0);
 
-                await releaseMarketplaceInventoryReservations(reservations, {
-                  session: expirySession,
-                });
+          const expirySession = await mongoose.startSession();
+
+          try {
+            await expirySession.withTransaction(async () => {
+              await PaymentSession.findByIdAndUpdate(
+                paymentSessionId,
+                {
+                  'stripe.status': 'expired',
+                  processed: true,
+                },
+                { session: expirySession },
+              );
+
+              await releaseMarketplaceInventoryReservations(reservations, {
+                session: expirySession,
               });
-            } finally {
-              await expirySession.endSession();
-            }
+            });
+          } finally {
+            await expirySession.endSession();
           }
         }
+      } else {
+        await PaymentSession.findOneAndUpdate(
+          { _id: paymentSessionId, processed: { $ne: true } },
+          {
+            $set: {
+              'stripe.status': 'expired',
+              processed: true,
+            },
+          },
+        );
       }
       break;
     }

@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import { Field, reduxForm } from 'redux-form';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import FormField from '../../components/forms/FormField.jsx';
 import {
   selectGym,
@@ -87,10 +87,8 @@ const ListingSubscriptionFormComponent = ({
   plans = [],
   submitting = false,
   error = null,
-  submitSucceeded = false,
 }) => {
   const dispatch = useDispatch();
-  const lastReceipt = useSelector((state) => state.monetisation.lastReceipt);
 
   return (
     <form className="monetisation-form" onSubmit={handleSubmit}>
@@ -114,14 +112,9 @@ const ListingSubscriptionFormComponent = ({
       </div>
 
       {error ? <div className="form-error">{error}</div> : null}
-      {submitSucceeded && lastReceipt ? (
-        <div className="form-success">
-          Subscription activated. Confirmation ID: {lastReceipt}
-        </div>
-      ) : null}
 
       <button type="submit" className="cta-button" disabled={submitting}>
-        {submitting ? 'Activating...' : 'Activate plan'}
+        {submitting ? 'Preparing checkout...' : 'Continue to payment'}
       </button>
     </form>
   );
@@ -140,7 +133,6 @@ ListingSubscriptionFormComponent.propTypes = {
   })),
   submitting: PropTypes.bool,
   error: PropTypes.string,
-  submitSucceeded: PropTypes.bool,
 };
 
 const validate = (values) => {

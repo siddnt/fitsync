@@ -12,6 +12,8 @@ const CartPage = lazy(() => import('../pages/marketplace/CartPage.jsx'));
 const CheckoutPage = lazy(() => import('../pages/marketplace/CheckoutPage.jsx'));
 const CheckoutSuccessPage = lazy(() => import('../pages/marketplace/CheckoutSuccessPage.jsx'));
 const CheckoutCancelPage = lazy(() => import('../pages/marketplace/CheckoutCancelPage.jsx'));
+const PaymentSuccessPage = lazy(() => import('../pages/payments/PaymentSuccessPage.jsx'));
+const PaymentCancelPage = lazy(() => import('../pages/payments/PaymentCancelPage.jsx'));
 const ProfilePage = lazy(() => import('../pages/profile/ProfilePage.jsx'));
 const TraineeDashboard = lazy(() => import('../pages/dashboards/TraineeDashboard.jsx'));
 const TraineeSessionsPage = lazy(() => import('../pages/dashboards/trainee/SessionsPage.jsx'));
@@ -74,6 +76,8 @@ const AppRouter = () => (
           <Route path="checkout" element={<CheckoutPage />} />
           <Route path="marketplace/checkout/success" element={<CheckoutSuccessPage />} />
           <Route path="marketplace/checkout/cancel" element={<CheckoutCancelPage />} />
+          <Route path="payments/success" element={<PaymentSuccessPage />} />
+          <Route path="payments/cancelled" element={<PaymentCancelPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="auth/*" element={<AuthRoutes />} />
         </Route>

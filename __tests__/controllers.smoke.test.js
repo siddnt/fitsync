@@ -1,7 +1,9 @@
 import { jest } from '@jest/globals';
+import GymMembership from '../src/models/gymMembership.model.js';
 import Order from '../src/models/order.model.js';
 import TrainerAssignment from '../src/models/trainerAssignment.model.js';
 import TrainerProgress from '../src/models/trainerProgress.model.js';
+import stripe from '../src/services/stripe.service.js';
 import {
   apiCall,
   buildFutureSlot,
@@ -19,13 +21,27 @@ import app from '../src/app.js';
 
 jest.setTimeout(180000);
 
+const originalStripeCheckoutCreate = stripe.checkout.sessions.create;
+
 beforeAll(async () => {
   await setupControllerSmoke();
 });
 
 afterAll(async () => {
+  stripe.checkout.sessions.create = originalStripeCheckoutCreate;
   await teardownControllerSmoke();
 });
+
+afterEach(() => {
+  stripe.checkout.sessions.create = originalStripeCheckoutCreate;
+});
+
+const mockStripeCheckoutSession = (suffix) => {
+  stripe.checkout.sessions.create = jest.fn().mockResolvedValue({
+    id: `cs_test_${suffix}`,
+    url: `https://checkout.stripe.test/${suffix}`,
+  });
+};
 
 describe('Controller route smoke coverage', () => {
   describe('System routes', () => {
@@ -157,23 +173,43 @@ describe('Controller route smoke coverage', () => {
       expect(String(res.body?.data?.membership?.id)).toBe(String(ctx.memberships.main._id));
     });
 
-    it('POST /api/gyms/:gymId/memberships joins a gym for a trainee', async () => {
+    it('POST /api/gyms/:gymId/memberships creates a Stripe checkout session for a trainee', async () => {
+      mockStripeCheckoutSession(`${runId}_membership`);
+
       const res = await apiCall('post', `/api/gyms/${ctx.gyms.main._id}/memberships`, { token: ctx.tokens.traineeJoin }).send({
         trainerId: String(ctx.users.trainer._id),
         planCode: 'monthly',
-        paymentReference: `${runId}-join-trainee`,
         autoRenew: true,
       });
 
-      expect(res.status).toBe(201);
-      ctx.memberships.joined = { _id: String(res.body?.data?.membership?.id) };
-      trackId('memberships', ctx.memberships.joined._id);
+      expect(res.status).toBe(200);
+      expect(res.body?.data?.sessionId).toBe(`cs_test_${runId}_membership`);
+      expect(res.body?.data?.checkoutUrl).toContain(`https://checkout.stripe.test/${runId}_membership`);
     });
 
     it('DELETE /api/gyms/:gymId/memberships/:membershipId leaves a gym membership', async () => {
+      const membership = await GymMembership.create({
+        trainee: ctx.users.traineeJoin._id,
+        gym: ctx.gyms.main._id,
+        trainer: ctx.users.trainer._id,
+        plan: 'monthly',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + (14 * 24 * 60 * 60 * 1000)),
+        status: 'active',
+        autoRenew: true,
+        billing: {
+          amount: 2500,
+          currency: 'INR',
+          paymentGateway: 'internal',
+          paymentReference: `${runId}-leave-membership`,
+          status: 'paid',
+        },
+      });
+      trackId('memberships', membership._id);
+
       const res = await apiCall(
         'delete',
-        `/api/gyms/${ctx.gyms.main._id}/memberships/${ctx.memberships.joined._id}`,
+        `/api/gyms/${ctx.gyms.main._id}/memberships/${membership._id}`,
         { token: ctx.tokens.traineeJoin },
       );
 
@@ -261,24 +297,38 @@ describe('Controller route smoke coverage', () => {
       expect(res.status).toBe(200);
     });
 
-    it('POST /api/owner/subscriptions/checkout activates a listing subscription', async () => {
+    it('POST /api/owner/subscriptions/checkout creates a Stripe checkout session', async () => {
+      mockStripeCheckoutSession(`${runId}_listing`);
+
       const res = await apiCall('post', '/api/owner/subscriptions/checkout', { token: ctx.tokens.owner }).send({
         gymId: String(ctx.gyms.secondary._id),
         planCode: 'listing-3m',
       });
 
-      expect(res.status).toBe(201);
-      expect(res.body?.data?.subscription?.planCode).toBe('listing-3m');
+      expect(res.status).toBe(200);
+      expect(res.body?.data?.sessionId).toBe(`cs_test_${runId}_listing`);
+      expect(res.body?.data?.checkoutUrl).toContain(`https://checkout.stripe.test/${runId}_listing`);
     });
 
-    it('POST /api/owner/sponsorships/purchase activates a sponsorship package', async () => {
+    it('POST /api/owner/sponsorships/purchase creates a Stripe checkout session', async () => {
+      mockStripeCheckoutSession(`${runId}_sponsorship`);
+
       const res = await apiCall('post', '/api/owner/sponsorships/purchase', { token: ctx.tokens.owner }).send({
         gymId: String(ctx.gyms.main._id),
         tier: 'gold',
       });
 
       expect(res.status).toBe(200);
-      expect(res.body?.data?.sponsorship?.tier).toBe('gold');
+      expect(res.body?.data?.sessionId).toBe(`cs_test_${runId}_sponsorship`);
+      expect(res.body?.data?.checkoutUrl).toContain(`https://checkout.stripe.test/${runId}_sponsorship`);
+    });
+
+    it('GET /api/payments/checkout/:sessionId returns 404 for an unknown session', async () => {
+      const res = await apiCall('get', '/api/payments/checkout/cs_test_unknown_payment', {
+        token: ctx.tokens.owner,
+      });
+
+      expect(res.status).toBe(404);
     });
 
     it('DELETE /api/owner/memberships/:membershipId removes a gym member', async () => {

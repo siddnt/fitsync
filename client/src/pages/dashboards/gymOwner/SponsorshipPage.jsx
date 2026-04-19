@@ -119,18 +119,18 @@ const GymOwnerSponsorshipPage = () => {
       };
 
       const response = await purchaseSponsorship(payload).unwrap();
+      const checkoutUrl = response?.data?.checkoutUrl;
 
-      const paymentReference =
-        response?.data?.sponsorship?.paymentReference ||
-        `${payload.tier}-${payload.gymId}`;
+      if (!checkoutUrl) {
+        throw new Error('Checkout URL missing from response.');
+      }
 
-      dispatch(setLastReceipt(paymentReference));
+      dispatch(setLastReceipt(null));
       dispatch(selectSponsorshipTier(null));
       dispatch(selectGym(null));
-
-      await Promise.all([refetchSponsorships(), refetchGyms()]);
       dispatch(resetForm('sponsorshipPurchase'));
       setSponsorshipDraft(null);
+      window.location.assign(checkoutUrl);
     } catch (error) {
       const message = error?.data?.message ?? 'We could not activate this sponsorship. Please try again.';
       throw new SubmissionError({ _error: message });
