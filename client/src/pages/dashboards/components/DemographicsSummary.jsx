@@ -29,7 +29,7 @@ const DemographicsSummary = ({ gender = [], ageBuckets = [] }) => {
         <h4>Age distribution</h4>
         {ageHasData ? (
           <div className="chart-container">
-            <ResponsiveContainer width="100%" height={240} minWidth={0}>
+            <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={240}>
               <BarChart data={ageBuckets} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.08)" vertical={false} />
                 <XAxis

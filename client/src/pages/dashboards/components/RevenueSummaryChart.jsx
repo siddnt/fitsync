@@ -68,7 +68,7 @@ const RevenueSummaryChart = ({
 
   return (
     <div className="chart-container">
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={260} minWidth={0} minHeight={260}>
         <AreaChart data={resolvedData} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
           {!hasCustomSeries && (
             <defs>

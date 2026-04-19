@@ -16,6 +16,12 @@ const authSlice = createSlice({
       state.status = 'loading';
       state.error = null;
     },
+    clearAuthError(state) {
+      if (state.status === 'failed') {
+        state.status = 'idle';
+      }
+      state.error = null;
+    },
     authSuccess(state, action) {
       const { user, accessToken, refreshToken } = action.payload;
       state.user = user;

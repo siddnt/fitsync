@@ -56,26 +56,32 @@ const ProductFilters = ({
         ))}
       </div>
       <div className="marketplace-price-inputs">
-        <label htmlFor="price-min">Min</label>
-        <input
-          id="price-min"
-          type="number"
-          min="0"
-          inputMode="numeric"
-          value={filters.minPrice}
-          onChange={(event) => onChange({ minPrice: event.target.value })}
-          disabled={disabled}
-        />
-        <label htmlFor="price-max">Max</label>
-        <input
-          id="price-max"
-          type="number"
-          min="0"
-          inputMode="numeric"
-          value={filters.maxPrice}
-          onChange={(event) => onChange({ maxPrice: event.target.value })}
-          disabled={disabled}
-        />
+        <label htmlFor="price-min">
+          <span>Min</span>
+          <input
+            id="price-min"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="0"
+            value={filters.minPrice}
+            onChange={(event) => onChange({ minPrice: event.target.value })}
+            disabled={disabled}
+          />
+        </label>
+        <label htmlFor="price-max">
+          <span>Max</span>
+          <input
+            id="price-max"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            placeholder="Any"
+            value={filters.maxPrice}
+            onChange={(event) => onChange({ maxPrice: event.target.value })}
+            disabled={disabled}
+          />
+        </label>
       </div>
     </div>
 

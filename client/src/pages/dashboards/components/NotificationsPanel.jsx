@@ -43,7 +43,7 @@ const NotificationsPanel = ({
             ) : null}
             <p className="notification-feed__message">{notification.message}</p>
             {notification.amount ? (
-              <p className="notification-feed__amount">{formatCurrency({ amount: notification.amount })}</p>
+              <p className="notification-feed__amount">{formatCurrency({ amount: notification.amount, currency: notification.currency })}</p>
             ) : null}
           </>
         );
@@ -67,7 +67,14 @@ NotificationsPanel.propTypes = {
     PropTypes.shape({
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
       type: PropTypes.string,
-      amount: PropTypes.number,
+      amount: PropTypes.oneOfType([
+        PropTypes.number,
+        PropTypes.shape({
+          amount: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+          currency: PropTypes.string,
+        }),
+      ]),
+      currency: PropTypes.string,
       title: PropTypes.string,
       link: PropTypes.string,
       message: PropTypes.string,

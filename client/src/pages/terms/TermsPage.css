@@ -55,6 +55,39 @@
   padding: 2rem 2rem 4rem;
 }
 
+.legal-summary {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 2.5rem;
+}
+
+.legal-summary__card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+}
+
+.legal-summary__card small {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.legal-summary__card strong {
+  color: #fff;
+}
+
+.legal-summary__card span {
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.6;
+}
+
 .legal-section {
   margin-bottom: 2.5rem;
 }

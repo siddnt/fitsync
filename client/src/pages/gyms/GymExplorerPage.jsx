@@ -23,19 +23,6 @@ const toPositiveNumber = (value) => {
 const isSponsoredGym = (gym) =>
   gym?.sponsorship?.status === 'active' && gym?.sponsorship?.tier !== 'none';
 
-const isFeaturedGym = (gym) => {
-  if (isSponsoredGym(gym)) {
-    return true;
-  }
-
-  const ratingCount = toPositiveNumber(gym?.analytics?.ratingCount);
-  const rating = Number(gym?.analytics?.rating ?? 0);
-  const memberships = toPositiveNumber(gym?.analytics?.memberships);
-  const impressions = toPositiveNumber(gym?.analytics?.impressions);
-
-  return (ratingCount >= 2 && rating >= 4.5) || memberships >= 2 || impressions >= 1500;
-};
-
 const buildDiscoveryMeta = (gym) => {
   const ratingCount = toPositiveNumber(gym?.analytics?.ratingCount);
   const rating = Number(gym?.analytics?.rating ?? 0);
@@ -176,20 +163,6 @@ const GymExplorerPage = () => {
     [trainersResponse?.data?.trainers],
   );
 
-  const explorerInsights = useMemo(() => {
-    const sponsored = enrichedGyms.filter((gym) => isSponsoredGym(gym)).length;
-    const featured = enrichedGyms.filter((gym) => isFeaturedGym(gym) && !isSponsoredGym(gym)).length;
-    const averageRating = enrichedGyms.length
-      ? enrichedGyms.reduce((sum, gym) => sum + Number(gym?.analytics?.rating ?? 0), 0) / enrichedGyms.length
-      : 0;
-
-    return {
-      sponsored,
-      featured,
-      averageRating: averageRating > 0 ? averageRating.toFixed(1) : null,
-    };
-  }, [enrichedGyms]);
-
   const searchSuggestions = useMemo(() => buildSuggestionList(
     enrichedGyms.flatMap((gym) => [
       { id: `name-${gym.id}`, label: gym.name, meta: `${gym.city ?? 'Unknown city'} gym` },
@@ -263,33 +236,21 @@ const GymExplorerPage = () => {
           searchSuggestions={searchSuggestions}
           citySuggestions={citySuggestions}
         />
-        <section className="gym-explorer__sort-card">
-          <small>How rankings work</small>
-          <strong>Sponsored gyms surface first, then member interest, then the newest live listings.</strong>
-          <p>
-            Active sponsorship boosts placement. Among non-sponsored gyms, stronger discovery traffic and published traction keep the listing higher in the stack.
-          </p>
-          <div className="gym-explorer__sort-stats">
-            <span>{explorerInsights.sponsored} sponsored</span>
-            <span>{explorerInsights.featured} featured</span>
-            <span>{explorerInsights.averageRating ? `${explorerInsights.averageRating} avg rating` : 'New catalogue'}</span>
-          </div>
-        </section>
         <GymList
           gyms={enrichedGyms}
           isLoading={isFetching}
           onSelect={setSelectedGymId}
           selectedGymId={selectedGym?.id ?? null}
         />
+        <p
+          className="gym-explorer__rankings-note"
+          title="Sponsored gyms surface first. Among the rest, ranking favours stronger member interest (ratings, memberships, discovery traffic) and newer live listings."
+        >
+          Sponsored listings appear first.
+          <span className="gym-explorer__rankings-note-icon" aria-hidden="true">i</span>
+        </p>
       </aside>
       <section className="gym-explorer__detail">
-        {selectedGym ? (
-          <div className="gym-explorer__selected-summary">
-            <small>Why this gym is surfaced</small>
-            <strong>{selectedGym.discovery?.label ?? 'Published listing'}</strong>
-            <p>{selectedGym.discovery?.reason ?? 'This gym matches the active browse filters.'}</p>
-          </div>
-        ) : null}
         <GymHighlight
           gym={selectedGym}
           isLoading={isFetching}

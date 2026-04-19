@@ -29,6 +29,7 @@ const analyticsOnly = process.argv.includes('--analytics-only');
 const DEMO_EMAILS = [
   'admin.demo@fitsync.local',
   'manager.demo@fitsync.local',
+  'manager.pending@fitsync.local',
   'owner.demo@fitsync.local',
   'trainer.alpha@fitsync.local',
   'trainer.beta@fitsync.local',
@@ -37,11 +38,13 @@ const DEMO_EMAILS = [
   'trainee.gamma@fitsync.local',
   'trainee.delta@fitsync.local',
   'seller.demo@fitsync.local',
+  'seller.pending@fitsync.local',
 ];
 
 const DEMO_GYM_NAMES = [
   'FitSync Demo Iron Temple',
   'FitSync Demo Flow Studio',
+  'FitSync Demo Pulse Lab',
 ];
 
 const DEMO_SETTING_KEYS = [
@@ -55,6 +58,14 @@ const DEMO_SETTING_KEYS = [
   'cacheWarmupEnabled',
   'orderReturnsEnabled',
   'gymModerationAlerts',
+  'maintenanceBannerMessage',
+  'supportQueueWarningDepth',
+  'staleSupportTicketHours',
+  'searchQueueWarningDepth',
+  'returnWindowDays',
+  'shipmentBacklogHours',
+  'listingHealthMinimumScore',
+  'auditSpikeThreshold',
 ];
 
 const daysAgo = (days) => {
@@ -259,6 +270,21 @@ const seed = async () => {
       },
     },
     {
+      firstName: 'Priya',
+      lastName: 'Coordinator',
+      email: 'manager.pending@fitsync.local',
+      password: 'Demo@123',
+      role: 'manager',
+      status: 'pending',
+      profilePicture: '/images/about/trainer3.jpg',
+      profile: {
+        headline: 'Pending operations coordinator',
+        about: 'Applied to handle evening support coverage, moderation follow-up, and owner escalations.',
+        location: 'Hyderabad, India',
+        company: 'FitSync Ops',
+      },
+    },
+    {
       firstName: 'Olivia',
       lastName: 'Owner',
       email: 'owner.demo@fitsync.local',
@@ -280,7 +306,7 @@ const seed = async () => {
       contactNumber: '9876500001',
       address: 'Demo Owner Office, Pune',
       ownerMetrics: {
-        totalGyms: 2,
+        totalGyms: 3,
         totalImpressions: 0,
         monthlySpend: 0,
         monthlyEarnings: 0,
@@ -440,11 +466,33 @@ const seed = async () => {
       contactNumber: '9876509001',
       address: 'Warehouse 7, Mumbai',
     },
+    {
+      firstName: 'Rohan',
+      lastName: 'Merchant',
+      email: 'seller.pending@fitsync.local',
+      password: 'Demo@123',
+      role: 'seller',
+      status: 'pending',
+      profilePicture: '/images/gallery/gallery5.jpg',
+      profile: {
+        headline: 'Pending recovery-gear seller',
+        about: 'Applied to sell home recovery tools, compression accessories, and mobility aids.',
+        location: 'Delhi, India',
+        company: 'Recovery Cart',
+        socialLinks: {
+          website: 'https://recovery-cart.fitsync.local',
+        },
+      },
+      bio: 'Awaiting onboarding approval with a richer catalogue focused on recovery hardware.',
+      contactNumber: '9876509015',
+      address: 'Warehouse Annex, Delhi',
+    },
   ]);
 
   const [
     admin,
     manager,
+    pendingManager,
     owner,
     trainerAlpha,
     trainerBeta,
@@ -453,6 +501,7 @@ const seed = async () => {
     traineeGamma,
     traineeDelta,
     seller,
+    pendingSeller,
   ] = users;
 
   const gyms = await Gym.create([
@@ -576,9 +625,54 @@ const seed = async () => {
       approvedAt: daysAgo(90),
       lastUpdatedBy: owner._id,
     },
+    {
+      owner: owner._id,
+      trainers: [],
+      name: DEMO_GYM_NAMES[2],
+      description: 'A new hybrid-conditioning concept currently in moderation review while the owner finalises the sales desk workflow and onboarding visuals.',
+      location: {
+        address: '8 Circuit Avenue',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        postalCode: '400001',
+        coordinates: {
+          lat: 19.076,
+          lng: 72.8777,
+        },
+      },
+      pricing: {
+        monthlyMrp: 3400,
+        monthlyPrice: 2999,
+        currency: 'INR',
+        membershipPlans: [
+          { code: 'monthly', label: 'Monthly', durationMonths: 1, mrp: 3400, price: 2999, currency: 'INR' },
+          { code: 'quarterly', label: 'Quarterly', durationMonths: 3, mrp: 9300, price: 8499, currency: 'INR' },
+        ],
+      },
+      features: ['Circuit classes', 'Starter onboarding', 'Hybrid conditioning'],
+      amenities: ['Open training bay', 'Showers', 'Retail corner', 'Member lockers'],
+      keyFeatures: ['Waitlist capture', 'Hybrid programming', 'Launch campaign pending'],
+      tags: ['Conditioning', 'Launch pending'],
+      images: ['/images/gyms/cardio.jpg'],
+      gallery: [
+        '/images/gyms/cardio.jpg',
+        '/images/gallery/gallery1.jpg',
+      ],
+      contact: {
+        phone: '9876505550',
+        email: 'pulse-lab@fitsync.local',
+        website: 'https://pulse-lab-demo.fitsync.local',
+      },
+      schedule: { openTime: '06:30', closeTime: '21:00', workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] },
+      analytics: { impressions: 0, opens: 0, memberships: 0, trainers: 0, rating: 0, ratingCount: 0 },
+      status: 'suspended',
+      isPublished: false,
+      approvedAt: null,
+      lastUpdatedBy: owner._id,
+    },
   ]);
 
-  const [gymOne, gymTwo] = gyms;
+  const [gymOne, gymTwo, gymThree] = gyms;
 
   await User.updateMany(
     { _id: { $in: [trainerAlpha._id, trainerBeta._id] } },
@@ -1767,6 +1861,66 @@ const seed = async () => {
         },
       ],
     },
+    {
+      user: traineeDelta._id,
+      seller: seller._id,
+      orderNumber: 'DEMO-ORDER-007',
+      shippingAddress: buildShippingAddress({ email: traineeDelta.email, city: 'Bengaluru', state: 'Karnataka' }),
+      paymentMethod: 'Card',
+      subtotal: 4000,
+      tax: 0,
+      shippingCost: 0,
+      total: 4000,
+      status: 'delivered',
+      createdAt: daysAgo(18),
+      updatedAt: daysAgo(12),
+      orderItems: [
+        {
+          seller: seller._id,
+          product: trackerProduct._id,
+          name: trackerProduct.name,
+          quantity: 1,
+          price: 3200,
+          image: trackerProduct.image,
+          status: 'delivered',
+          lastStatusAt: daysAgo(12),
+          statusHistory: [
+            { status: 'processing', note: 'Tracker batch boxed with protective inserts.', updatedBy: seller._id, updatedAt: daysAgo(18) },
+            { status: 'in-transit', note: 'Transported through the Bengaluru electronics lane-haul.', updatedBy: seller._id, updatedAt: daysAgo(14) },
+            { status: 'delivered', note: 'Delivered successfully with setup guide included.', updatedBy: seller._id, updatedAt: daysAgo(12) },
+          ],
+          payoutRecorded: true,
+          tracking: {
+            carrier: 'Delhivery',
+            trackingNumber: 'DLV-DEMO-007A',
+            trackingUrl: 'https://tracking.fitsync.local/DLV-DEMO-007A',
+            updatedAt: daysAgo(12),
+          },
+        },
+        {
+          seller: seller._id,
+          product: bottleProduct._id,
+          name: bottleProduct.name,
+          quantity: 1,
+          price: 800,
+          image: bottleProduct.image,
+          status: 'delivered',
+          lastStatusAt: daysAgo(12),
+          statusHistory: [
+            { status: 'processing', note: 'Bottle batch passed insulation check.', updatedBy: seller._id, updatedAt: daysAgo(18) },
+            { status: 'in-transit', note: 'Packed with the tracker order for the same route.', updatedBy: seller._id, updatedAt: daysAgo(14) },
+            { status: 'delivered', note: 'Delivered in the same final parcel.', updatedBy: seller._id, updatedAt: daysAgo(12) },
+          ],
+          payoutRecorded: true,
+          tracking: {
+            carrier: 'Delhivery',
+            trackingNumber: 'DLV-DEMO-007A',
+            trackingUrl: 'https://tracking.fitsync.local/DLV-DEMO-007A',
+            updatedAt: daysAgo(12),
+          },
+        },
+      ],
+    },
   ]);
 
   const [
@@ -1776,6 +1930,7 @@ const seed = async () => {
     returnRequestedOrder,
     refundedOrder,
     alphaApprovedReturnOrder,
+    deltaDeliveredOrder,
   ] = orders;
 
   await ProductReview.create([
@@ -1863,6 +2018,17 @@ const seed = async () => {
       isVerifiedPurchase: true,
       createdAt: daysAgo(7),
       updatedAt: daysAgo(7),
+    },
+    {
+      product: trackerProduct._id,
+      user: traineeDelta._id,
+      order: deltaDeliveredOrder._id,
+      rating: 4,
+      title: 'Useful tracker for routine building',
+      comment: 'Battery life is solid and the simple timers make it easier to stay consistent between workdays.',
+      isVerifiedPurchase: true,
+      createdAt: daysAgo(11),
+      updatedAt: daysAgo(11),
     },
   ]);
 
@@ -2003,6 +2169,22 @@ const seed = async () => {
       metadata: new Map([['orderNumber', 'DEMO-ORDER-005'], ['refundStatus', 'refunded']]),
       createdAt: daysAgo(9),
     },
+    {
+      amount: 600,
+      user: admin._id,
+      type: 'marketplace',
+      description: 'Platform commission for delivered tracker bundle order',
+      metadata: new Map([['orderNumber', 'DEMO-ORDER-007']]),
+      createdAt: daysAgo(12),
+    },
+    {
+      amount: 3400,
+      user: seller._id,
+      type: 'seller',
+      description: 'Seller payout for delivered tracker bundle order',
+      metadata: new Map([['orderNumber', 'DEMO-ORDER-007']]),
+      createdAt: daysAgo(12),
+    },
   ]);
 
   const impressionRows = [];
@@ -2077,6 +2259,7 @@ const seed = async () => {
     ),
     User.findByIdAndUpdate(owner._id, {
       $set: {
+        'ownerMetrics.totalGyms': 3,
         'ownerMetrics.totalImpressions': gymOneImpressions + gymTwoImpressions,
         'ownerMetrics.monthlySpend': 58998,
         'ownerMetrics.monthlyEarnings': 11300,
@@ -2089,12 +2272,20 @@ const seed = async () => {
     { key: 'autoApproveTrainers', value: false, updatedBy: admin._id, description: 'Require trainer review before activation.', createdAt: daysAgo(2), updatedAt: daysAgo(2) },
     { key: 'showBetaDashboards', value: true, updatedBy: admin._id, description: 'Enable beta dashboards for internal staff.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
     { key: 'maintenanceMode', value: false, updatedBy: admin._id, description: 'Keep the platform available during evaluation.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+    { key: 'maintenanceBannerMessage', value: 'Scheduled maintenance notices appear here before public downtime windows.', updatedBy: admin._id, description: 'Copy shown when maintenance mode is enabled.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
     { key: 'supportInboxEnabled', value: true, updatedBy: manager._id, description: 'Public contact intake remains enabled.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+    { key: 'supportQueueWarningDepth', value: 5, updatedBy: manager._id, description: 'Open ticket count that should trigger queue-pressure warnings.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+    { key: 'staleSupportTicketHours', value: 24, updatedBy: manager._id, description: 'Hours before an unattended support ticket is considered stale.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
     { key: 'paymentCheckoutEnabled', value: true, updatedBy: admin._id, description: 'Allow marketplace checkout flows.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
     { key: 'searchIndexingEnabled', value: true, updatedBy: manager._id, description: 'Keep product and gym indexing warm.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+    { key: 'searchQueueWarningDepth', value: 6, updatedBy: manager._id, description: 'Warning depth for queued search sync jobs.', createdAt: daysAgo(1), updatedAt: daysAgo(1) },
     { key: 'cacheWarmupEnabled', value: true, updatedBy: manager._id, description: 'Prime public cache entries after updates.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
     { key: 'orderReturnsEnabled', value: true, updatedBy: admin._id, description: 'Support delivered-order returns.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
+    { key: 'returnWindowDays', value: 7, updatedBy: admin._id, description: 'Buyer return policy window shown in order flows.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
+    { key: 'shipmentBacklogHours', value: 48, updatedBy: manager._id, description: 'Age threshold for seller shipment backlog alerts.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
     { key: 'gymModerationAlerts', value: true, updatedBy: admin._id, description: 'Raise visibility for risky listing changes.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
+    { key: 'listingHealthMinimumScore', value: 75, updatedBy: admin._id, description: 'Minimum listing-health target before promo pushes.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
+    { key: 'auditSpikeThreshold', value: 10, updatedBy: admin._id, description: 'Audit-event count that should trigger a control-center spike warning.', createdAt: daysAgo(0), updatedAt: daysAgo(0) },
   ]);
 
   await Contact.create([
@@ -2173,6 +2364,69 @@ const seed = async () => {
       status: 'new',
       assignedTo: manager._id,
       gym: gymOne._id,
+      createdAt: daysAgo(0),
+      updatedAt: daysAgo(0),
+    },
+    {
+      name: 'Corporate Wellness Lead',
+      email: 'wellness.lead@fitsync.local',
+      subject: 'Corporate onboarding timing for Pulse Lab',
+      category: 'general',
+      priority: 'high',
+      message: 'We are considering a 20-person conditioning package for Pulse Lab once the launch timeline is confirmed. Who can share the moderation and opening timeline?',
+      status: 'read',
+      assignedTo: admin._id,
+      gym: gymThree._id,
+      internalNotes: 'Use this inquiry to pressure-test launch readiness for the suspended listing.',
+      replies: [
+        {
+          author: admin._id,
+          authorRole: admin.role,
+          message: 'We are reviewing the launch checklist now and will share the opening timeline once moderation is complete.',
+          createdAt: daysAgo(1),
+        },
+      ],
+      createdAt: daysAgo(2),
+      updatedAt: daysAgo(1),
+    },
+    {
+      name: 'Aisha Recovery',
+      email: 'aisha.recovery@fitsync.local',
+      subject: 'Unable to open invoice attachment from DEMO-ORDER-007',
+      category: 'technical',
+      priority: 'normal',
+      message: 'The receipt view opens, but the email attachment preview did not load on mobile. Please confirm whether the invoice link is still active.',
+      status: 'responded',
+      assignedTo: manager._id,
+      internalNotes: 'Likely a mobile mail-app rendering issue. Shared direct order receipt link and recommended browser fallback.',
+      replies: [
+        {
+          author: manager._id,
+          authorRole: manager.role,
+          message: 'We confirmed the invoice link is active and shared a direct browser-safe receipt URL.',
+          createdAt: daysAgo(3),
+        },
+        {
+          author: admin._id,
+          authorRole: admin.role,
+          message: 'Tracking this as a lightweight mobile compatibility issue for a future notification pass.',
+          createdAt: daysAgo(2),
+        },
+      ],
+      createdAt: daysAgo(4),
+      updatedAt: daysAgo(2),
+    },
+    {
+      name: 'Late-night Prospect',
+      email: 'prospect.queue@fitsync.local',
+      subject: 'Can someone help me compare memberships tonight?',
+      category: 'membership',
+      priority: 'high',
+      message: 'I am trying to decide between the quarterly and half-yearly options at Iron Temple and would like a callback this evening if possible.',
+      status: 'new',
+      assignedTo: null,
+      gym: gymOne._id,
+      internalNotes: 'Unassigned queue example for manager claim-next-ticket flow.',
       createdAt: daysAgo(0),
       updatedAt: daysAgo(0),
     },
@@ -2541,6 +2795,84 @@ const seed = async () => {
       entityId: 'marketplace-return-ticket',
       summary: 'Manager picked up the marketplace return support ticket',
       metadata: { priority: 'high', assignee: manager.email },
+    }),
+    recordAuditLog({
+      actor: admin._id,
+      actorRole: admin.role,
+      action: 'admin.gym.flagged',
+      entityType: 'gym',
+      entityId: gymThree._id,
+      summary: 'Pulse Lab was flagged for launch-readiness follow-up',
+      metadata: {
+        gymId: String(gymThree._id),
+        source: 'listing-health-review',
+        threshold: 75,
+      },
+    }),
+    recordAuditLog({
+      actor: manager._id,
+      actorRole: manager.role,
+      action: 'support.ticket.responded',
+      entityType: 'contact',
+      entityId: 'invoice-mobile-preview',
+      summary: 'Manager responded to the invoice preview support request',
+      metadata: {
+        orderNumber: deltaDeliveredOrder.orderNumber,
+        paymentReference: 'DEMO-ORDER-007',
+        source: 'support-desk',
+      },
+    }),
+    recordAuditLog({
+      actor: admin._id,
+      actorRole: admin.role,
+      action: 'admin.user.review.queued',
+      entityType: 'user',
+      entityId: pendingSeller._id,
+      summary: 'Pending seller application added to the approval queue',
+      metadata: {
+        userId: String(pendingSeller._id),
+        role: pendingSeller.role,
+        targetId: String(pendingSeller._id),
+      },
+    }),
+    recordAuditLog({
+      actor: admin._id,
+      actorRole: admin.role,
+      action: 'admin.user.review.queued',
+      entityType: 'user',
+      entityId: pendingManager._id,
+      summary: 'Pending manager application added to the approval queue',
+      metadata: {
+        userId: String(pendingManager._id),
+        role: pendingManager.role,
+        targetId: String(pendingManager._id),
+      },
+    }),
+    recordAuditLog({
+      actor: owner._id,
+      actorRole: owner.role,
+      action: 'owner.subscription.renewed',
+      entityType: 'listingSubscription',
+      entityId: `${gymOne._id}-listing-renewal`,
+      summary: 'Owner renewed the flagship listing plan',
+      metadata: {
+        gymId: String(gymOne._id),
+        paymentReference: 'DEMO-LIST-IRON-001',
+        source: 'owner-billing',
+      },
+    }),
+    recordAuditLog({
+      actor: admin._id,
+      actorRole: admin.role,
+      action: 'admin.settings.threshold.updated',
+      entityType: 'systemSettings',
+      entityId: 'ops-thresholds',
+      summary: 'Ops alert thresholds were tuned for the evaluation environment',
+      metadata: {
+        staleSupportTicketHours: 24,
+        shipmentBacklogHours: 48,
+        auditSpikeThreshold: 10,
+      },
     }),
   ]);
 

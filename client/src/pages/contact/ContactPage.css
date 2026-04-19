@@ -70,6 +70,52 @@
   max-width: 92%;
 }
 
+.contact-insights {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.contact-insight-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+}
+
+.contact-insight-card small {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.contact-insight-card strong {
+  font-size: 1.05rem;
+}
+
+.contact-insight-card span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.contact-faq-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.contact-faq-links a {
+  color: #fff;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
 .contact-context,
 .contact-success,
 .contact-error {
@@ -200,6 +246,21 @@
   margin-top: 0.5rem;
   padding: 1.1rem;
   width: 100%;
+}
+
+.contact-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.contact-attachment-pill {
+  background: rgba(229, 9, 20, 0.12);
+  border: 1px solid rgba(229, 9, 20, 0.18);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.82rem;
+  padding: 0.35rem 0.75rem;
 }
 
 @media (max-width: 768px) {

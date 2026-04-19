@@ -3896,23 +3896,31 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
   const observability = getObservabilitySnapshot();
   const cache = getCacheStatus();
   const search = getSearchStatus();
+  const adminToggles = await loadAdminToggles();
+
+  const staleSupportTicketHours = Math.max(1, Number(adminToggles?.staleSupportTicketHours) || 24);
+  const shipmentBacklogHours = Math.max(1, Number(adminToggles?.shipmentBacklogHours) || 48);
+  const searchQueueWarningDepth = Math.max(1, Number(adminToggles?.searchQueueWarningDepth) || 6);
+  const auditSpikeThreshold = Math.max(1, Number(adminToggles?.auditSpikeThreshold) || 10);
+  const supportQueueWarningDepth = Math.max(1, Number(adminToggles?.supportQueueWarningDepth) || 5);
+  const staleSupportCutoff = new Date(now.getTime() - staleSupportTicketHours * 60 * 60 * 1000);
+  const shipmentBacklogCutoff = new Date(now.getTime() - shipmentBacklogHours * 60 * 60 * 1000);
 
   const [
-    openSupportTickets,
-    staleSupportTickets,
+    openSupportTicketsCount,
+    staleSupportTicketsCount,
     pendingBookings,
     todaysBookings,
-    sellerShipmentBacklog,
-    pendingReturnRequests,
+    sellerShipmentBacklogCount,
+    pendingReturnRequestsCount,
     recentAuditLogs,
-    auditLast24Hours,
-    auditPrevious24Hours,
-    adminToggles,
+    auditLast24HoursCount,
+    auditPrevious24HoursCount,
   ] = await Promise.all([
     Contact.countDocuments({ status: { $in: ['new', 'read', 'in-progress', 'responded'] } }),
     Contact.countDocuments({
       status: { $in: ['new', 'read', 'in-progress', 'responded'] },
-      updatedAt: { $lte: oneDayAgo },
+      updatedAt: { $lte: staleSupportCutoff },
     }),
     Booking.countDocuments({ status: 'pending' }),
     Booking.countDocuments({
@@ -3922,14 +3930,13 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
       },
     }),
     Order.countDocuments({
-      createdAt: { $lte: twoDaysAgo },
+      createdAt: { $lte: shipmentBacklogCutoff },
       'orderItems.status': 'processing',
     }),
     Order.countDocuments({ 'orderItems.returnRequest.status': 'requested' }),
     listAuditLogs({ limit: 10 }),
     AuditLog.countDocuments({ createdAt: { $gte: oneDayAgo } }),
     AuditLog.countDocuments({ createdAt: { $gte: twoDaysAgo, $lt: oneDayAgo } }),
-    loadAdminToggles(),
   ]);
 
   const uptimeHours = Math.max(
@@ -3947,7 +3954,7 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
     .slice(0, 6)
     .map(([operation, count]) => ({ operation, count }));
 
-  const auditDelta = auditLast24Hours - auditPrevious24Hours;
+  const auditDelta = auditLast24HoursCount - auditPrevious24HoursCount;
   const alerts = [];
 
   if (search.configured && !search.ready) {
@@ -3968,21 +3975,30 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
     });
   }
 
-  if (staleSupportTickets > 0) {
+  if (staleSupportTicketsCount > 0) {
     alerts.push({
       id: 'support-backlog',
       severity: 'warning',
       title: 'Support follow-up backlog',
-      message: `${staleSupportTickets} support ticket${staleSupportTickets === 1 ? ' is' : 's are'} idle for more than 24 hours.`,
+      message: `${staleSupportTicketsCount} support ticket${staleSupportTicketsCount === 1 ? ' is' : 's are'} idle for more than ${staleSupportTicketHours} hours.`,
     });
   }
 
-  if (sellerShipmentBacklog > 0) {
+  if (openSupportTicketsCount >= supportQueueWarningDepth) {
+    alerts.push({
+      id: 'support-volume',
+      severity: 'info',
+      title: 'Support queue depth rising',
+      message: `${openSupportTicketsCount} open support ticket${openSupportTicketsCount === 1 ? '' : 's'} are in the queue, above the warning depth of ${supportQueueWarningDepth}.`,
+    });
+  }
+
+  if (sellerShipmentBacklogCount > 0) {
     alerts.push({
       id: 'shipment-backlog',
       severity: 'warning',
       title: 'Seller shipment backlog',
-      message: `${sellerShipmentBacklog} order${sellerShipmentBacklog === 1 ? '' : 's'} still have processing items older than 48 hours.`,
+      message: `${sellerShipmentBacklogCount} order${sellerShipmentBacklogCount === 1 ? '' : 's'} still have processing items older than ${shipmentBacklogHours} hours.`,
     });
   }
 
@@ -3995,18 +4011,34 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
     });
   }
 
-  if ((search.queue?.depth ?? 0) > 0) {
+  if ((search.queue?.depth ?? 0) >= searchQueueWarningDepth) {
     alerts.push({
       id: 'search-queue',
+      severity: 'warning',
+      title: 'Search sync queue depth high',
+      message: `${search.queue.depth} search sync job${search.queue.depth === 1 ? '' : 's'} are queued, above the warning depth of ${searchQueueWarningDepth}.`,
+    });
+  }
+
+  if (auditLast24HoursCount >= auditSpikeThreshold || auditDelta >= auditSpikeThreshold) {
+    alerts.push({
+      id: 'audit-spike',
       severity: 'info',
-      title: 'Search sync queue active',
-      message: `${search.queue.depth} search sync job${search.queue.depth === 1 ? '' : 's'} waiting or processing.`,
+      title: 'Audit activity spike detected',
+      message: `${auditLast24HoursCount} audit event${auditLast24HoursCount === 1 ? '' : 's'} were captured in the last 24 hours with a delta of ${auditDelta} against the prior window.`,
     });
   }
 
   return res.status(200).json(new ApiResponse(200, {
     generatedAt: now,
     adminToggles,
+    thresholds: {
+      supportQueueWarningDepth,
+      staleSupportTicketHours,
+      shipmentBacklogHours,
+      searchQueueWarningDepth,
+      auditSpikeThreshold,
+    },
     services: {
       uptimeHours,
       cache,
@@ -4027,16 +4059,16 @@ export const getAdminOpsStatus = asyncHandler(async (_req, res) => {
       httpCache: observability.httpCache ?? { freshResponses: 0, notModifiedResponses: 0 },
     },
     backlog: {
-      openSupportTickets,
-      staleSupportTickets,
+      openSupportTickets: openSupportTicketsCount,
+      staleSupportTickets: staleSupportTicketsCount,
       pendingBookings,
       todaysBookings,
-      sellerShipmentBacklog,
-      pendingReturnRequests,
+      sellerShipmentBacklog: sellerShipmentBacklogCount,
+      pendingReturnRequests: pendingReturnRequestsCount,
     },
     audit: {
-      last24Hours: auditLast24Hours,
-      previous24Hours: auditPrevious24Hours,
+      last24Hours: auditLast24HoursCount,
+      previous24Hours: auditPrevious24HoursCount,
       delta: auditDelta,
       recent: recentAuditLogs.map((log) => ({
         id: log._id,
@@ -4078,15 +4110,24 @@ export const getManagerOverview = asyncHandler(async (req, res) => {
     totalGyms,
     recentOrders,
     contactMessages,
+    newMessages,
+    flaggedGyms,
     recentPending,
   ] = await Promise.all([
-    User.countDocuments({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } }),
+    User.countDocuments({ status: 'pending', role: { $in: ['seller', 'manager'] } }),
     User.countDocuments({ role: 'seller', status: 'active' }),
     User.countDocuments({ role: 'gym-owner', status: 'active' }),
     Gym.countDocuments({ status: 'active' }),
     Order.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
     Contact.countDocuments({ status: { $in: ['new', 'in-progress'] } }),
-    User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner'] } })
+    Contact.countDocuments({ status: 'new' }),
+    Gym.countDocuments({
+      $or: [
+        { isPublished: { $ne: true } },
+        { status: { $ne: 'active' } },
+      ],
+    }),
+    User.find({ status: 'pending', role: { $in: ['seller', 'manager'] } })
       .select('name email role createdAt profilePicture')
       .sort({ createdAt: -1 })
       .limit(5)
@@ -4102,6 +4143,8 @@ export const getManagerOverview = asyncHandler(async (req, res) => {
         totalGyms,
         recentOrders,
         openMessages: contactMessages,
+        newMessages,
+        flaggedGyms,
       },
       recentPending,
     }, 'Manager overview fetched successfully.'),

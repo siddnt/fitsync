@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import DashboardSection from './components/DashboardSection.jsx';
 import EmptyState from './components/EmptyState.jsx';
 import SkeletonPanel from '../../ui/SkeletonPanel.jsx';
@@ -59,6 +60,36 @@ const ManagerDashboard = () => {
   }
 
   const { stats, recentPending } = response?.data ?? {};
+  const operationalShortcuts = [
+    {
+      id: 'claim-ticket',
+      label: 'Claim next ticket',
+      value: formatNumber(stats?.newMessages ?? 0),
+      meta: `${formatNumber(stats?.openMessages ?? 0)} open support conversations waiting in the queue`,
+      to: '/dashboard/manager/messages',
+    },
+    {
+      id: 'review-gyms',
+      label: 'Review flagged gyms',
+      value: formatNumber(stats?.flaggedGyms ?? 0),
+      meta: 'Draft, suspended, or unpublished listings need attention',
+      to: '/dashboard/admin/gyms',
+    },
+    {
+      id: 'approvals',
+      label: 'Approve pending accounts',
+      value: formatNumber(stats?.pendingApprovals ?? 0),
+      meta: 'Seller and manager applications waiting for review',
+      to: '/dashboard/admin/users',
+    },
+    {
+      id: 'communications',
+      label: 'Open communications',
+      value: formatNumber(stats?.openMessages ?? 0),
+      meta: 'Escalations and owner follow-ups across gyms',
+      to: '/dashboard/manager/communications',
+    },
+  ];
 
   return (
     <div className="dashboard-grid dashboard-grid--stacked">
@@ -89,6 +120,18 @@ const ManagerDashboard = () => {
             <small>Open messages</small>
             <strong>{formatNumber(stats?.openMessages ?? 0)}</strong>
           </div>
+        </div>
+      </DashboardSection>
+
+      <DashboardSection title="Operational shortcuts">
+        <div className="dashboard-link-grid">
+          {operationalShortcuts.map((shortcut) => (
+            <Link key={shortcut.id} className="dashboard-link-card" to={shortcut.to}>
+              <small>{shortcut.label}</small>
+              <strong>{shortcut.value}</strong>
+              <span>{shortcut.meta}</span>
+            </Link>
+          ))}
         </div>
       </DashboardSection>
 

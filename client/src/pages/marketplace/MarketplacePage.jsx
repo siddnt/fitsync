@@ -345,30 +345,28 @@ const MarketplacePage = () => {
     <div className="marketplace-page">
       <header className="marketplace-hero">
         <div className="marketplace-hero__intro">
+          <p className="eyebrow">FitSync marketplace</p>
+          <h1>Equipment, supplements, and essentials with real seller context.</h1>
+          <p className="marketplace-hero__copy">
+            Browse live stock, seller summaries, estimated delivery windows, and return support before you place an order.
+          </p>
+        </div>
+        <div className="marketplace-hero__stats">
           <div>
-            <p className="eyebrow">FitSync marketplace</p>
-            <h1>Equipment, supplements, and essentials with real seller context.</h1>
-            <p className="marketplace-hero__copy">
-              Browse live stock, seller summaries, estimated delivery windows, and return support before you place an order.
-            </p>
+            <small>Results</small>
+            <strong>{totalResults}</strong>
           </div>
-          <div className="marketplace-hero__stats">
-            <div>
-              <small>Results</small>
-              <strong>{totalResults}</strong>
-            </div>
-            <div>
-              <small>In stock</small>
-              <strong>{catalogueSummary.inStockCount}</strong>
-            </div>
-            <div>
-              <small>Sellers</small>
-              <strong>{catalogueSummary.sellerCount}</strong>
-            </div>
-            <div>
-              <small>Categories</small>
-              <strong>{catalogueSummary.categoryCount}</strong>
-            </div>
+          <div>
+            <small>In stock</small>
+            <strong>{catalogueSummary.inStockCount}</strong>
+          </div>
+          <div>
+            <small>Sellers</small>
+            <strong>{catalogueSummary.sellerCount}</strong>
+          </div>
+          <div>
+            <small>Categories</small>
+            <strong>{catalogueSummary.categoryCount}</strong>
           </div>
         </div>
 

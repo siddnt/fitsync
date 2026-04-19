@@ -13,8 +13,8 @@ import {
   useGetAdminGymsQuery,
 } from '../../services/dashboardApi.js';
 import { useGetContactMessagesQuery } from '../../services/contactApi.js';
-import { useGetAuditLogsQuery } from '../../services/adminApi.js';
-import { formatNumber, formatDate, formatStatus } from '../../utils/format.js';
+import { useGetAuditLogsQuery, useGetAdminTogglesQuery } from '../../services/adminApi.js';
+import { formatCurrency, formatNumber, formatDate, formatStatus } from '../../utils/format.js';
 import './Dashboard.css';
 
 const OPEN_TICKET_STATUSES = new Set(['new', 'read', 'in-progress', 'responded']);
@@ -59,6 +59,9 @@ const AdminDashboard = () => {
     data: auditResponse,
     isFetching: isAuditFetching,
   } = useGetAuditLogsQuery({ limit: 100 });
+  const {
+    data: settingsState,
+  } = useGetAdminTogglesQuery();
 
   const overview = overviewResponse?.data;
   const rawRevenueTrend = revenueResponse?.data?.trend;
@@ -67,6 +70,7 @@ const AdminDashboard = () => {
   const gyms = gymsResponse?.data?.gyms ?? [];
   const contactMessages = contactsResponse?.data ?? [];
   const auditLogs = auditResponse?.data?.logs ?? [];
+  const adminSettings = settingsState?.toggles ?? {};
 
   const revenueSeries = useMemo(() => {
     if (!rawRevenueTrend) {
@@ -129,6 +133,99 @@ const AdminDashboard = () => {
     count: recentOrders.length,
     latestAt: recentOrders[0]?.createdAt ?? null,
   }), [recentOrders]);
+
+  const controlAlerts = useMemo(() => {
+    const alerts = [];
+    const supportQueueWarningDepth = Math.max(1, Number(adminSettings?.supportQueueWarningDepth) || 5);
+    const auditSpikeThreshold = Math.max(1, Number(adminSettings?.auditSpikeThreshold) || 10);
+
+    if (adminSettings?.maintenanceMode) {
+      alerts.push({
+        id: 'maintenance',
+        severity: 'critical',
+        title: 'Maintenance mode enabled',
+        message: adminSettings?.maintenanceBannerMessage
+          ? `Banner: ${adminSettings.maintenanceBannerMessage}`
+          : 'Public-facing activity is intentionally constrained while maintenance mode is on.',
+        to: '/dashboard/admin/settings',
+      });
+    }
+
+    if (adminSettings?.paymentCheckoutEnabled === false) {
+      alerts.push({
+        id: 'payments-disabled',
+        severity: 'critical',
+        title: 'Checkout disabled',
+        message: 'Marketplace checkout is currently disabled for end users.',
+        to: '/dashboard/admin/settings',
+      });
+    }
+
+    if (adminSettings?.supportInboxEnabled === false) {
+      alerts.push({
+        id: 'support-disabled',
+        severity: 'warning',
+        title: 'Support intake paused',
+        message: 'The public contact form is disabled. New tickets will not enter the queue.',
+        to: '/dashboard/admin/settings',
+      });
+    }
+
+    if (pendingTickets >= supportQueueWarningDepth) {
+      alerts.push({
+        id: 'ticket-backlog',
+        severity: 'warning',
+        title: 'Support queue above warning depth',
+        message: `${formatNumber(pendingTickets)} active tickets are open against a warning depth of ${formatNumber(supportQueueWarningDepth)}.`,
+        to: '/dashboard/admin/messages',
+      });
+    }
+
+    if (flaggedGyms > 0 && adminSettings?.gymModerationAlerts !== false) {
+      alerts.push({
+        id: 'flagged-gyms',
+        severity: 'warning',
+        title: 'Flagged gyms need review',
+        message: `${formatNumber(flaggedGyms)} gyms are draft, suspended, or unpublished.`,
+        to: '/dashboard/admin/gyms',
+      });
+    }
+
+    if (auditSpikeSummary.count >= auditSpikeThreshold) {
+      alerts.push({
+        id: 'audit-spike',
+        severity: 'info',
+        title: 'Audit activity spike',
+        message: `${formatNumber(auditSpikeSummary.count)} logs were recorded in the last 24 hours. Dominant action: ${auditSpikeSummary.dominantAction ? formatStatus(auditSpikeSummary.dominantAction) : 'Unknown'}.`,
+        to: '/dashboard/admin/audit-logs',
+      });
+    }
+
+    if (!recentOrderSummary.count) {
+      alerts.push({
+        id: 'marketplace-quiet',
+        severity: 'info',
+        title: 'Marketplace activity is quiet',
+        message: 'No recent marketplace orders were returned in the current dashboard snapshot.',
+        to: '/dashboard/admin/marketplace',
+      });
+    }
+
+    return alerts.slice(0, 4);
+  }, [
+    adminSettings?.auditSpikeThreshold,
+    adminSettings?.gymModerationAlerts,
+    adminSettings?.maintenanceBannerMessage,
+    adminSettings?.maintenanceMode,
+    adminSettings?.paymentCheckoutEnabled,
+    adminSettings?.supportInboxEnabled,
+    adminSettings?.supportQueueWarningDepth,
+    auditSpikeSummary.count,
+    auditSpikeSummary.dominantAction,
+    flaggedGyms,
+    pendingTickets,
+    recentOrderSummary.count,
+  ]);
 
   const quickLinks = useMemo(() => ([
     {
@@ -254,6 +351,28 @@ const AdminDashboard = () => {
         </div>
       </DashboardSection>
 
+      <DashboardSection title="Control center alerts">
+        {controlAlerts.length ? (
+          <div className="dashboard-alert-grid">
+            {controlAlerts.map((alert) => (
+              <Link
+                key={alert.id}
+                className={`dashboard-alert-card dashboard-alert-card--${alert.severity}`}
+                to={alert.to}
+              >
+                <small>{formatStatus(alert.severity)}</small>
+                <strong>{alert.title}</strong>
+                <span>{alert.message}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="status-pill status-pill--success">
+            No active control-center anomalies were detected in the current snapshot.
+          </div>
+        )}
+      </DashboardSection>
+
       <DashboardSection title="Platform performance">
         {overview ? (
           <div className="stat-grid">
@@ -317,7 +436,7 @@ const AdminDashboard = () => {
                   {' '}
                   revenue
                 </small>
-                <strong>{item.amount}</strong>
+                <strong>{formatCurrency({ amount: item.amount, currency: item.currency })}</strong>
               </div>
             ))}
             <div className="stat-card">
@@ -360,7 +479,7 @@ const AdminDashboard = () => {
                   </td>
                   <td>{order.user?.name ?? '-'}</td>
                   <td>{order.status}</td>
-                  <td>{order.total ?? '-'}</td>
+                  <td>{formatCurrency({ amount: order.total, currency: order.currency })}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { authActions } from '../../features/auth/authSlice.js';
 import { useLoginMutation } from '../../services/authApi.js';
@@ -79,7 +79,7 @@ const LoginPage = () => {
           </button>
 
           <p className="auth-card__switch">
-            New here? <a href="/auth/register">Create an account</a>
+            New here? <Link to="/auth/register">Create an account</Link>
           </p>
         </form>
       </div>

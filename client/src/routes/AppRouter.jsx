@@ -44,6 +44,7 @@ const AdminAuditLogsPage = lazy(() => import('../pages/dashboards/admin/AuditLog
 const AdminSettingsPage = lazy(() => import('../pages/dashboards/admin/SettingsPage.jsx'));
 const SellerInventoryPage = lazy(() => import('../pages/dashboards/seller/InventoryPage.jsx'));
 const SellerOrdersPage = lazy(() => import('../pages/dashboards/seller/OrdersPage.jsx'));
+const SellerProductDetailsPage = lazy(() => import('../pages/dashboards/seller/ProductDetailsPage.jsx'));
 const DashboardLanding = lazy(() => import('../pages/dashboards/DashboardLanding.jsx'));
 const NotFoundPage = lazy(() => import('../pages/errors/NotFoundPage.jsx'));
 const AboutPage = lazy(() => import('../pages/about/AboutPage.jsx'));
@@ -97,6 +98,7 @@ const AppRouter = () => (
           <Route path="seller">
             <Route index element={<SellerDashboard />} />
             <Route path="inventory" element={<SellerInventoryPage />} />
+            <Route path="products/:productId" element={<SellerProductDetailsPage />} />
             <Route path="orders" element={<SellerOrdersPage />} />
           </Route>
           <Route path="trainer">

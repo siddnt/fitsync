@@ -218,6 +218,15 @@ export const submitContactForm = asyncHandler(async (req, res) => {
 
   const resolvedGymId = await resolveOptionalGymId(gymId);
   const assignedManagerId = await resolveLeastBurdenedManagerId();
+  const attachments = Array.isArray(req.files)
+    ? req.files.map((file) => ({
+        originalName: file.originalname,
+        filename: file.filename,
+        mimeType: file.mimetype,
+        size: file.size,
+        path: file.path,
+      }))
+    : [];
 
   const contact = await Contact.create({
     name,
@@ -229,6 +238,7 @@ export const submitContactForm = asyncHandler(async (req, res) => {
     status: 'in-progress',
     gym: resolvedGymId,
     message,
+    attachments,
   });
 
   await createNotification({
@@ -250,6 +260,7 @@ export const submitContactForm = asyncHandler(async (req, res) => {
     metadata: {
       assignedTo: assignedManagerId,
       gymId: resolvedGymId,
+      attachmentCount: attachments.length,
       strategy: 'least-burdened-manager',
     },
   });

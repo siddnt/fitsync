@@ -8,8 +8,9 @@
 /* Enhanced Hero Styles */
 .about-hero {
     position: relative;
-    height: 80vh;
-    min-height: 600px;
+    height: 55vh;
+    min-height: 380px;
+    max-height: 540px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -43,10 +44,10 @@
 }
 
 .about-hero h1 {
-    font-size: clamp(3.5rem, 6vw, 6rem);
+    font-size: clamp(2.25rem, 4.5vw, 3.75rem);
     font-weight: 800;
-    margin-bottom: 1.5rem;
-    line-height: 1.1;
+    margin-bottom: 1rem;
+    line-height: 1.15;
     color: #fff;
     text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
@@ -61,18 +62,58 @@
 }
 
 .about-hero p {
-    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    font-size: clamp(1rem, 1.4vw, 1.2rem);
     color: rgba(255, 255, 255, 0.9);
-    max-width: 700px;
+    max-width: 640px;
     margin: 0 auto;
-    line-height: 1.6;
+    line-height: 1.55;
     text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .about-section {
-    max-width: 1200px;
+    max-width: 1100px;
     margin: 0 auto;
-    padding: 4rem 2rem;
+    padding: 2.5rem clamp(1rem, 2vw, 1.5rem);
+}
+
+.about-trust-strip {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin-bottom: 2.5rem;
+}
+
+.about-trust-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.1rem 1.2rem;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.about-trust-card:hover {
+    border-color: rgba(229, 9, 20, 0.32);
+    transform: translateY(-1px);
+}
+
+.about-trust-card small {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.about-trust-card strong {
+    font-size: 1.15rem;
+}
+
+.about-trust-card span {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.92rem;
+    line-height: 1.5;
 }
 
 /* Mission & Story Shared Styles */
@@ -80,9 +121,9 @@
 .about-story {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4rem;
+    gap: 2.5rem;
     align-items: center;
-    margin-bottom: 6rem;
+    margin-bottom: 3rem;
 }
 
 .about-story {
@@ -102,25 +143,33 @@
 
 .mission-statement h2,
 .about-story h2 {
-    font-size: 2.5rem;
-    margin-bottom: 1.5rem;
+    font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+    margin: 0 0 1rem;
     color: #fff;
+    line-height: 1.2;
 }
 
 .mission-statement p,
 .about-story p {
-    font-size: 1.15rem;
+    font-size: 1rem;
     color: rgba(255, 255, 255, 0.8);
-    line-height: 1.7;
-    margin-bottom: 1rem;
+    line-height: 1.65;
+    margin-bottom: 0.85rem;
 }
 
 .mission-image,
 .story-image {
-    border-radius: 24px;
+    border-radius: 18px;
     overflow: hidden;
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 18px 36px -10px rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.1);
+    aspect-ratio: 4 / 3;
+}
+
+.mission-image img,
+.story-image img {
+    object-fit: cover;
+    height: 100%;
 }
 
 .mission-image img,
@@ -139,44 +188,47 @@
 /* Core Values */
 .about-values {
     text-align: center;
-    margin-top: 4rem;
+    margin-top: 2.5rem;
 }
 
 .about-values h2 {
-    font-size: 2.5rem;
-    margin-bottom: 3rem;
+    font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+    margin-bottom: 1.5rem;
 }
 
 .values-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
 }
 
 .value-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 24px;
-    padding: 3rem 2rem;
-    transition: all 0.3s ease;
+    border-radius: 18px;
+    padding: 1.5rem 1.4rem;
+    transition: all 0.25s ease;
+    text-align: left;
 }
 
 .value-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
     background: rgba(255, 255, 255, 0.05);
     border-color: var(--primary-color);
-    box-shadow: 0 20px 40px -10px rgba(229, 9, 20, 0.15);
+    box-shadow: 0 18px 36px -10px rgba(229, 9, 20, 0.18);
 }
 
 .value-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    margin: 0 0 0.6rem;
     color: var(--primary-color);
 }
 
 .value-card p {
     color: var(--muted-text-color);
-    line-height: 1.6;
+    line-height: 1.55;
+    font-size: 0.95rem;
+    margin: 0;
 }
 
 @media (max-width: 900px) {

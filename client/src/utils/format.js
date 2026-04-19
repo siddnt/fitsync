@@ -1,24 +1,36 @@
 const DEFAULT_CURRENCY = 'INR';
 
+const resolveCurrencyValue = (value, fallbackCurrency = DEFAULT_CURRENCY) => {
+  if (typeof value === 'object' && value !== null) {
+    const nestedValue = value.amount ?? value.value ?? 0;
+
+    if (typeof nestedValue === 'object' && nestedValue !== null) {
+      return resolveCurrencyValue(nestedValue, value.currency || fallbackCurrency);
+    }
+
+    const amount = Number(nestedValue);
+    return {
+      amount: Number.isFinite(amount) ? amount : 0,
+      currency: value.currency || fallbackCurrency,
+    };
+  }
+
+  const amount = Number(value);
+  return {
+    amount: Number.isFinite(amount) ? amount : 0,
+    currency: fallbackCurrency,
+  };
+};
+
 export const formatCurrency = (value, fallbackCurrency = DEFAULT_CURRENCY) => {
   if (value === null || value === undefined) {
     return '—';
   }
 
-  if (typeof value === 'object' && value !== null) {
-    const amount = Number(value.amount ?? value.value ?? 0);
-    const currency = value.currency || fallbackCurrency;
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  }
-
-  const amount = Number(value) || 0;
+  const { amount, currency } = resolveCurrencyValue(value, fallbackCurrency);
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
-    currency: fallbackCurrency,
+    currency,
     maximumFractionDigits: 0,
   }).format(amount);
 };

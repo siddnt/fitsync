@@ -492,6 +492,18 @@ describe('Controller route smoke coverage', () => {
       expect(Array.isArray(res.body?.data?.products)).toBe(true);
     });
 
+    it('GET /api/marketplace/seller/products/:productId fetches seller product detail', async () => {
+      const res = await apiCall('get', `/api/marketplace/seller/products/${ctx.products.main._id}`, {
+        token: ctx.tokens.seller,
+      });
+
+      expect(res.status).toBe(200);
+      expect(String(res.body?.data?.product?.id)).toBe(String(ctx.products.main._id));
+      expect(res.body?.data?.product?.stats).toBeDefined();
+      expect(res.body?.data?.performance).toBeDefined();
+      expect(Array.isArray(res.body?.data?.recentOrders)).toBe(true);
+    });
+
     it('POST /api/marketplace/seller/products validates seller product creation without an image', async () => {
       const res = await apiCall('post', '/api/marketplace/seller/products', { token: ctx.tokens.seller }).field({
         name: `${runId} No Image Product`,

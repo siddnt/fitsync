@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -12,7 +13,7 @@ import {
   normaliseCategoryValue,
 } from './helpers.js';
 import {
-  useGetSellerProductsQuery,
+  useLazyGetSellerProductsQuery,
   useCreateSellerProductMutation,
   useUpdateSellerProductMutation,
   useDeleteSellerProductMutation,
@@ -38,6 +39,21 @@ const filters = [
 ];
 
 const LOW_STOCK_THRESHOLD = 5;
+const PRODUCT_PAGE_LIMIT = 24;
+
+const mergeUniqueProducts = (currentProducts = [], nextProducts = []) => {
+  const productMap = new Map(currentProducts.map((product) => [product.id, product]));
+
+  nextProducts.forEach((product) => {
+    if (!product?.id) {
+      return;
+    }
+
+    productMap.set(product.id, product);
+  });
+
+  return Array.from(productMap.values());
+};
 
 const buildProductFormData = (fields, file) => {
   const formData = new FormData();
@@ -126,23 +142,18 @@ const InventoryPage = () => {
   const dispatch = useDispatch();
   const { editingProductId, isProductPanelOpen, filterStatus } = useSelector((state) => state.seller);
 
-  const {
-    data: productsResponse,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useGetSellerProductsQuery();
+  const [fetchSellerProducts] = useLazyGetSellerProductsQuery();
   const [createProduct] = useCreateSellerProductMutation();
   const [updateProduct] = useUpdateSellerProductMutation();
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteSellerProductMutation();
-
-  const rawProducts = productsResponse?.data?.products;
-
-  const products = useMemo(
-    () => (Array.isArray(rawProducts) ? rawProducts : []),
-    [rawProducts],
-  );
+  const [products, setProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [productsError, setProductsError] = useState(null);
+  const [productPagination, setProductPagination] = useState({
+    hasMore: false,
+    nextCursor: null,
+  });
 
   const editingProduct = useMemo(
     () => products.find((product) => product.id === editingProductId) ?? null,
@@ -169,9 +180,60 @@ const InventoryPage = () => {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [minStock, setMinStock] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState('available');
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const { confirm, confirmationModal } = useConfirmationModal();
+
+  const fetchProductPage = useCallback(async ({ cursor = null, reset = false } = {}) => {
+    if (reset) {
+      setIsLoading(true);
+      setProductsError(null);
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    try {
+      const response = await fetchSellerProducts({
+        pagination: 'cursor',
+        limit: PRODUCT_PAGE_LIMIT,
+        ...(cursor ? { cursor } : {}),
+      }).unwrap();
+
+      const pageProducts = Array.isArray(response?.data?.products) ? response.data.products : [];
+      const pagination = response?.data?.pagination ?? {};
+
+      setProducts((current) => (reset ? pageProducts : mergeUniqueProducts(current, pageProducts)));
+      setProductPagination({
+        hasMore: Boolean(pagination?.hasMore),
+        nextCursor: pagination?.nextCursor ?? null,
+      });
+
+      return response;
+    } catch (requestError) {
+      if (reset) {
+        setProducts([]);
+        setProductPagination({ hasMore: false, nextCursor: null });
+        setProductsError(requestError);
+      } else {
+        setErrorNotice(requestError?.data?.message ?? 'Unable to load more products right now.');
+      }
+
+      throw requestError;
+    } finally {
+      if (reset) {
+        setIsLoading(false);
+      } else {
+        setIsLoadingMore(false);
+      }
+    }
+  }, [fetchSellerProducts]);
+
+  useEffect(() => {
+    fetchProductPage({ reset: true }).catch(() => {});
+  }, [fetchProductPage]);
 
   const filteredProducts = useMemo(() => {
     let list = products.slice();
@@ -263,7 +325,20 @@ const InventoryPage = () => {
     return suggestions;
   }, [products, searchText]);
 
-  const approvalError = error?.status === 403 ? error : null;
+  const filteredProductIds = useMemo(
+    () => filteredProducts.map((product) => product.id),
+    [filteredProducts],
+  );
+
+  const selectedProducts = useMemo(
+    () => products.filter((product) => selectedProductIds.includes(product.id)),
+    [products, selectedProductIds],
+  );
+
+  const allFilteredSelected = filteredProductIds.length > 0
+    && filteredProductIds.every((productId) => selectedProductIds.includes(productId));
+
+  const approvalError = productsError?.status === 403 ? productsError : null;
   const approvalMessage = approvalError?.data?.message
     ?? 'Your seller account is awaiting admin approval. Hang tight—you can start listing products as soon as you are activated.';
 
@@ -321,6 +396,52 @@ const InventoryPage = () => {
     }
   }, [imagePreviewUrl, revokePreviewUrl]);
 
+  useEffect(() => {
+    const visibleIds = new Set(filteredProductIds);
+    setSelectedProductIds((current) => current.filter((productId) => visibleIds.has(productId)));
+  }, [filteredProductIds]);
+
+  const buildProductUpdateFields = useCallback((product, overrides = {}) => {
+    const pricing = derivePricingDetails(product);
+
+    return {
+      name: product.name,
+      description: product.description ?? '',
+      category: normaliseCategoryValue(product.category),
+      price: pricing.price,
+      mrp: pricing.mrp,
+      stock: product.stock ?? 0,
+      status: product.status || 'available',
+      isPublished: Boolean(product.isPublished),
+      ...overrides,
+    };
+  }, []);
+
+  const runProductBatchUpdate = useCallback(async (targetProducts, buildOverrides, successMessage) => {
+    if (!targetProducts.length) {
+      return;
+    }
+
+    setNotice(null);
+    setErrorNotice(null);
+    setIsBulkUpdating(true);
+
+    try {
+      for (const product of targetProducts) {
+        const formData = buildProductFormData(buildProductUpdateFields(product, buildOverrides(product)));
+        await updateProduct({ id: product.id, body: formData }).unwrap();
+      }
+
+      setSelectedProductIds([]);
+      setNotice(successMessage);
+      await fetchProductPage({ reset: true });
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to apply the selected bulk action.');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  }, [buildProductUpdateFields, fetchProductPage, updateProduct]);
+
   const openCreatePanel = () => {
     setNotice(null);
     setErrorNotice(null);
@@ -356,7 +477,8 @@ const InventoryPage = () => {
     try {
       await deleteProduct(product.id).unwrap();
       setNotice('Product removed from inventory.');
-      refetch();
+      setSelectedProductIds((current) => current.filter((productId) => productId !== product.id));
+      await fetchProductPage({ reset: true });
     } catch (mutationError) {
       setErrorNotice(mutationError?.data?.message ?? 'Unable to delete this product.');
     }
@@ -368,23 +490,11 @@ const InventoryPage = () => {
     setErrorNotice(null);
 
     try {
-      const pricing = derivePricingDetails(product);
-      const formData = buildProductFormData(
-        {
-          name: product.name,
-          description: product.description ?? '',
-          category: normaliseCategoryValue(product.category),
-          price: pricing.price,
-          mrp: pricing.mrp,
-          stock: product.stock ?? 0,
-          status: product.status || 'available',
-          isPublished: !product.isPublished,
-        },
-      );
+      const formData = buildProductFormData(buildProductUpdateFields(product, { isPublished: !product.isPublished }));
 
       await updateProduct({ id: product.id, body: formData }).unwrap();
       setNotice(product.isPublished ? 'Product unpublished.' : 'Product published.');
-      refetch();
+      await fetchProductPage({ reset: true });
     } catch (mutationError) {
       setErrorNotice(mutationError?.data?.message ?? 'Unable to update product listing.');
     }
@@ -438,7 +548,7 @@ const InventoryPage = () => {
     dispatch(closeProductPanel());
     dispatch(reset('sellerProduct'));
     resetImageSelection();
-    refetch();
+    await fetchProductPage({ reset: true });
   });
 
   const closePanel = () => {
@@ -446,6 +556,111 @@ const InventoryPage = () => {
     dispatch(reset('sellerProduct'));
     resetImageSelection();
   };
+
+  const toggleProductSelection = (productId) => {
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedProductIds((current) => {
+      if (allFilteredSelected) {
+        return current.filter((productId) => !filteredProductIds.includes(productId));
+      }
+
+      const next = new Set(current);
+      filteredProductIds.forEach((productId) => next.add(productId));
+      return Array.from(next);
+    });
+  };
+
+  const handleBulkPublishToggle = async (nextPublishedState) => {
+    if (!selectedProducts.length) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: `${nextPublishedState ? 'Publish' : 'Hide'} selected products`,
+      message: `Apply this change to ${selectedProducts.length} selected product${selectedProducts.length === 1 ? '' : 's'}?`,
+      confirmLabel: nextPublishedState ? 'Publish selected' : 'Hide selected',
+      cancelLabel: 'Cancel',
+      tone: nextPublishedState ? 'info' : 'warning',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    await runProductBatchUpdate(
+      selectedProducts,
+      () => ({ isPublished: nextPublishedState }),
+      nextPublishedState
+        ? 'Selected products are now live.'
+        : 'Selected products were moved out of the live catalogue.',
+    );
+  };
+
+  const handleBulkStatusUpdate = async () => {
+    if (!selectedProducts.length) {
+      return;
+    }
+
+    await runProductBatchUpdate(
+      selectedProducts,
+      () => ({ status: bulkStatus }),
+      `Selected products updated to ${formatStatus(bulkStatus)}.`,
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedProducts.length) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Delete selected products',
+      message: `Delete ${selectedProducts.length} selected product${selectedProducts.length === 1 ? '' : 's'}? This cannot be undone.`,
+      confirmLabel: 'Delete selected',
+      cancelLabel: 'Keep products',
+      tone: 'danger',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setNotice(null);
+    setErrorNotice(null);
+    setIsBulkUpdating(true);
+
+    try {
+      for (const product of selectedProducts) {
+        await deleteProduct(product.id).unwrap();
+      }
+      setSelectedProductIds([]);
+      setNotice('Selected products were removed from inventory.');
+      await fetchProductPage({ reset: true });
+    } catch (mutationError) {
+      setErrorNotice(mutationError?.data?.message ?? 'Unable to delete all selected products.');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const refreshProducts = useCallback(async () => {
+    await fetchProductPage({ reset: true });
+  }, [fetchProductPage]);
+
+  const handleLoadMoreProducts = useCallback(async () => {
+    if (!productPagination.hasMore || !productPagination.nextCursor || isLoadingMore) {
+      return;
+    }
+
+    await fetchProductPage({ cursor: productPagination.nextCursor }).catch(() => {});
+  }, [fetchProductPage, isLoadingMore, productPagination.hasMore, productPagination.nextCursor]);
 
   if (isLoading) {
     return (
@@ -463,7 +678,7 @@ const InventoryPage = () => {
         <DashboardSection
           title="Inventory"
           action={(
-            <button type="button" onClick={() => refetch()}>
+            <button type="button" onClick={() => refreshProducts()}>
               Refresh
             </button>
           )}
@@ -474,13 +689,13 @@ const InventoryPage = () => {
     );
   }
 
-  if (isError) {
+  if (productsError) {
     return (
       <div className="dashboard-grid">
         <DashboardSection
           title="Inventory unavailable"
           action={(
-            <button type="button" onClick={() => refetch()}>
+            <button type="button" onClick={() => refreshProducts()}>
               Retry
             </button>
           )}
@@ -503,11 +718,17 @@ const InventoryPage = () => {
 
   const hiddenProducts = filteredProducts.filter((product) => !product.isPublished);
   const liveProducts = filteredProducts.filter((product) => product.isPublished);
+  const recentSalesUnits = filteredProducts.reduce(
+    (sum, product) => sum + (Number(product?.stats?.soldLast30Days) || 0),
+    0,
+  );
 
   const categoryPerformance = filteredProducts.reduce((accumulator, product) => {
     const key = product.category ? formatStatus(product.category) : 'Uncategorised';
     const stock = Number(product.stock) || 0;
     const { price } = derivePricingDetails(product);
+    const totalSold = Number(product?.stats?.totalSold) || 0;
+    const soldLast30Days = Number(product?.stats?.soldLast30Days) || 0;
 
     if (!accumulator[key]) {
       accumulator[key] = {
@@ -517,6 +738,8 @@ const InventoryPage = () => {
         hidden: 0,
         lowStock: 0,
         stockUnits: 0,
+        totalSold: 0,
+        soldLast30Days: 0,
         inventoryValue: 0,
       };
     }
@@ -526,6 +749,8 @@ const InventoryPage = () => {
     accumulator[key].hidden += product.isPublished ? 0 : 1;
     accumulator[key].lowStock += stock > 0 && stock <= LOW_STOCK_THRESHOLD ? 1 : 0;
     accumulator[key].stockUnits += stock;
+    accumulator[key].totalSold += totalSold;
+    accumulator[key].soldLast30Days += soldLast30Days;
     accumulator[key].inventoryValue += (price || 0) * stock;
 
     return accumulator;
@@ -624,10 +849,15 @@ const InventoryPage = () => {
               <strong>{formatNumber(lowStockProducts.length)}</strong>
               <small>{`At or below ${LOW_STOCK_THRESHOLD} units`}</small>
             </div>
+            <div className="stat-card">
+              <small>Units sold recently</small>
+              <strong>{formatNumber(recentSalesUnits)}</strong>
+              <small>Across the current filtered view</small>
+            </div>
           <div className="stat-card">
             <small>Inventory value</small>
             <strong>{formatCurrency(totalInventoryValue)}</strong>
-            <small>Assuming listed price · Filtered set</small>
+            <small>Assuming listed price for the filtered set</small>
           </div>
         </div>
 
@@ -638,67 +868,157 @@ const InventoryPage = () => {
         )}
 
         {filteredProducts.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Status</th>
-                <th>Stock</th>
-                <th>Price</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => {
-                const pricing = derivePricingDetails(product);
-                const categoryLabel = product.category ? formatStatus(product.category) : 'Uncategorised';
-                return (
-                  <tr key={product.id}>
-                    <td>
-                      <strong>{product.name}</strong>
-                      <div className="dashboard-table__meta">
-                        <span className="inventory-category">{categoryLabel}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
-                        {product.isPublished ? 'Published' : 'Draft'} · {formatStatus(product.status)}
-                      </span>
-                    </td>
-                    <td>{formatNumber(product.stock ?? 0)}</td>
-                    <td>
-                      <div className="inventory-price">
-                        {pricing.hasDiscount ? (
-                          <>
-                            <span className="inventory-price__mrp">{formatCurrency(pricing.mrp)}</span>
+          <div className="inventory-bulk-bar">
+            <label className="selection-toggle">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAllFiltered}
+                disabled={isBulkUpdating}
+              />
+              <span>Select shown products</span>
+            </label>
+            <span className="inventory-bulk-bar__count">{formatNumber(selectedProducts.length)} selected</span>
+            <div className="inventory-bulk-bar__actions">
+              <button type="button" onClick={() => handleBulkPublishToggle(true)} disabled={!selectedProducts.length || isBulkUpdating}>
+                Publish
+              </button>
+              <button type="button" onClick={() => handleBulkPublishToggle(false)} disabled={!selectedProducts.length || isBulkUpdating}>
+                Hide
+              </button>
+              <select
+                className="inventory-toolbar__input inventory-toolbar__input--select"
+                value={bulkStatus}
+                onChange={(event) => setBulkStatus(event.target.value)}
+                disabled={!selectedProducts.length || isBulkUpdating}
+              >
+                <option value="available">Available</option>
+                <option value="out-of-stock">Out of stock</option>
+                <option value="discontinued">Discontinued</option>
+              </select>
+              <button type="button" onClick={handleBulkStatusUpdate} disabled={!selectedProducts.length || isBulkUpdating}>
+                Apply status
+              </button>
+              <button type="button" onClick={handleBulkDelete} disabled={!selectedProducts.length || isBulkUpdating}>
+                Delete selected
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {filteredProducts.length ? (
+          <>
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      disabled={isBulkUpdating}
+                      aria-label="Select all shown products"
+                    />
+                  </th>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th>Stock</th>
+                  <th>Price</th>
+                  <th>Sales</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map((product) => {
+                  const pricing = derivePricingDetails(product);
+                  const categoryLabel = product.category ? formatStatus(product.category) : 'Uncategorised';
+                  const totalSold = Number(product?.stats?.totalSold ?? 0);
+                  const soldLast30Days = Number(product?.stats?.soldLast30Days ?? 0);
+                  const ratingCount = Number(product?.reviews?.count ?? 0);
+                  const averageRating = Number(product?.reviews?.averageRating ?? 0);
+                  return (
+                    <tr key={product.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.includes(product.id)}
+                          onChange={() => toggleProductSelection(product.id)}
+                          disabled={isBulkUpdating}
+                          aria-label={`Select ${product.name}`}
+                        />
+                      </td>
+                      <td>
+                        <strong>
+                          <Link to={`/dashboard/seller/products/${product.id}`}>
+                            {product.name}
+                          </Link>
+                        </strong>
+                        <div className="dashboard-table__meta">
+                          <span className="inventory-category">{categoryLabel}</span>
+                          <small>{formatNumber(totalSold)} sold lifetime</small>
+                          <small>
+                            {ratingCount
+                              ? `${averageRating.toFixed(1)} / 5 from ${formatNumber(ratingCount)} review${ratingCount === 1 ? '' : 's'}`
+                              : 'No reviews yet'}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
+                          {product.isPublished ? 'Published' : 'Draft'} - {formatStatus(product.status)}
+                        </span>
+                      </td>
+                      <td>{formatNumber(product.stock ?? 0)}</td>
+                      <td>
+                        <div className="inventory-price">
+                          {pricing.hasDiscount ? (
+                            <>
+                              <span className="inventory-price__mrp">{formatCurrency(pricing.mrp)}</span>
+                              <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
+                              <span className="inventory-price__badge">-{pricing.discountPercentage}%</span>
+                            </>
+                          ) : (
                             <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
-                            <span className="inventory-price__badge">-{pricing.discountPercentage}%</span>
-                          </>
-                        ) : (
-                          <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>{formatDate(product.updatedAt)}</td>
-                    <td>
-                      <div className="button-row">
-                        <button type="button" onClick={() => openEditPanel(product)}>
-                          Edit
-                        </button>
-                        <button type="button" onClick={() => handleTogglePublish(product)}>
-                          {product.isPublished ? 'Disable' : 'Enable'}
-                        </button>
-                        <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
-                          {isDeleting ? 'Removing…' : 'Delete'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{formatNumber(soldLast30Days)}</strong>
+                        <div className="dashboard-table__meta">
+                          <small>Last 30 days</small>
+                        </div>
+                      </td>
+                      <td>{formatDate(product.updatedAt)}</td>
+                      <td>
+                        <div className="button-row">
+                          <Link to={`/dashboard/seller/products/${product.id}`}>
+                            View
+                          </Link>
+                          <button type="button" onClick={() => openEditPanel(product)}>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleTogglePublish(product)}>
+                            {product.isPublished ? 'Disable' : 'Enable'}
+                          </button>
+                          <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting || isBulkUpdating}>
+                            {isDeleting ? 'Removing...' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {productPagination.hasMore ? (
+              <div className="inventory-load-more">
+                <button type="button" onClick={handleLoadMoreProducts} disabled={isLoadingMore}>
+                  {isLoadingMore ? 'Loading more...' : 'Load more products'}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <EmptyState message="No products match the current filter." />
         )}
@@ -717,6 +1037,8 @@ const InventoryPage = () => {
                 <th>Live / Hidden</th>
                 <th>Low stock</th>
                 <th>Stock units</th>
+                <th>Units sold</th>
+                <th>Last 30 days</th>
                 <th>Inventory value</th>
               </tr>
             </thead>
@@ -730,6 +1052,8 @@ const InventoryPage = () => {
                   <td>{`${formatNumber(row.live)} / ${formatNumber(row.hidden)}`}</td>
                   <td>{formatNumber(row.lowStock)}</td>
                   <td>{formatNumber(row.stockUnits)}</td>
+                  <td>{formatNumber(row.totalSold)}</td>
+                  <td>{formatNumber(row.soldLast30Days)}</td>
                   <td>{formatCurrency(row.inventoryValue)}</td>
                 </tr>
               ))}

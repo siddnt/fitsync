@@ -106,6 +106,7 @@ const MARKETPLACE_ORDER_PRODUCT_SELECT = 'seller name price image stock status i
 const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role profile profilePicture bio';
 const MARKETPLACE_REVIEW_SELECT = 'rating title comment createdAt isVerifiedPurchase user';
 const MARKETPLACE_REVIEW_USER_SELECT = 'name profilePicture role';
+const SELLER_PRODUCT_DETAIL_SELECT = 'name description price mrp image category stock status isPublished createdAt updatedAt metrics metadata';
 
 const ensureSellerActive = (user) => {
   if (!user) {
@@ -255,21 +256,68 @@ export const computeDiscountPercentage = (mrp, price) => {
   return Math.min(100, Math.max(0, discount));
 };
 
-const mapProduct = (product) => ({
-  id: product._id,
-  name: product.name,
-  description: product.description,
-  price: product.price,
-  mrp: product.mrp ?? product.price,
-  discountPercentage: computeDiscountPercentage(product.mrp ?? product.price, product.price),
-  image: product.image,
-  category: product.category,
-  stock: product.stock,
-  status: product.status,
-  isPublished: product.isPublished,
-  createdAt: product.createdAt,
-  updatedAt: product.updatedAt,
+const getPlainProductMetadata = (product) => {
+  if (product?.metadata instanceof Map) {
+    return Object.fromEntries(product.metadata.entries());
+  }
+
+  if (product?.metadata && typeof product.metadata === 'object') {
+    return { ...product.metadata };
+  }
+
+  return undefined;
+};
+
+const mapProductReviewItem = (review) => ({
+  id: review._id,
+  rating: review.rating,
+  title: review.title || null,
+  comment: review.comment || '',
+  createdAt: review.createdAt,
+  isVerifiedPurchase: review.isVerifiedPurchase,
+  user: review.user
+    ? {
+        id: review.user._id,
+        name: review.user.name,
+        avatar: review.user.profilePicture ?? null,
+        role: review.user.role ?? null,
+      }
+    : null,
 });
+
+const mapSellerProduct = (product, { includeMetadata = false, includeRecentDaily = false } = {}) => {
+  const salesStats = getProductSalesSnapshot(product);
+  const reviewStats = getProductReviewSnapshot(product);
+
+  return {
+    id: product._id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    mrp: product.mrp ?? product.price,
+    discountPercentage: computeDiscountPercentage(product.mrp ?? product.price, product.price),
+    image: product.image,
+    category: product.category,
+    stock: product.stock,
+    status: product.status,
+    isPublished: product.isPublished,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+    stats: {
+      totalSold: salesStats.totalSold,
+      soldLast30Days: salesStats.soldLast30Days,
+      inStock: product.stock > 0 && product.status === 'available',
+      lastSoldAt: salesStats.lastSoldAt ?? null,
+      ...(includeRecentDaily ? { recentDaily: salesStats.recentDaily } : {}),
+    },
+    reviews: {
+      count: reviewStats.count,
+      averageRating: reviewStats.averageRating,
+      lastReviewedAt: reviewStats.lastReviewedAt ?? null,
+    },
+    ...(includeMetadata ? { metadata: getPlainProductMetadata(product) } : {}),
+  };
+};
 
 const applyCacheHeaders = (res, meta = {}) => {
   res.set('X-Cache', String(meta.state ?? 'miss').toUpperCase());
@@ -317,11 +365,7 @@ const buildMarketplaceOutboxEvents = ({ productId, productIds = [], deleted = fa
 const mapCatalogueProduct = (product) => {
   const sellerDoc = product.seller ?? null;
   let sellerName = null;
-  const metadata = product?.metadata instanceof Map
-    ? Object.fromEntries(product.metadata.entries())
-    : product?.metadata && typeof product.metadata === 'object'
-      ? { ...product.metadata }
-      : undefined;
+  const metadata = getPlainProductMetadata(product);
 
   if (sellerDoc) {
     const fullName = [sellerDoc.firstName, sellerDoc.lastName].filter(Boolean).join(' ').trim();
@@ -1089,22 +1133,7 @@ export const getMarketplaceProduct = asyncHandler(async (req, res) => {
 
       const shaped = shapeMarketplaceProduct(product);
 
-      const reviewPayload = reviewItems.map((review) => ({
-        id: review._id,
-        rating: review.rating,
-        title: review.title || null,
-        comment: review.comment || '',
-        createdAt: review.createdAt,
-        isVerifiedPurchase: review.isVerifiedPurchase,
-        user: review.user
-          ? {
-              id: review.user._id,
-              name: review.user.name,
-              avatar: review.user.profilePicture ?? null,
-              role: review.user.role ?? null,
-            }
-          : null,
-      }));
+      const reviewPayload = reviewItems.map(mapProductReviewItem);
 
       return {
         product: {
@@ -1132,6 +1161,222 @@ export const getMarketplaceProduct = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, payload, 'Marketplace product fetched successfully'));
+});
+
+const buildSellerProductPerformance = async (productId, sellerId) => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 29);
+  cutoff.setHours(0, 0, 0, 0);
+
+  const subtotalExpression = {
+    $multiply: [
+      { $ifNull: ['$orderItems.price', 0] },
+      { $ifNull: ['$orderItems.quantity', 0] },
+    ],
+  };
+  const deliveredCondition = { $eq: ['$orderItems.status', 'delivered'] };
+  const deliveredAtExpression = { $ifNull: ['$orderItems.lastStatusAt', '$createdAt'] };
+  const returnStatusExpression = { $ifNull: ['$orderItems.returnRequest.status', 'none'] };
+
+  const [summary] = await Order.aggregate([
+    { $match: { 'orderItems.product': productId, 'orderItems.seller': sellerId } },
+    { $unwind: '$orderItems' },
+    { $match: { 'orderItems.product': productId, 'orderItems.seller': sellerId } },
+    {
+      $group: {
+        _id: null,
+        orderIds: { $addToSet: '$_id' },
+        deliveredOrderIds: {
+          $addToSet: {
+            $cond: [deliveredCondition, '$_id', null],
+          },
+        },
+        unitsOrdered: { $sum: { $ifNull: ['$orderItems.quantity', 0] } },
+        unitsDelivered: {
+          $sum: {
+            $cond: [deliveredCondition, { $ifNull: ['$orderItems.quantity', 0] }, 0],
+          },
+        },
+        grossRevenue: { $sum: subtotalExpression },
+        deliveredRevenue: {
+          $sum: {
+            $cond: [deliveredCondition, subtotalExpression, 0],
+          },
+        },
+        revenueLast30Days: {
+          $sum: {
+            $cond: [
+              { $and: [deliveredCondition, { $gte: [deliveredAtExpression, cutoff] }] },
+              subtotalExpression,
+              0,
+            ],
+          },
+        },
+        pendingReturnCount: {
+          $sum: {
+            $cond: [{ $eq: [returnStatusExpression, 'requested'] }, 1, 0],
+          },
+        },
+        approvedReturnCount: {
+          $sum: {
+            $cond: [{ $eq: [returnStatusExpression, 'approved'] }, 1, 0],
+          },
+        },
+        refundedCount: {
+          $sum: {
+            $cond: [{ $eq: [returnStatusExpression, 'refunded'] }, 1, 0],
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        ordersCount: { $size: '$orderIds' },
+        deliveredOrdersCount: {
+          $size: {
+            $filter: {
+              input: '$deliveredOrderIds',
+              as: 'orderId',
+              cond: { $ne: ['$$orderId', null] },
+            },
+          },
+        },
+        unitsOrdered: 1,
+        unitsDelivered: 1,
+        grossRevenue: 1,
+        deliveredRevenue: 1,
+        revenueLast30Days: 1,
+        pendingReturnCount: 1,
+        approvedReturnCount: 1,
+        refundedCount: 1,
+      },
+    },
+  ]);
+
+  const performance = summary ?? {
+    ordersCount: 0,
+    deliveredOrdersCount: 0,
+    unitsOrdered: 0,
+    unitsDelivered: 0,
+    grossRevenue: 0,
+    deliveredRevenue: 0,
+    revenueLast30Days: 0,
+    pendingReturnCount: 0,
+    approvedReturnCount: 0,
+    refundedCount: 0,
+  };
+
+  return {
+    ...performance,
+    openUnits: Math.max(0, Number(performance.unitsOrdered ?? 0) - Number(performance.unitsDelivered ?? 0)),
+  };
+};
+
+const buildSellerProductRecentOrders = async (productId, sellerId) => {
+  const orders = await Order.find({
+    'orderItems.product': productId,
+    'orderItems.seller': sellerId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(24)
+    .populate({ path: 'user', select: 'name email' })
+    .select('orderNumber createdAt paymentMethod shippingAddress user orderItems')
+    .lean();
+
+  return orders
+    .flatMap((order) =>
+      (order.orderItems || [])
+        .filter(
+          (item) =>
+            normaliseSellerId(item?.product) === normaliseSellerId(productId)
+            && normaliseSellerId(item?.seller) === normaliseSellerId(sellerId),
+        )
+        .map((item) => {
+          const quantity = Number(item?.quantity) || 0;
+          const price = Number(item?.price) || 0;
+
+          return {
+            id: `${order._id}:${item._id}`,
+            orderId: order._id,
+            itemId: item._id,
+            orderNumber: order.orderNumber,
+            createdAt: order.createdAt,
+            paymentMethod: order.paymentMethod ?? null,
+            buyer: order.user
+              ? {
+                  id: order.user._id,
+                  name: order.user.name,
+                  email: order.user.email ?? null,
+                }
+              : null,
+            shippingAddress: order.shippingAddress
+              ? {
+                  city: order.shippingAddress.city ?? '',
+                  state: order.shippingAddress.state ?? '',
+                }
+              : null,
+            quantity,
+            price,
+            subtotal: quantity * price,
+            status: normaliseItemStatus(item?.status),
+            lastStatusAt: item?.lastStatusAt ?? null,
+            tracking: buildTrackingSnapshot(item),
+            returnRequest: buildReturnRequestSnapshot(item),
+          };
+        }),
+    )
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+    .slice(0, 12);
+};
+
+export const getSellerProduct = asyncHandler(async (req, res) => {
+  ensureSellerActive(req.user);
+
+  const productId = toObjectId(req.params.productId, 'Product id');
+  const sellerId = req.user._id;
+
+  const product = await Product.findOne({ _id: productId, seller: sellerId })
+    .select(SELLER_PRODUCT_DETAIL_SELECT)
+    .lean();
+
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  const salesStats = getProductSalesSnapshot(product);
+  const [reviewItems, performance, recentOrders] = await Promise.all([
+    ProductReview.find({ product: productId })
+      .select(MARKETPLACE_REVIEW_SELECT)
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .populate({ path: 'user', select: MARKETPLACE_REVIEW_USER_SELECT })
+      .lean(),
+    buildSellerProductPerformance(productId, sellerId),
+    buildSellerProductRecentOrders(productId, sellerId),
+  ]);
+
+  const shaped = mapSellerProduct(product, {
+    includeMetadata: true,
+    includeRecentDaily: true,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {
+      product: {
+        ...shaped,
+        reviews: {
+          ...shaped.reviews,
+          items: reviewItems.map(mapProductReviewItem),
+        },
+      },
+      performance: {
+        ...performance,
+        unitsLast30Days: salesStats.soldLast30Days,
+      },
+      recentOrders,
+    }, 'Seller product fetched successfully'));
 });
 
 export const createMarketplaceOrder = asyncHandler(async (req, res) => {
@@ -1637,7 +1882,7 @@ export const listSellerProducts = asyncHandler(async (req, res) => {
     return res
       .status(200)
       .json(new ApiResponse(200, {
-        products: pageItems.map(mapProduct),
+        products: pageItems.map((product) => mapSellerProduct(product)),
         pagination: { mode: 'cursor', limit, hasMore, nextCursor },
       }, 'Products fetched successfully'));
   }
@@ -1648,7 +1893,7 @@ export const listSellerProducts = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { products: products.map(mapProduct) }, 'Products fetched successfully'));
+    .json(new ApiResponse(200, { products: products.map((product) => mapSellerProduct(product)) }, 'Products fetched successfully'));
 });
 
 export const createSellerProduct = asyncHandler(async (req, res) => {
@@ -1751,7 +1996,7 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(new ApiResponse(201, { product: mapProduct(product) }, 'Product created successfully'));
+    .json(new ApiResponse(201, { product: mapSellerProduct(product) }, 'Product created successfully'));
 });
 
 export const updateSellerProduct = asyncHandler(async (req, res) => {
@@ -1878,7 +2123,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { product: mapProduct(product) }, 'Product updated successfully'));
+    .json(new ApiResponse(200, { product: mapSellerProduct(product) }, 'Product updated successfully'));
 });
 
 export const deleteSellerProduct = asyncHandler(async (req, res) => {
@@ -1935,6 +2180,19 @@ const mapOrder = (order, sellerId) => {
     createdAt: order.createdAt,
     total,
     buyer: order.user,
+    shippingAddress: order.shippingAddress
+      ? {
+        firstName: order.shippingAddress.firstName ?? '',
+        lastName: order.shippingAddress.lastName ?? '',
+        email: order.shippingAddress.email ?? '',
+        phone: order.shippingAddress.phone ?? '',
+        address: order.shippingAddress.address ?? '',
+        city: order.shippingAddress.city ?? '',
+        state: order.shippingAddress.state ?? '',
+        zipCode: order.shippingAddress.zipCode ?? '',
+      }
+      : null,
+    paymentMethod: order.paymentMethod ?? null,
     items: relevantItems.map((item) => ({
       id: item.product,
       itemId: item._id,

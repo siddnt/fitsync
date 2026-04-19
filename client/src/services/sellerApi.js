@@ -3,7 +3,10 @@ import { apiSlice } from './apiSlice.js';
 export const sellerApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getSellerProducts: builder.query({
-      query: () => '/marketplace/seller/products',
+      query: (params = {}) => ({
+        url: '/marketplace/seller/products',
+        params,
+      }),
       providesTags: (result) =>
         result?.data?.products
           ? [
@@ -15,6 +18,13 @@ export const sellerApi = apiSlice.injectEndpoints({
               { type: 'Marketplace', id: 'SELLER_PRODUCTS' },
               { type: 'Marketplace', id: 'CATALOG' },
             ],
+    }),
+    getSellerProduct: builder.query({
+      query: (productId) => `/marketplace/seller/products/${productId}`,
+      providesTags: (_result, _error, productId) => [
+        { type: 'Marketplace', id: productId },
+        { type: 'Marketplace', id: 'SELLER_PRODUCTS' },
+      ],
     }),
     createSellerProduct: builder.mutation({
       query: (payload) => ({
@@ -57,7 +67,10 @@ export const sellerApi = apiSlice.injectEndpoints({
       ],
     }),
     getSellerOrders: builder.query({
-      query: () => '/marketplace/seller/orders',
+      query: (params = {}) => ({
+        url: '/marketplace/seller/orders',
+        params,
+      }),
       providesTags: [{ type: 'Marketplace', id: 'SELLER_ORDERS' }],
     }),
     updateSellerOrderStatus: builder.mutation({
@@ -89,10 +102,13 @@ export const sellerApi = apiSlice.injectEndpoints({
 
 export const {
   useGetSellerProductsQuery,
+  useLazyGetSellerProductsQuery,
+  useGetSellerProductQuery,
   useCreateSellerProductMutation,
   useUpdateSellerProductMutation,
   useDeleteSellerProductMutation,
   useGetSellerOrdersQuery,
+  useLazyGetSellerOrdersQuery,
   useUpdateSellerOrderStatusMutation,
   useUpdateSellerOrderTrackingMutation,
   useReviewReturnRequestMutation,

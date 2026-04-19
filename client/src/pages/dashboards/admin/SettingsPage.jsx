@@ -9,58 +9,153 @@ import {
 import { formatDateTime } from '../../../utils/format.js';
 import '../Dashboard.css';
 
-const TOGGLE_DEFINITIONS = [
+const BOOLEAN_SETTING_DEFINITIONS = [
   {
     key: 'marketplaceEnabled',
     label: 'Marketplace enabled',
     description: 'Controls whether the public marketplace is visible to end users.',
+    type: 'boolean',
   },
   {
     key: 'autoApproveTrainers',
     label: 'Auto-approve trainers',
     description: 'Automatically activate trainer accounts after registration instead of manual review.',
+    type: 'boolean',
   },
   {
     key: 'showBetaDashboards',
     label: 'Show beta dashboards',
     description: 'Expose experimental analytics views to internal roles for validation.',
+    type: 'boolean',
   },
   {
     key: 'maintenanceMode',
     label: 'Maintenance mode',
     description: 'Temporarily pause member-facing activity while administrators perform platform maintenance.',
+    type: 'boolean',
   },
   {
     key: 'supportInboxEnabled',
     label: 'Support inbox enabled',
     description: 'Keep the public support and contact intake available for new tickets.',
+    type: 'boolean',
   },
   {
     key: 'paymentCheckoutEnabled',
     label: 'Payments enabled',
     description: 'Allow marketplace checkout and paid flows to proceed for end users.',
+    type: 'boolean',
   },
   {
     key: 'searchIndexingEnabled',
     label: 'Search indexing enabled',
     description: 'Keep marketplace and gym-search indexing jobs active for fresh discovery results.',
+    type: 'boolean',
   },
   {
     key: 'cacheWarmupEnabled',
     label: 'Cache warmup enabled',
     description: 'Prime cache-heavy public experiences so traffic spikes do not hit cold reads first.',
+    type: 'boolean',
   },
   {
     key: 'orderReturnsEnabled',
     label: 'Order returns enabled',
     description: 'Allow buyers to request returns and refunds from delivered marketplace orders.',
+    type: 'boolean',
   },
   {
     key: 'gymModerationAlerts',
     label: 'Gym moderation alerts',
     description: 'Highlight suspicious listing activity for admin and manager review.',
+    type: 'boolean',
   },
 ];
+
+const CONFIG_SETTING_DEFINITIONS = [
+  {
+    key: 'maintenanceBannerMessage',
+    label: 'Maintenance banner message',
+    description: 'Optional message shown when maintenance mode is enabled.',
+    type: 'text',
+    placeholder: 'Scheduled maintenance from 2:00 AM to 3:00 AM IST.',
+  },
+  {
+    key: 'supportQueueWarningDepth',
+    label: 'Support queue warning depth',
+    description: 'Open-ticket count that should begin surfacing queue pressure alerts.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'staleSupportTicketHours',
+    label: 'Stale support ticket hours',
+    description: 'Idle ticket age before ops highlights the support backlog.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'shipmentBacklogHours',
+    label: 'Shipment backlog hours',
+    description: 'Processing-order age before seller fulfillment backlog is considered risky.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'searchQueueWarningDepth',
+    label: 'Search queue warning depth',
+    description: 'Queued search-sync jobs allowed before a queue-depth alert is raised.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'auditSpikeThreshold',
+    label: 'Audit spike threshold',
+    description: 'Audit events in the last 24 hours needed before the control center flags a spike.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'returnWindowDays',
+    label: 'Return window days',
+    description: 'Default buyer return window surfaced across order and receipt flows.',
+    type: 'number',
+    min: 1,
+    step: 1,
+  },
+  {
+    key: 'listingHealthMinimumScore',
+    label: 'Listing health minimum score',
+    description: 'Recommended minimum listing-health target before merchandising pushes begin.',
+    type: 'number',
+    min: 1,
+    max: 100,
+    step: 1,
+  },
+];
+
+const ALL_SETTING_DEFINITIONS = [...BOOLEAN_SETTING_DEFINITIONS, ...CONFIG_SETTING_DEFINITIONS];
+
+const normalizeSettingValue = (definition, value) => {
+  if (definition.type === 'boolean') {
+    return Boolean(value);
+  }
+
+  if (definition.type === 'number') {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return definition.min ?? 0;
+    }
+    return parsed;
+  }
+
+  return String(value ?? '');
+};
 
 const AdminSettingsPage = () => {
   const {
@@ -71,29 +166,34 @@ const AdminSettingsPage = () => {
   } = useGetAdminTogglesQuery();
   const [updateToggles, { isLoading: isSaving }] = useUpdateAdminTogglesMutation();
 
-  const [localToggles, setLocalToggles] = useState({});
+  const [localSettings, setLocalSettings] = useState({});
   const [status, setStatus] = useState(null);
-  const persistedToggles = serverToggles?.toggles ?? {};
+  const persistedSettings = serverToggles?.toggles ?? {};
 
   useEffect(() => {
-    setLocalToggles(persistedToggles);
-  }, [persistedToggles]);
+    setLocalSettings(persistedSettings);
+  }, [persistedSettings]);
 
   const enabledCount = useMemo(
-    () => TOGGLE_DEFINITIONS.filter(({ key }) => Boolean(localToggles?.[key])).length,
-    [localToggles],
+    () => BOOLEAN_SETTING_DEFINITIONS.filter(({ key }) => Boolean(localSettings?.[key])).length,
+    [localSettings],
   );
 
-  const handleToggleChange = (key) => {
-    setLocalToggles((prev) => ({
+  const configuredThresholdCount = useMemo(
+    () => CONFIG_SETTING_DEFINITIONS.filter(({ key }) => localSettings?.[key] !== undefined && localSettings?.[key] !== '').length,
+    [localSettings],
+  );
+
+  const handleFieldChange = (key, value) => {
+    setLocalSettings((prev) => ({
       ...prev,
-      [key]: !prev[key],
+      [key]: value,
     }));
     setStatus(null);
   };
 
   const handleReset = () => {
-    setLocalToggles(persistedToggles);
+    setLocalSettings(persistedSettings);
     setStatus(null);
   };
 
@@ -101,20 +201,29 @@ const AdminSettingsPage = () => {
     if (!serverToggles?.toggles) {
       return false;
     }
-    return TOGGLE_DEFINITIONS.some(({ key }) => Boolean(persistedToggles[key]) !== Boolean(localToggles[key]));
-  }, [localToggles, persistedToggles, serverToggles?.toggles]);
+
+    return ALL_SETTING_DEFINITIONS.some((definition) => (
+      normalizeSettingValue(definition, persistedSettings?.[definition.key])
+      !== normalizeSettingValue(definition, localSettings?.[definition.key])
+    ));
+  }, [localSettings, persistedSettings, serverToggles?.toggles]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setStatus(null);
 
+    const payload = ALL_SETTING_DEFINITIONS.reduce((accumulator, definition) => {
+      accumulator[definition.key] = normalizeSettingValue(definition, localSettings?.[definition.key]);
+      return accumulator;
+    }, {});
+
     try {
-      await updateToggles(localToggles).unwrap();
-      setStatus({ type: 'success', message: 'Platform toggles updated successfully.' });
+      await updateToggles(payload).unwrap();
+      setStatus({ type: 'success', message: 'Platform controls updated successfully.' });
     } catch (error) {
       setStatus({
         type: 'error',
-        message: error?.data?.message ?? 'Unable to update toggles right now.',
+        message: error?.data?.message ?? 'Unable to update controls right now.',
       });
     }
   };
@@ -122,8 +231,8 @@ const AdminSettingsPage = () => {
   if (isLoading) {
     return (
       <div className="dashboard-grid">
-        <DashboardSection title="Platform toggles">
-          <SkeletonPanel lines={8} />
+        <DashboardSection title="Platform controls">
+          <SkeletonPanel lines={10} />
         </DashboardSection>
       </div>
     );
@@ -136,7 +245,7 @@ const AdminSettingsPage = () => {
           title="Admin settings"
           action={(<button type="button" onClick={() => refetch()}>Retry</button>)}
         >
-          <EmptyState message="We could not load the platform toggle settings." />
+          <EmptyState message="We could not load the platform settings." />
         </DashboardSection>
       </div>
     );
@@ -145,13 +254,13 @@ const AdminSettingsPage = () => {
   return (
     <div className="dashboard-grid">
       <DashboardSection
-        title="Platform toggles"
+        title="Platform controls"
         action={(
           <div className="button-row">
             <button type="button" onClick={handleReset} disabled={!isDirty || isSaving}>
               Reset
             </button>
-            <button type="submit" form="admin-toggle-form" disabled={!isDirty || isSaving}>
+            <button type="submit" form="admin-settings-form" disabled={!isDirty || isSaving}>
               {isSaving ? 'Saving...' : 'Save changes'}
             </button>
           </div>
@@ -163,23 +272,67 @@ const AdminSettingsPage = () => {
           </div>
         ) : null}
 
-        <form id="admin-toggle-form" className="settings-toggle-list" onSubmit={handleSubmit}>
-          {TOGGLE_DEFINITIONS.map(({ key, label, description }) => (
-            <label key={key} className="settings-toggle">
-              <div className="settings-toggle__meta">
-                <span className="settings-toggle__label">{label}</span>
-                <span className="settings-toggle__description">{description}</span>
-              </div>
-              <div className="settings-toggle__control">
-                <input
-                  type="checkbox"
-                  checked={Boolean(localToggles?.[key])}
-                  onChange={() => handleToggleChange(key)}
-                />
-                <span className="settings-toggle__switch" aria-hidden="true" />
-              </div>
-            </label>
-          ))}
+        <form id="admin-settings-form" className="settings-layout" onSubmit={handleSubmit}>
+          <div className="settings-section">
+            <div className="settings-section__header">
+              <h4>Availability switches</h4>
+              <p>Core on or off controls for the public product, intake, and platform workflows.</p>
+            </div>
+            <div className="settings-toggle-list">
+              {BOOLEAN_SETTING_DEFINITIONS.map(({ key, label, description }) => (
+                <label key={key} className="settings-toggle">
+                  <div className="settings-toggle__meta">
+                    <span className="settings-toggle__label">{label}</span>
+                    <span className="settings-toggle__description">{description}</span>
+                  </div>
+                  <div className="settings-toggle__control">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(localSettings?.[key])}
+                      onChange={() => handleFieldChange(key, !localSettings?.[key])}
+                    />
+                    <span className="settings-toggle__switch" aria-hidden="true" />
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-section__header">
+              <h4>Operational thresholds</h4>
+              <p>These values drive backlog warnings, audit spikes, listing-health expectations, and buyer policy cues.</p>
+            </div>
+            <div className="settings-field-list">
+              {CONFIG_SETTING_DEFINITIONS.map((definition) => (
+                <label key={definition.key} className="settings-field">
+                  <span className="settings-field__label">{definition.label}</span>
+                  <span className="settings-field__description">{definition.description}</span>
+                  {definition.type === 'text' ? (
+                    <textarea
+                      className="settings-field__input settings-field__input--textarea"
+                      value={String(localSettings?.[definition.key] ?? '')}
+                      onChange={(event) => handleFieldChange(definition.key, event.target.value)}
+                      placeholder={definition.placeholder}
+                      rows={3}
+                    />
+                  ) : (
+                    <input
+                      className="settings-field__input"
+                      type="number"
+                      value={Number.isFinite(Number(localSettings?.[definition.key]))
+                        ? Number(localSettings?.[definition.key])
+                        : definition.min ?? 0}
+                      min={definition.min}
+                      max={definition.max}
+                      step={definition.step}
+                      onChange={(event) => handleFieldChange(definition.key, event.target.value)}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
         </form>
       </DashboardSection>
 
@@ -195,14 +348,19 @@ const AdminSettingsPage = () => {
             </small>
           </div>
           <div className="stat-card">
-            <small>Enabled toggles</small>
-            <strong>{enabledCount} / {TOGGLE_DEFINITIONS.length}</strong>
-            <small>Live configuration currently applied across the platform.</small>
+            <small>Enabled switches</small>
+            <strong>{enabledCount} / {BOOLEAN_SETTING_DEFINITIONS.length}</strong>
+            <small>Availability controls currently active across the platform.</small>
+          </div>
+          <div className="stat-card">
+            <small>Configured thresholds</small>
+            <strong>{configuredThresholdCount} / {CONFIG_SETTING_DEFINITIONS.length}</strong>
+            <small>Non-boolean operational controls persisted with audit attribution.</small>
           </div>
           <div className="stat-card">
             <small>Persistence</small>
             <strong>systemsettings</strong>
-            <small>Changes are persisted with the acting admin for audit review.</small>
+            <small>Thresholds, messages, and switches are stored for ops and audit review.</small>
           </div>
         </div>
       </DashboardSection>

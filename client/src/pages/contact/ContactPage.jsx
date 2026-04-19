@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useSubmitContactFormMutation } from '../../services/contactApi.js';
 import { useGetGymsQuery } from '../../services/gymsApi.js';
@@ -48,6 +48,7 @@ const ContactPage = () => {
   const { data: gymsResponse } = useGetGymsQuery();
   const gyms = Array.isArray(gymsResponse?.data?.gyms) ? gymsResponse.data.gyms : [];
   const selectedGym = gyms.find((gym) => gym.id === watch('gymId'));
+  const [attachments, setAttachments] = useState([]);
 
   const [submitContactForm, { isLoading, isSuccess, isError, error }] = useSubmitContactFormMutation();
 
@@ -57,17 +58,32 @@ const ContactPage = () => {
 
   const onSubmit = async (formData) => {
     try {
-      await submitContactForm({
-        ...formData,
-        gymId: formData.gymId || undefined,
-      }).unwrap();
+      const payload = new FormData();
+      payload.append('name', formData.name);
+      payload.append('email', formData.email);
+      payload.append('subject', formData.subject);
+      payload.append('category', formData.category);
+      payload.append('priority', formData.priority);
+      payload.append('message', formData.message);
+      if (formData.gymId) {
+        payload.append('gymId', formData.gymId);
+      }
+      attachments.forEach((file) => payload.append('attachments', file));
+
+      await submitContactForm(payload).unwrap();
       reset({
         ...defaultValues,
         message: '',
       });
+      setAttachments([]);
     } catch (err) {
       console.error('Failed to send message:', err);
     }
+  };
+
+  const handleAttachmentChange = (event) => {
+    const nextFiles = Array.from(event.target.files ?? []).slice(0, 3);
+    setAttachments(nextFiles);
   };
 
   return (
@@ -77,6 +93,24 @@ const ContactPage = () => {
         <div className="contact-header">
           <h1>Get in Touch</h1>
           <p>Route support requests with the right context so billing, membership, technical, and marketplace issues reach the correct queue faster.</p>
+        </div>
+
+        <div className="contact-insights">
+          <article className="contact-insight-card">
+            <small>Response SLA</small>
+            <strong>High priority: same day</strong>
+            <span>Normal requests are usually answered within one business day, while low-priority questions are queued behind urgent incidents.</span>
+          </article>
+          <article className="contact-insight-card">
+            <small>Need quick help?</small>
+            <strong>Start with the right guide</strong>
+            <div className="contact-faq-links">
+              <Link to="/gyms">Membership and gym questions</Link>
+              <Link to="/marketplace">Marketplace orders and returns</Link>
+              <Link to="/terms">Terms and refund policy</Link>
+              <Link to="/privacy">Privacy and account data</Link>
+            </div>
+          </article>
         </div>
 
         {selectedGym ? (
@@ -207,6 +241,29 @@ const ContactPage = () => {
             ) : (
               <span className="contact-helper">The assigned admin or manager will see your category, priority, and optional gym link.</span>
             )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="attachments">Attachments</label>
+            <input
+              id="attachments"
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={handleAttachmentChange}
+            />
+            <span className="contact-helper">
+              Optional screenshots or short videos help support reproduce the issue faster. Up to 3 files, 5MB each.
+            </span>
+            {attachments.length ? (
+              <div className="contact-attachments">
+                {attachments.map((file) => (
+                  <span key={`${file.name}-${file.size}`} className="contact-attachment-pill">
+                    {file.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <button type="submit" disabled={isLoading} className="submit-btn primary-button">

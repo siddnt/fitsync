@@ -26,7 +26,6 @@ const GymList = ({
         const discoveryTone = gym.discovery?.tone ?? 'standard';
         const discoveryLabel = gym.discovery?.label ?? 'Published';
         const ownerLabel = gym.owner?.name ?? 'Unknown owner';
-        const contactLabel = gym.contact?.phone ?? gym.contact?.email ?? 'Contact not published';
         const startingAmount = parseAmount(gym.pricing?.startingAt ?? gym.pricing?.discounted ?? gym.pricing?.mrp);
         const priceLabel = startingAmount !== null
           ? `From Rs ${startingAmount.toLocaleString('en-IN')}`
@@ -50,7 +49,7 @@ const GymList = ({
                     {discoveryLabel}
                   </span>
                 </div>
-                <span className="gym-list__subline">{ownerLabel} · {contactLabel}</span>
+                <span className="gym-list__subline">{ownerLabel}</span>
                 <span className="gym-list__reason">
                   {gym.discovery?.reason ?? 'Published and ready for new memberships.'}
                 </span>
@@ -80,10 +79,6 @@ GymList.propTypes = {
       sponsorship: PropTypes.shape({
         status: PropTypes.string,
         tier: PropTypes.string,
-      }),
-      contact: PropTypes.shape({
-        phone: PropTypes.string,
-        email: PropTypes.string,
       }),
       pricing: PropTypes.shape({
         mrp: PropTypes.number,

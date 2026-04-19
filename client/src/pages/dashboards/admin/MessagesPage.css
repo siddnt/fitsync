@@ -224,6 +224,13 @@
     padding: 0.3rem 0.75rem;
 }
 
+.message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
 .message-controls {
     align-items: end;
     display: grid;

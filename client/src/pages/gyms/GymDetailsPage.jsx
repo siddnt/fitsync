@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -26,6 +27,39 @@ const parseAmount = (value) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 };
+
+const Icon = ({ name }) => {
+  const props = {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+  switch (name) {
+    case 'star':
+      return <svg {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
+    case 'clock':
+      return <svg {...props}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>;
+    case 'badge':
+      return <svg {...props}><path d="M12 2l3 6 6 .9-4.5 4.4 1 6.7L12 17l-5.5 3 1-6.7L3 8.9 9 8z" /></svg>;
+    case 'pin':
+      return <svg {...props}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>;
+    case 'phone':
+      return <svg {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>;
+    case 'dumbbell':
+      return <svg {...props}><path d="M6 4v16M2 8v8M18 4v16M22 8v8M6 12h12" /></svg>;
+    case 'calendar':
+      return <svg {...props}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>;
+    default:
+      return null;
+  }
+};
+Icon.propTypes = { name: PropTypes.string.isRequired };
 
 const normalizeWebsiteUrl = (value) => {
   const trimmed = String(value ?? '').trim();
@@ -218,12 +252,14 @@ const GymDetailsPage = () => {
     return [...new Set(values)];
   }, [gym?.amenities, gym?.features, gym?.keyFeatures, gym?.tags]);
 
-  const locationLabel = useMemo(() => (
-    [
-      gym?.location?.address,
-      [gym?.location?.city, gym?.location?.state].filter(Boolean).join(', '),
-    ].filter(Boolean).join(' | ')
-  ), [gym?.location?.address, gym?.location?.city, gym?.location?.state]);
+  const locationLabel = useMemo(() => {
+    const address = String(gym?.location?.address ?? '').trim();
+    const cityState = [gym?.location?.city, gym?.location?.state].filter(Boolean).join(', ').trim();
+    if (address && cityState && address.toLowerCase() !== cityState.toLowerCase()) {
+      return `${address} | ${cityState}`;
+    }
+    return address || cityState;
+  }, [gym?.location?.address, gym?.location?.city, gym?.location?.state]);
 
   const mapLink = useMemo(() => buildMapLink(gym), [gym]);
   const websiteUrl = useMemo(() => normalizeWebsiteUrl(gym?.contact?.website), [gym?.contact?.website]);
@@ -429,24 +465,52 @@ const GymDetailsPage = () => {
   );
   const headlinePlanLabel = gym.pricing?.startingPlanLabel ?? gym.pricing?.defaultPlanLabel ?? null;
 
+  const heroImage = activeMedia || mediaGallery[0] || null;
+  const heroInitial = (gym.name ?? 'G').trim().charAt(0).toUpperCase();
+  const ratingValue = gym.analytics?.ratingCount
+    ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5`
+    : 'No ratings yet';
+  const ratingMeta = gym.analytics?.ratingCount
+    ? `${gym.analytics.ratingCount} member reviews`
+    : 'Be the first to review this gym.';
+  const openingHours = `${gym.schedule?.open || 'Schedule pending'}${gym.schedule?.close ? ` - ${gym.schedule.close}` : ''}`;
+  const bestFitLabel = recommendedPlan?.label ?? 'Membership enquiry';
+  const bestFitMeta = recommendedPlan
+    ? `${recommendedPlan.durationMonths ? `${recommendedPlan.durationMonths} month plan` : 'Flexible plan'} at ${currencyPrefix}${Number(recommendedPlan.price ?? recommendedPlan.mrp ?? 0).toLocaleString('en-IN')}`
+    : 'Ask the gym to confirm the best plan for your goals.';
+
   return (
     <div className="gym-details">
+      <div className="gym-details__hero-banner">
+        {heroImage ? (
+          <img src={heroImage} alt={`${gym.name} preview`} />
+        ) : (
+          <div className="gym-details__hero-placeholder" aria-hidden>
+            <span>{heroInitial}</span>
+          </div>
+        )}
+        <span className="gym-details__hero-eyebrow">Gym listing</span>
+      </div>
+
+      {mediaGallery.length > 1 ? (
+        <div className="gym-details__media-grid">
+          {mediaGallery.slice(0, 5).map((image, index) => (
+            <button
+              key={`${image}-${index}`}
+              type="button"
+              className={`gym-details__media-thumb${image === activeMedia ? ' is-active' : ''}`}
+              onClick={() => setSelectedMediaIndex(index)}
+            >
+              <img src={image} alt={`${gym.name} gallery ${index + 1}`} />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <header className="gym-details__header">
         <div className="gym-details__headline">
-          <div className="gym-details__eyebrow">Gym listing</div>
           <h1>{gym.name}</h1>
           <p>{locationLabel || 'Location details pending'}</p>
-          <div className="gym-details__header-actions">
-            <button type="button" onClick={handleShareGym}>
-              Share
-            </button>
-            <button type="button" onClick={handleToggleSave}>
-              {isSaved ? 'Saved' : 'Save'}
-            </button>
-            <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
-              Contact
-            </Link>
-          </div>
         </div>
         <div className="gym-details__pricing">
           <span className="price">
@@ -458,119 +522,72 @@ const GymDetailsPage = () => {
           {headlinePlanLabel ? (
             <small>Starting with {headlinePlanLabel}</small>
           ) : null}
-          <div className="gym-details__pricing-actions">
-            <a href="#gym-membership-options">Join membership</a>
-            <Link to="/dashboard/trainee/sessions">Book session</Link>
-          </div>
+        </div>
+        <div className="gym-details__header-actions">
+          <button type="button" onClick={handleShareGym}>Share</button>
+          <button type="button" onClick={handleToggleSave}>{isSaved ? 'Saved' : 'Save'}</button>
+          <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
+            Contact
+          </Link>
+          <a className="gym-details__header-actions-primary" href="#gym-membership-options">Join membership</a>
+          <Link className="gym-details__header-actions-primary" to="/dashboard/trainee/sessions">Book session</Link>
         </div>
       </header>
       {pageNotice ? <p className="gym-details__notice">{pageNotice}</p> : null}
 
-      <section className="gym-details__conversion-strip" id="gym-membership-options">
-        <div className="gym-details__conversion-copy">
-          <small>Membership conversion</small>
-          <strong>
-            {recommendedPlan
-              ? `${recommendedPlan.label} from ${currencyPrefix}${Number(recommendedPlan.price ?? recommendedPlan.mrp ?? 0).toLocaleString('en-IN')}`
-              : headlinePrice !== null
-                ? `Memberships start at ${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}`
-                : 'Ask the gym about membership pricing'}
-          </strong>
-          <p>
-            Compare plan durations, lock in the right membership, and keep trainer session booking tied to the same plan.
-          </p>
+      <section className="gym-details__quick-stats">
+        <div>
+          <span className="gym-details__quick-icon"><Icon name="star" /></span>
+          <div>
+            <strong>Rating</strong>
+            <p>{ratingValue}</p>
+            <small>{ratingMeta}</small>
+          </div>
         </div>
-        <div className="gym-details__conversion-actions">
-          <GymMembershipActions
-            membership={membership}
-            isLoading={isMembershipFetching && shouldFetchMembership}
-            canManage={canManageMembership}
-            isAuthenticated={isAuthenticated}
-            onJoin={handleJoin}
-            onLeave={handleLeave}
-            isJoining={isJoining}
-            isLeaving={isLeaving}
-            error={actionError}
-            userRole={userRole}
-            trainers={trainers}
-            pricingPlans={gym.pricing?.plans ?? []}
-            currency={currencyPrefix}
-          />
+        <div>
+          <span className="gym-details__quick-icon"><Icon name="clock" /></span>
+          <div>
+            <strong>Opening hours</strong>
+            <p>{openingHours}</p>
+            <small>{formatWorkingDays(gym.schedule?.workingDays)}</small>
+          </div>
+        </div>
+        <div>
+          <span className="gym-details__quick-icon"><Icon name="badge" /></span>
+          <div>
+            <strong>Best fit</strong>
+            <p>{bestFitLabel}</p>
+            <small>{bestFitMeta}</small>
+          </div>
         </div>
       </section>
 
-      <section className="gym-details__hero">
-        <div className="gym-details__media">
-          {mediaGallery.length ? (
-            <>
-              <div className="gym-details__media-primary">
-                <img src={activeMedia} alt={`${gym.name} preview`} />
-              </div>
-              {mediaGallery.length > 1 ? (
-                <div className="gym-details__media-grid">
-                  {mediaGallery.slice(0, 5).map((image, index) => (
-                    <button
-                      key={`${image}-${index}`}
-                      type="button"
-                      className={`gym-details__media-thumb${image === activeMedia ? ' is-active' : ''}`}
-                      onClick={() => setSelectedMediaIndex(index)}
-                    >
-                      <img src={image} alt={`${gym.name} gallery ${index + 1}`} />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="gym-details__media-empty">
-              <strong>No gallery uploaded yet</strong>
-              <p>The owner has not published facility photos for this listing yet.</p>
-            </div>
-          )}
-        </div>
+      <div className="gym-details__quick-actions">
+        {mapLink ? <a href={mapLink} target="_blank" rel="noreferrer">Open in Maps</a> : null}
+        {gym.contact?.phone ? <a href={`tel:${gym.contact.phone}`}>Call gym</a> : null}
+        {gym.contact?.email ? (
+          <a href={`mailto:${gym.contact.email}?subject=${encodeURIComponent(`Enquiry about ${gym.name}`)}`}>Email gym</a>
+        ) : null}
+        <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>Contact support</Link>
+        {websiteUrl ? <a href={websiteUrl} target="_blank" rel="noreferrer">Visit website</a> : null}
+      </div>
 
-        <aside className="gym-details__hero-card">
-          <div>
-            <small>Rating</small>
-            <strong>
-              {gym.analytics?.ratingCount
-                ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5`
-                : 'No ratings yet'}
-            </strong>
-            <p>{gym.analytics?.ratingCount ? `${gym.analytics.ratingCount} member reviews` : 'Be the first to review this gym.'}</p>
-          </div>
-          <div>
-            <small>Opening hours</small>
-            <strong>{gym.schedule?.open || 'Schedule pending'}{gym.schedule?.close ? ` - ${gym.schedule.close}` : ''}</strong>
-            <p>{formatWorkingDays(gym.schedule?.workingDays)}</p>
-          </div>
-          <div>
-            <small>Best fit</small>
-            <strong>{recommendedPlan?.label ?? 'Membership enquiry'}</strong>
-            <p>
-              {recommendedPlan
-                ? `${recommendedPlan.durationMonths ? `${recommendedPlan.durationMonths} month plan` : 'Flexible plan'} at ${currencyPrefix}${Number(recommendedPlan.price ?? recommendedPlan.mrp ?? 0).toLocaleString('en-IN')}`
-                : 'Ask the gym to confirm the best plan for your goals.'}
-            </p>
-          </div>
-          <div className="gym-details__hero-actions">
-            {mapLink ? (
-              <a href={mapLink} target="_blank" rel="noreferrer">Open in Maps</a>
-            ) : null}
-            {gym.contact?.phone ? (
-              <a href={`tel:${gym.contact.phone}`}>Call gym</a>
-            ) : null}
-            {gym.contact?.email ? (
-              <a href={`mailto:${gym.contact.email}?subject=${encodeURIComponent(`Enquiry about ${gym.name}`)}`}>Email gym</a>
-            ) : null}
-            <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
-              Contact support
-            </Link>
-            {websiteUrl ? (
-              <a href={websiteUrl} target="_blank" rel="noreferrer">Visit website</a>
-            ) : null}
-          </div>
-        </aside>
+      <section className="gym-details__membership-section" id="gym-membership-options">
+        <GymMembershipActions
+          membership={membership}
+          isLoading={isMembershipFetching && shouldFetchMembership}
+          canManage={canManageMembership}
+          isAuthenticated={isAuthenticated}
+          onJoin={handleJoin}
+          onLeave={handleLeave}
+          isJoining={isJoining}
+          isLeaving={isLeaving}
+          error={actionError}
+          userRole={userRole}
+          trainers={trainers}
+          pricingPlans={gym.pricing?.plans ?? []}
+          currency={currencyPrefix}
+        />
       </section>
 
       <section className="gym-details__section">
@@ -612,7 +629,7 @@ const GymDetailsPage = () => {
 
       <section className="gym-details__grid">
         <article>
-          <h2>Location</h2>
+          <h2><span className="gym-details__section-icon"><Icon name="pin" /></span>Location</h2>
           <p>{gym.location?.address || 'Address pending'}</p>
           <p>{[gym.location?.city, gym.location?.state].filter(Boolean).join(', ') || 'City pending'}</p>
           {gym.location?.coordinates?.lat && gym.location?.coordinates?.lng ? (
@@ -625,13 +642,13 @@ const GymDetailsPage = () => {
           ) : null}
         </article>
         <article>
-          <h2>Contact</h2>
+          <h2><span className="gym-details__section-icon"><Icon name="phone" /></span>Contact</h2>
           <p>{gym.contact?.phone || 'Phone not published'}</p>
           <p>{gym.contact?.email || 'Email not published'}</p>
           <p>{websiteUrl || 'Website not published'}</p>
         </article>
         <article>
-          <h2>Facilities and focus</h2>
+          <h2><span className="gym-details__section-icon"><Icon name="dumbbell" /></span>Facilities and focus</h2>
           {featurePills.length ? (
             <div className="gym-details__chips">
               {featurePills.map((feature) => (
@@ -643,7 +660,7 @@ const GymDetailsPage = () => {
           )}
         </article>
         <article>
-          <h2>Weekly hours</h2>
+          <h2><span className="gym-details__section-icon"><Icon name="calendar" /></span>Weekly hours</h2>
           <div className="gym-details__hours-list">
             {weeklyHours.map((entry) => (
               <div key={entry.key} className="gym-details__hours-row">

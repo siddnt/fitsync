@@ -11,6 +11,43 @@ const parseAmount = (value) => {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 };
 
+const Icon = ({ name }) => {
+  const props = {
+    width: 18,
+    height: 18,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+  switch (name) {
+    case 'user':
+      return <svg {...props}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" /></svg>;
+    case 'phone':
+      return <svg {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>;
+    case 'calendar':
+      return <svg {...props}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>;
+    case 'clock':
+      return <svg {...props}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>;
+    case 'users':
+      return <svg {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+    case 'tag':
+      return <svg {...props}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><circle cx="7" cy="7" r="1.5" /></svg>;
+    case 'star':
+      return <svg {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>;
+    case 'badge':
+      return <svg {...props}><path d="M12 2l3 6 6 .9-4.5 4.4 1 6.7L12 17l-5.5 3 1-6.7L3 8.9 9 8z" /></svg>;
+    case 'arrow':
+      return <svg {...props}><path d="M5 12h14M13 5l7 7-7 7" /></svg>;
+    default:
+      return null;
+  }
+};
+Icon.propTypes = { name: PropTypes.string.isRequired };
+
 const GymHighlight = ({
   gym = null,
   isLoading = false,
@@ -175,34 +212,44 @@ const GymHighlight = ({
     ? `${trainers.length} trainer${trainers.length > 1 ? 's' : ''} available`
     : 'Trainer roster not published';
 
+  const heroImage = Array.isArray(gym.gallery) ? gym.gallery.find(Boolean) : null;
+  const heroInitial = (gym.name ?? 'G').trim().charAt(0).toUpperCase();
+
   return (
     <article className="gym-highlight">
-      {discovery ? (
-        <div className={`gym-highlight__discovery-banner gym-highlight__discovery-banner--${discovery.tone ?? 'standard'}`}>
-          <div>
-            <small>Discovery status</small>
-            <strong>{discovery.label}</strong>
-            <p>{discovery.reason}</p>
+      <div className="gym-highlight__hero">
+        {heroImage ? (
+          <img src={heroImage} alt={`${gym.name} preview`} />
+        ) : (
+          <div className="gym-highlight__hero-placeholder" aria-hidden>
+            <span>{heroInitial}</span>
           </div>
-          {isSponsored ? (
-            <span className="gym-highlight__discovery-tier">{gym.sponsorship?.tier ?? 'sponsored'}</span>
-          ) : null}
-        </div>
-      ) : null}
+        )}
+        {discovery ? (
+          <span className={`gym-highlight__hero-badge gym-highlight__hero-badge--${discovery.tone ?? 'standard'}`}>
+            {discovery.label}
+          </span>
+        ) : null}
+        {isSponsored ? (
+          <span className="gym-highlight__hero-tier">{gym.sponsorship?.tier ?? 'sponsored'}</span>
+        ) : null}
+      </div>
       <header className="gym-highlight__header">
         <div>
           <h1>{gym.name}</h1>
           <p>{gym.location?.address}</p>
         </div>
         <div className="gym-highlight__pricing">
-          <span className="price">
-            {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'Pricing unavailable'}
-          </span>
-          {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
-            <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
-          ) : null}
+          <div className="gym-highlight__pricing-row">
+            <span className="price">
+              {headlinePrice !== null ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}` : 'Pricing unavailable'}
+            </span>
+            {headlineMrp !== null && headlinePrice !== null && headlineMrp > headlinePrice ? (
+              <span className="price--mrp">{currencyPrefix}{headlineMrp.toLocaleString('en-IN')}</span>
+            ) : null}
+          </div>
           {headlinePlanLabel ? (
-            <small style={{ display: 'block', marginTop: '0.35rem', color: 'var(--muted-text-color)' }}>
+            <small className="gym-highlight__pricing-meta">
               Starting with {headlinePlanLabel}
             </small>
           ) : null}
@@ -227,73 +274,102 @@ const GymHighlight = ({
 
       <section className="gym-highlight__meta">
         <div>
-          <strong>Owner</strong>
-          <span>{ownerLabel}</span>
-        </div>
-        <div>
-          <strong>Contact</strong>
-          <span>{contactSummary}</span>
-        </div>
-        <div>
-          <strong>Working days</strong>
-          <span>{workingDayLabel}</span>
-        </div>
-        <div>
-          <strong>Timings</strong>
-          <span>{timingLabel}</span>
-        </div>
-        <div>
-          <strong>Trainer roster</strong>
-          <span>{trainerSummary}</span>
-        </div>
-      </section>
-
-      <section className="gym-highlight__features">
-        <h2>Key features</h2>
-        {featureList.length ? (
-          <div>
-            {featureList.map((feature) => (
-              <span key={feature}>{feature}</span>
-            ))}
+          <span className="gym-highlight__meta-icon"><Icon name="user" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Owner</strong>
+            <span>{ownerLabel}</span>
           </div>
-        ) : (
-          <p className="gym-highlight__review-notice">This gym has not published feature badges yet.</p>
-        )}
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="phone" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Contact</strong>
+            <span>{contactSummary}</span>
+          </div>
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="calendar" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Working days</strong>
+            <span>{workingDayLabel}</span>
+          </div>
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="clock" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Timings</strong>
+            <span>{timingLabel}</span>
+          </div>
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="users" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Trainer roster</strong>
+            <span>{trainerSummary}</span>
+          </div>
+        </div>
       </section>
 
-      <section className="gym-highlight__about">
-        <h2>About</h2>
-        {description ? (
-          <p>{description}</p>
-        ) : (
-          <p className="gym-highlight__review-notice">The owner has not published a gym description yet.</p>
-        )}
-      </section>
+      <div className="gym-highlight__split">
+        <section className="gym-highlight__features">
+          <h2>Key features</h2>
+          {featureList.length ? (
+            <div>
+              {featureList.map((feature) => (
+                <span key={feature}>{feature}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="gym-highlight__review-notice">This gym has not published feature badges yet.</p>
+          )}
+        </section>
+
+        <section className="gym-highlight__about">
+          <h2>About</h2>
+          {description ? (
+            <p>{description}</p>
+          ) : (
+            <p className="gym-highlight__review-notice">The owner has not published a gym description yet.</p>
+          )}
+        </section>
+      </div>
 
       <section className="gym-highlight__meta">
         <div>
-          <strong>Pricing</strong>
-          <span>
-            {headlinePrice !== null
-              ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}${headlinePlanLabel ? ` starting with ${headlinePlanLabel}` : ''}`
-              : 'Pricing not published'}
-          </span>
+          <span className="gym-highlight__meta-icon"><Icon name="tag" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Pricing</strong>
+            <span>
+              {headlinePrice !== null
+                ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}${headlinePlanLabel ? ` starting with ${headlinePlanLabel}` : ''}`
+                : 'Pricing not published'}
+            </span>
+          </div>
         </div>
         <div>
-          <strong>Ratings</strong>
-          <span>
-            {gym.analytics?.ratingCount
-              ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from ${gym.analytics.ratingCount} reviews`
-              : 'No ratings yet'}
-          </span>
+          <span className="gym-highlight__meta-icon"><Icon name="star" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Ratings</strong>
+            <span>
+              {gym.analytics?.ratingCount
+                ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from ${gym.analytics.ratingCount} reviews`
+                : 'No ratings yet'}
+            </span>
+          </div>
         </div>
         <div>
-          <strong>Membership</strong>
-          <span>{membership ? `Your status: ${formatStatus(membership.status)}` : 'Open to new memberships'}</span>
+          <span className="gym-highlight__meta-icon"><Icon name="badge" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Membership</strong>
+            <span>{membership ? `Your status: ${formatStatus(membership.status)}` : 'Open to new memberships'}</span>
+          </div>
         </div>
         <div>
-          <strong>More details</strong>
-          <span><Link to={`/gyms/${gym.id}`}>Open full gym profile</Link></span>
+          <span className="gym-highlight__meta-icon"><Icon name="arrow" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>More details</strong>
+            <span><Link to={`/gyms/${gym.id}`}>Open full gym profile</Link></span>
+          </div>
         </div>
       </section>
 

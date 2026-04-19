@@ -11,6 +11,7 @@ import {
   requestMarketplaceReturn,
   listSellerProducts,
   createSellerProduct,
+  getSellerProduct,
   updateSellerProduct,
   deleteSellerProduct,
   listSellerOrders,
@@ -36,6 +37,7 @@ router.post('/orders/:orderId/items/:itemId/return', verifyJWT, authorizeRoles('
 router.use(verifyJWT, authorizeRoles('seller', 'admin'));
 
 router.get('/seller/products', listSellerProducts);
+router.get('/seller/products/:productId', getSellerProduct);
 router.post('/seller/products', upload.single('image'), createSellerProduct);
 router.put('/seller/products/:productId', upload.single('image'), updateSellerProduct);
 router.delete('/seller/products/:productId', deleteSellerProduct);

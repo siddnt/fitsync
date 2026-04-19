@@ -13,6 +13,12 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.seller-analytics__leaderboards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .chart-card {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 14px;
@@ -147,6 +153,39 @@
 .empty-chart {
   color: var(--muted-text-color);
   padding: 1.25rem 0;
+}
+
+.seller-chart-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.seller-chart-list__item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.85rem 0.95rem;
+}
+
+.seller-chart-list__item strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.seller-chart-list__item small,
+.seller-chart-list__metric small {
+  color: var(--muted-text-color);
+}
+
+.seller-chart-list__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-align: right;
 }
 
 @media (max-width: 880px) {

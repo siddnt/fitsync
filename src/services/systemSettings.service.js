@@ -5,12 +5,20 @@ export const DEFAULT_ADMIN_TOGGLES = {
   autoApproveTrainers: false,
   showBetaDashboards: false,
   maintenanceMode: false,
+  maintenanceBannerMessage: '',
   supportInboxEnabled: true,
+  supportQueueWarningDepth: 5,
+  staleSupportTicketHours: 24,
   paymentCheckoutEnabled: true,
   searchIndexingEnabled: true,
+  searchQueueWarningDepth: 6,
   cacheWarmupEnabled: true,
   orderReturnsEnabled: true,
+  returnWindowDays: 7,
+  shipmentBacklogHours: 48,
   gymModerationAlerts: true,
+  listingHealthMinimumScore: 75,
+  auditSpikeThreshold: 10,
 };
 
 export const loadAdminToggles = async () => {

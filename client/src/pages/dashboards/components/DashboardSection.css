@@ -30,6 +30,7 @@
 
 .dashboard-section__body {
   color: var(--muted-text-color);
+  min-width: 0;
 }
 
 .dashboard-section {

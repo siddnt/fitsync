@@ -29,8 +29,8 @@ const TIMEFRAME_OPTIONS = [
 ];
 
 const TIMEFRAME_COPY = {
-  weekly: 'Daily sales across the last 7 days.',
-  monthly: 'Monthly sales across the last 12 months.',
+  weekly: 'Delivered revenue across the last 7 days.',
+  monthly: 'Delivered revenue across the last 12 months.',
 };
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -52,13 +52,17 @@ const formatCurrency = (value) => currencyFormatter.format(value || 0);
 const formatCurrencyCompact = (value) => compactCurrencyFormatter.format(value || 0);
 const formatNumber = (value) => numberFormatter.format(value || 0);
 
+const formatLabel = (value) => String(value ?? 'Uncategorised')
+  .replace(/[-_]/g, ' ')
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
 function buildRevenueSeriesByDay(orders = [], days = 7) {
   const today = new Date();
   const windowMap = new Map();
 
-  for (let i = days - 1; i >= 0; i -= 1) {
+  for (let index = days - 1; index >= 0; index -= 1) {
     const date = new Date(today);
-    date.setDate(today.getDate() - i);
+    date.setDate(today.getDate() - index);
     const key = date.toISOString().slice(0, 10);
     windowMap.set(key, {
       id: key,
@@ -69,11 +73,19 @@ function buildRevenueSeriesByDay(orders = [], days = 7) {
   }
 
   (orders || []).forEach((order) => {
-    if (!order?.createdAt) return;
+    if (!order?.createdAt) {
+      return;
+    }
+
     const date = new Date(order.createdAt);
-    if (Number.isNaN(date.getTime())) return;
+    if (Number.isNaN(date.getTime())) {
+      return;
+    }
+
     const key = date.toISOString().slice(0, 10);
-    if (!windowMap.has(key)) return;
+    if (!windowMap.has(key)) {
+      return;
+    }
 
     const item = windowMap.get(key);
     item.value += Number(order.total) || 0;
@@ -86,8 +98,8 @@ function buildRevenueSeriesByMonth(orders = [], months = 12) {
   const today = new Date();
   const windowMap = new Map();
 
-  for (let i = months - 1; i >= 0; i -= 1) {
-    const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+  for (let index = months - 1; index >= 0; index -= 1) {
+    const date = new Date(today.getFullYear(), today.getMonth() - index, 1);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     windowMap.set(key, {
       id: key,
@@ -98,11 +110,19 @@ function buildRevenueSeriesByMonth(orders = [], months = 12) {
   }
 
   (orders || []).forEach((order) => {
-    if (!order?.createdAt) return;
+    if (!order?.createdAt) {
+      return;
+    }
+
     const date = new Date(order.createdAt);
-    if (Number.isNaN(date.getTime())) return;
+    if (Number.isNaN(date.getTime())) {
+      return;
+    }
+
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!windowMap.has(key)) return;
+    if (!windowMap.has(key)) {
+      return;
+    }
 
     const item = windowMap.get(key);
     item.value += Number(order.total) || 0;
@@ -112,19 +132,26 @@ function buildRevenueSeriesByMonth(orders = [], months = 12) {
 }
 
 function buildCategoryBreakdown(products = []) {
-  const map = new Map();
+  const categoryMap = new Map();
+
   (products || []).forEach((product) => {
-    const raw = product?.category || product?.type || 'Uncategorised';
-    const label = raw || 'Uncategorised';
-    const id = label.toString().toLowerCase();
-    map.set(id, {
-      id,
-      name: label,
-      value: (map.get(id)?.value || 0) + 1,
-    });
+    const rawCategory = product?.category || product?.type || 'Uncategorised';
+    const label = formatLabel(rawCategory);
+    const id = label.toLowerCase();
+    const unitsSold = Number(product?.stats?.soldLast30Days ?? 0);
+
+    if (!categoryMap.has(id)) {
+      categoryMap.set(id, {
+        id,
+        name: label,
+        value: 0,
+      });
+    }
+
+    categoryMap.get(id).value += unitsSold;
   });
 
-  return Array.from(map.values());
+  return Array.from(categoryMap.values()).filter((entry) => entry.value > 0);
 }
 
 const ORDER_STATUS_KEYS = ['processing', 'in-transit', 'out-for-delivery', 'delivered'];
@@ -133,6 +160,7 @@ const normaliseStatus = (status) => {
   if (!status) {
     return 'processing';
   }
+
   const value = status.toString().toLowerCase();
   return ORDER_STATUS_KEYS.includes(value) ? value : 'processing';
 };
@@ -142,6 +170,7 @@ const isDeliveredOrder = (order) => {
   if (!items.length) {
     return false;
   }
+
   return items.every((item) => normaliseStatus(item?.status) === 'delivered');
 };
 
@@ -158,9 +187,36 @@ function buildOrderStatusBreakdown(orders = []) {
 
   return Array.from(counts.entries()).map(([key, value]) => ({
     id: key,
-    name: key.replace(/-/g, ' ').replace(/^\w/, (char) => char.toUpperCase()),
+    name: formatLabel(key),
     value,
   }));
+}
+
+function buildTopProducts(products = []) {
+  return [...(products || [])]
+    .sort((left, right) => {
+      const recentGap = Number(right?.stats?.soldLast30Days ?? 0) - Number(left?.stats?.soldLast30Days ?? 0);
+      if (recentGap !== 0) {
+        return recentGap;
+      }
+
+      return Number(right?.stats?.totalSold ?? 0) - Number(left?.stats?.totalSold ?? 0);
+    })
+    .slice(0, 5);
+}
+
+function buildSlowProducts(products = []) {
+  return [...(products || [])]
+    .filter((product) => product?.isPublished && Number(product?.stats?.soldLast30Days ?? 0) === 0)
+    .sort((left, right) => {
+      const lifetimeGap = Number(left?.stats?.totalSold ?? 0) - Number(right?.stats?.totalSold ?? 0);
+      if (lifetimeGap !== 0) {
+        return lifetimeGap;
+      }
+
+      return Number(right?.stock ?? 0) - Number(left?.stock ?? 0);
+    })
+    .slice(0, 5);
 }
 
 function applyColors(entries, overrides = {}) {
@@ -178,6 +234,7 @@ const ChartLegend = ({ entries, hiddenKeys, onToggle, valueFormatter }) => {
       {entries.map((entry) => {
         const isHidden = hiddenKeys.includes(entry.id);
         const percentage = total ? ((entry.value / total) * 100).toFixed(1) : 0;
+
         return (
           <li key={entry.id} className="chart-legend__item">
             <button
@@ -193,7 +250,7 @@ const ChartLegend = ({ entries, hiddenKeys, onToggle, valueFormatter }) => {
                 {entry.name}
                 <small>
                   {valueFormatter(entry.value)}
-                  {total ? ` · ${percentage}%` : ''}
+                  {total ? ` | ${percentage}%` : ''}
                 </small>
               </span>
             </button>
@@ -231,9 +288,7 @@ const SmallPie = ({ data, title, hiddenKeys, onToggle, valueFormatter }) => {
                 <Cell key={entry.id} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
-              formatter={(value, name) => [valueFormatter(value), name]}
-            />
+            <Tooltip formatter={(value, name) => [valueFormatter(value), name]} />
           </PieChart>
         </ResponsiveContainer>
       ) : (
@@ -296,11 +351,39 @@ const RevenueLine = ({ data, timeframe, onChange }) => {
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        <p className="empty-chart">No revenue yet</p>
+        <p className="empty-chart">No delivered revenue yet.</p>
       )}
     </div>
   );
 };
+
+const ProductLeaderboard = ({ title, products, emptyMessage, valueLabel }) => (
+  <div className="chart-card">
+    <div className="chart-card__header">
+      <h4>{title}</h4>
+    </div>
+    {products.length ? (
+      <div className="seller-chart-list">
+        {products.map((product) => (
+          <div key={product.id} className="seller-chart-list__item">
+            <div>
+              <strong>{product.name}</strong>
+              <small>{formatLabel(product.category)}</small>
+            </div>
+            <div className="seller-chart-list__metric">
+              <strong>{formatNumber(valueLabel(product))}</strong>
+              <small>
+                {formatNumber(product?.stats?.totalSold ?? 0)} lifetime sold
+              </small>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <p className="empty-chart">{emptyMessage}</p>
+    )}
+  </div>
+);
 
 const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null, products = [] }) => {
   const [timeframe, setTimeframe] = useState('weekly');
@@ -311,12 +394,12 @@ const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null
     if (Array.isArray(deliveredOrdersProp)) {
       return deliveredOrdersProp;
     }
+
     return (orders || []).filter((order) => isDeliveredOrder(order));
   }, [orders, deliveredOrdersProp]);
 
   const revenueWeekly = useMemo(() => buildRevenueSeriesByDay(deliveredOrders, 7), [deliveredOrders]);
   const revenueMonthly = useMemo(() => buildRevenueSeriesByMonth(deliveredOrders, 12), [deliveredOrders]);
-
   const revenueSeries = timeframe === 'weekly' ? revenueWeekly : revenueMonthly;
 
   const categories = useMemo(() => applyColors(buildCategoryBreakdown(products)), [products]);
@@ -324,6 +407,8 @@ const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null
     () => applyColors(buildOrderStatusBreakdown(orders), STATUS_COLOR_MAP),
     [orders],
   );
+  const topProducts = useMemo(() => buildTopProducts(products), [products]);
+  const slowProducts = useMemo(() => buildSlowProducts(products), [products]);
 
   useEffect(() => {
     setHiddenCategoryKeys((prev) => prev.filter((key) => categories.some((category) => category.id === key)));
@@ -353,7 +438,7 @@ const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null
       <div className="seller-analytics__pies">
         <SmallPie
           data={categories}
-          title="By category"
+          title="Units sold by category"
           hiddenKeys={hiddenCategoryKeys}
           onToggle={toggleCategory}
           valueFormatter={formatNumber}
@@ -364,6 +449,20 @@ const SellerCharts = ({ orders = [], deliveredOrders: deliveredOrdersProp = null
           hiddenKeys={hiddenStatusKeys}
           onToggle={toggleStatus}
           valueFormatter={formatNumber}
+        />
+      </div>
+      <div className="seller-analytics__leaderboards">
+        <ProductLeaderboard
+          title="Best sellers"
+          products={topProducts}
+          emptyMessage="Sales rankings will appear once products start moving."
+          valueLabel={(product) => product?.stats?.soldLast30Days ?? 0}
+        />
+        <ProductLeaderboard
+          title="Slow movers"
+          products={slowProducts}
+          emptyMessage="Every published product has recorded recent sales."
+          valueLabel={(product) => product?.stock ?? 0}
         />
       </div>
     </div>

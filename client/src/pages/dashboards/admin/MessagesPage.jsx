@@ -260,6 +260,15 @@ const MessagesPage = () => {
                     <span>Status: {msg.status || 'new'}</span>
                     <span>{msg.gym?.name ? `Gym context: ${msg.gym.name}` : 'No gym context'}</span>
                   </div>
+                  {msg.attachments?.length ? (
+                    <div className="message-attachments">
+                      {msg.attachments.map((attachment) => (
+                        <span key={`${msg._id}-${attachment.filename || attachment.originalName}`} className="ticket-pill">
+                          {attachment.originalName || attachment.filename || 'Attachment'}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="message-controls">

@@ -175,6 +175,18 @@ const TraineeDashboard = () => {
     [progress?.metrics],
   );
 
+  const membershipBillingLabel = useMemo(() => {
+    if (!membership?.billing) {
+      return '--';
+    }
+
+    if (typeof membership.billing === 'string') {
+      return membership.billing;
+    }
+
+    return formatCurrency(membership.billing);
+  }, [membership?.billing]);
+
   const totalsCounts = attendanceTotals.counts ?? { present: 0, late: 0, absent: 0 };
   const totalsSinceLabel = attendanceTotals.range?.start ? formatDate(attendanceTotals.range.start) : null;
   const totalsContext = totalsSinceLabel ? `Since ${totalsSinceLabel}` : 'Tracking begins after your trainer logs attendance.';
@@ -354,7 +366,7 @@ const TraineeDashboard = () => {
               </div>
               <div className="stat-card">
                 <small>Billing</small>
-                <strong>{membership.billing || '--'}</strong>
+                <strong>{membershipBillingLabel}</strong>
                 <small>Started {formatDate(membership.startDate)}</small>
               </div>
               <div className="stat-card">

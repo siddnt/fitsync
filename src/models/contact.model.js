@@ -51,6 +51,40 @@ const contactSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    attachments: {
+      type: [
+        new mongoose.Schema(
+          {
+            originalName: {
+              type: String,
+              trim: true,
+              default: ''
+            },
+            filename: {
+              type: String,
+              trim: true,
+              default: ''
+            },
+            mimeType: {
+              type: String,
+              trim: true,
+              default: ''
+            },
+            size: {
+              type: Number,
+              default: 0
+            },
+            path: {
+              type: String,
+              trim: true,
+              default: ''
+            }
+          },
+          { _id: true }
+        )
+      ],
+      default: []
+    },
     replies: {
       type: [
         new mongoose.Schema(

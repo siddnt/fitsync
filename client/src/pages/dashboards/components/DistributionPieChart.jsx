@@ -118,7 +118,7 @@ const DistributionPieChart = ({
       {displayData.length ? (
         <div className={`pie-layout${shouldShowLegend ? ' pie-layout--with-legend' : ''}`}>
           <div className="pie-layout__chart">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <PieChart>
                 <Pie
                   data={displayData}

@@ -11,9 +11,57 @@ import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../ut
 import './Dashboard.css';
 
 const IN_PROGRESS_STATUSES = new Set(['processing', 'in-transit', 'out-for-delivery']);
+const ORDER_FULFILLMENT_RISK_HOURS = 72;
+
 const normaliseStatus = (status) => (status ? status.toString().toLowerCase() : '');
 const isDelivered = (status) => normaliseStatus(status) === 'delivered';
 const isInProgress = (status) => IN_PROGRESS_STATUSES.has(normaliseStatus(status));
+
+const getOrderAgeHours = (createdAt) => {
+  const created = new Date(createdAt ?? 0).getTime();
+  if (!created) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((Date.now() - created) / (60 * 60 * 1000)));
+};
+
+const buildAttentionEntries = (products = []) => products
+  .filter((product) => product?.isPublished)
+  .map((product) => {
+    const recentSales = Number(product?.stats?.soldLast30Days ?? 0);
+    const lifetimeSales = Number(product?.stats?.totalSold ?? 0);
+    const stock = Number(product?.stock ?? 0);
+
+    let priority = -1;
+    let reason = '';
+
+    if (stock <= 5 && recentSales > 0) {
+      priority = 3;
+      reason = 'Low stock with active demand';
+    } else if (recentSales === 0 && lifetimeSales > 0) {
+      priority = 2;
+      reason = 'Previously sold, but quiet this month';
+    } else if (recentSales === 0 && lifetimeSales === 0) {
+      priority = 1;
+      reason = 'No completed sales yet';
+    }
+
+    return { product, priority, reason, recentSales, stock };
+  })
+  .filter((entry) => entry.priority > 0)
+  .sort((left, right) => {
+    if (right.priority !== left.priority) {
+      return right.priority - left.priority;
+    }
+
+    if (left.priority === 3) {
+      return left.stock - right.stock;
+    }
+
+    return left.recentSales - right.recentSales;
+  })
+  .slice(0, 5);
 
 const SellerDashboard = () => {
   const {
@@ -31,13 +79,14 @@ const SellerDashboard = () => {
     refetch: refetchOrders,
     error: ordersError,
   } = useGetSellerOrdersQuery();
+
   const { data: notificationsResponse } = useGetMyNotificationsQuery({ limit: 6 });
 
   const isLoading = isProductsLoading || isOrdersLoading;
   const hasError = isProductsError || isOrdersError;
   const approvalError = [productsError, ordersError].find((err) => err?.status === 403);
   const approvalMessage = approvalError?.data?.message
-    ?? 'Your seller account is awaiting admin approval. Hang tight—we\'ll unlock the seller console as soon as you are activated.';
+    ?? 'Your seller account is awaiting admin approval. The seller console will unlock as soon as you are activated.';
 
   const rawProducts = productsResponse?.data?.products;
   const rawOrders = ordersResponse?.data?.orders;
@@ -56,6 +105,7 @@ const SellerDashboard = () => {
     () => products.filter((product) => product?.isPublished),
     [products],
   );
+
   const lowStockProducts = useMemo(
     () => products.filter((product) => (product?.stock ?? 0) <= 5 && product?.isPublished),
     [products],
@@ -70,10 +120,7 @@ const SellerDashboard = () => {
   );
 
   const inProgressOrders = useMemo(
-    () =>
-      orders.filter((order) =>
-        (order.items || []).some((item) => isInProgress(item.status)),
-      ),
+    () => orders.filter((order) => (order.items || []).some((item) => isInProgress(item.status))),
     [orders],
   );
 
@@ -97,6 +144,62 @@ const SellerDashboard = () => {
       ),
     [orders],
   );
+
+  const shipmentBacklogItems = useMemo(
+    () => orders.flatMap((order) => (order.items || []).filter((item) => !isDelivered(item.status))),
+    [orders],
+  );
+
+  const pendingReturnItems = useMemo(
+    () =>
+      orders.flatMap((order) =>
+        (order.items || []).filter(
+          (item) => String(item?.returnRequest?.status ?? '').trim().toLowerCase() === 'requested',
+        ),
+      ),
+    [orders],
+  );
+
+  const slaRiskItems = useMemo(
+    () =>
+      orders.flatMap((order) =>
+        (order.items || []).filter(
+          (item) => !isDelivered(item.status) && getOrderAgeHours(order.createdAt) >= ORDER_FULFILLMENT_RISK_HOURS,
+        ),
+      ),
+    [orders],
+  );
+
+  const totalUnitsSoldLast30Days = useMemo(
+    () => products.reduce((sum, product) => sum + (Number(product?.stats?.soldLast30Days) || 0), 0),
+    [products],
+  );
+
+  const productsWithRecentSales = useMemo(
+    () => products.filter((product) => Number(product?.stats?.soldLast30Days ?? 0) > 0).length,
+    [products],
+  );
+
+  const topSellingProducts = useMemo(
+    () =>
+      [...products]
+        .sort((left, right) => {
+          const recentGap = Number(right?.stats?.soldLast30Days ?? 0) - Number(left?.stats?.soldLast30Days ?? 0);
+          if (recentGap !== 0) {
+            return recentGap;
+          }
+
+          return Number(right?.stats?.totalSold ?? 0) - Number(left?.stats?.totalSold ?? 0);
+        })
+        .slice(0, 5),
+    [products],
+  );
+
+  const productsNeedingAttention = useMemo(
+    () => buildAttentionEntries(products),
+    [products],
+  );
+
   const notifications = notificationsResponse?.data?.notifications ?? [];
 
   if (isLoading) {
@@ -107,6 +210,9 @@ const SellerDashboard = () => {
         </DashboardSection>
         <DashboardSection title="Analytics" className="seller-overview__analytics">
           <SkeletonPanel lines={12} />
+        </DashboardSection>
+        <DashboardSection title="Product performance" className="seller-overview__orders">
+          <SkeletonPanel lines={8} />
         </DashboardSection>
         <DashboardSection title="Orders in progress" className="seller-overview__orders">
           <SkeletonPanel lines={6} />
@@ -183,13 +289,9 @@ const SellerDashboard = () => {
                 <small>{formatNumber(publishedProducts.length)} published</small>
               </div>
               <div className="stat-card">
-                <small>Published conversion</small>
-                <strong>
-                  {products.length
-                    ? `${Math.round((publishedProducts.length / products.length) * 100)}%`
-                    : '—'}
-                </strong>
-                <small>Keep at least three live listings</small>
+                <small>Units sold recently</small>
+                <strong>{formatNumber(totalUnitsSoldLast30Days)}</strong>
+                <small>{formatNumber(productsWithRecentSales)} products recorded sales in the last 30 days</small>
               </div>
               <div className="stat-card">
                 <small>Delivered orders</small>
@@ -202,6 +304,32 @@ const SellerDashboard = () => {
                 <small>{formatNumber(inProgressOrders.length)} orders in fulfilment</small>
               </div>
             </div>
+            <div className="seller-overview__action-grid">
+              <Link to="/dashboard/seller/orders?queue=backlog" className="seller-overview__action-card">
+                <span className="seller-overview__action-eyebrow">Shipment backlog</span>
+                <strong>{formatNumber(shipmentBacklogItems.length)} open item{shipmentBacklogItems.length === 1 ? '' : 's'}</strong>
+                <p>Move active orders through processing, in-transit, and delivery without losing queue visibility.</p>
+                <span className="seller-overview__action-cta">Open fulfilment queue</span>
+              </Link>
+              <Link to="/dashboard/seller/orders?queue=returns" className="seller-overview__action-card">
+                <span className="seller-overview__action-eyebrow">Return review queue</span>
+                <strong>{formatNumber(pendingReturnItems.length)} request{pendingReturnItems.length === 1 ? '' : 's'} waiting</strong>
+                <p>Review buyer return cases quickly before they become support escalations or refund disputes.</p>
+                <span className="seller-overview__action-cta">Review pending returns</span>
+              </Link>
+              <Link to="/dashboard/seller/orders?queue=sla-risk" className="seller-overview__action-card">
+                <span className="seller-overview__action-eyebrow">Fulfilment SLA risk</span>
+                <strong>{formatNumber(slaRiskItems.length)} overdue item{slaRiskItems.length === 1 ? '' : 's'}</strong>
+                <p>Prioritise orders older than {formatNumber(ORDER_FULFILLMENT_RISK_HOURS)} hours that still are not delivered.</p>
+                <span className="seller-overview__action-cta">Prioritise overdue items</span>
+              </Link>
+              <Link to="/dashboard/seller/inventory" className="seller-overview__action-card">
+                <span className="seller-overview__action-eyebrow">Inventory readiness</span>
+                <strong>{formatNumber(lowStockProducts.length)} low-stock listing{lowStockProducts.length === 1 ? '' : 's'}</strong>
+                <p>Top up thin inventory and keep live listings healthy before demand spills into stockouts.</p>
+                <span className="seller-overview__action-cta">Open inventory actions</span>
+              </Link>
+            </div>
           </>
         ) : (
           <EmptyState message="Add your first product to kickstart the marketplace." />
@@ -210,6 +338,91 @@ const SellerDashboard = () => {
 
       <DashboardSection title="Analytics" className="seller-overview__analytics">
         <SellerCharts orders={orders} deliveredOrders={deliveredOrders} products={products} />
+      </DashboardSection>
+
+      <DashboardSection
+        title="Product performance"
+        action={(
+          <Link to="/dashboard/seller/inventory">Inspect all products</Link>
+        )}
+        className="seller-overview__orders"
+      >
+        {products.length ? (
+          <div className="seller-overview__performance-grid">
+            <div className="seller-overview__table-wrapper">
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Top sellers</th>
+                    <th>Sold in 30 days</th>
+                    <th>Lifetime sold</th>
+                    <th>Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topSellingProducts.map((product) => (
+                    <tr key={product.id}>
+                      <td>
+                        <strong>
+                          <Link to={`/dashboard/seller/products/${product.id}`}>
+                            {product.name}
+                          </Link>
+                        </strong>
+                        <div className="dashboard-table__meta">
+                          <small>{formatStatus(product.category)}</small>
+                        </div>
+                      </td>
+                      <td>{formatNumber(product?.stats?.soldLast30Days ?? 0)}</td>
+                      <td>{formatNumber(product?.stats?.totalSold ?? 0)}</td>
+                      <td>
+                        {Number(product?.reviews?.count ?? 0)
+                          ? `${Number(product?.reviews?.averageRating ?? 0).toFixed(1)} / 5`
+                          : 'No reviews'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="seller-overview__table-wrapper">
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Listings needing attention</th>
+                    <th>Reason</th>
+                    <th>Stock</th>
+                    <th>Sold in 30 days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productsNeedingAttention.length ? (
+                    productsNeedingAttention.map(({ product, reason, stock, recentSales }) => (
+                      <tr key={product.id}>
+                        <td>
+                          <strong>
+                            <Link to={`/dashboard/seller/products/${product.id}`}>
+                              {product.name}
+                            </Link>
+                          </strong>
+                        </td>
+                        <td>{reason}</td>
+                        <td>{formatNumber(stock)}</td>
+                        <td>{formatNumber(recentSales)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4">No product alerts right now. Your published catalogue looks healthy.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <EmptyState message="Add products to unlock per-product performance tracking." />
+        )}
       </DashboardSection>
 
       <DashboardSection
@@ -240,7 +453,7 @@ const SellerDashboard = () => {
                         <small>{formatDate(order.createdAt)}</small>
                       </div>
                     </td>
-                    <td>{order.buyer?.name ?? order.buyer?.email ?? '—'}</td>
+                    <td>{order.buyer?.name ?? order.buyer?.email ?? '-'}</td>
                     <td>
                       {Array.isArray(order.items) && order.items.length
                         ? order.items
@@ -248,11 +461,11 @@ const SellerDashboard = () => {
                           .map((item) =>
                             [item?.name, item?.status ? formatStatus(item.status) : null]
                               .filter(Boolean)
-                              .join(' · '),
+                              .join(' - '),
                           )
                           .filter(Boolean)
                           .join('; ')
-                        : '—'}
+                        : '-'}
                     </td>
                     <td>
                       {formatCurrency(
@@ -296,10 +509,19 @@ const SellerDashboard = () => {
               <tbody>
                 {lowStockProducts.map((product) => (
                   <tr key={product.id}>
-                    <td>{product.name}</td>
+                    <td>
+                      <Link to={`/dashboard/seller/products/${product.id}`}>
+                        {product.name}
+                      </Link>
+                    </td>
                     <td>{formatStatus(product.status)}</td>
                     <td>{formatNumber(product.stock ?? 0)}</td>
-                    <td>{formatDate(product.updatedAt)}</td>
+                    <td>
+                      <div>{formatDate(product.updatedAt)}</div>
+                      <div className="dashboard-table__meta">
+                        <small>{formatNumber(product?.stats?.soldLast30Days ?? 0)} sold in 30 days</small>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
