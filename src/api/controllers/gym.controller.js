@@ -10,6 +10,7 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
+import { invalidatePrefix } from '../../services/redis.service.js';
 
 const normalizeLocationInput = (location) => {
   if (!location) {
@@ -50,11 +51,17 @@ const buildFilters = ({ search, city, amenities }) => {
   const filter = { status: 'active', isPublished: true };
 
   if (search) {
-    filter.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } },
-      { tags: { $regex: search, $options: 'i' } },
-    ];
+    // Use MongoDB $text search for full-word matches (uses the text index)
+    // Fall back to $regex for partial / short queries
+    if (search.trim().length >= 3) {
+      filter.$text = { $search: search };
+    } else {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { tags: { $regex: search, $options: 'i' } },
+      ];
+    }
   }
 
   if (city) {
@@ -286,6 +293,11 @@ export const submitGymReview = asyncHandler(async (req, res) => {
 
   const analytics = await recalculateGymRating(gymId);
 
+  // Invalidate gym & review caches
+  await invalidatePrefix('cache:gym-detail:');
+  await invalidatePrefix('cache:gym-reviews:');
+  await invalidatePrefix('cache:gyms:');
+
   return res.status(200).json(
     new ApiResponse(
       200,
@@ -422,6 +434,9 @@ export const createGym = asyncHandler(async (req, res) => {
 
   const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
 
+  // Invalidate gym list cache
+  await invalidatePrefix('cache:gyms:');
+
   return res
     .status(201)
     .json(new ApiResponse(201, { gym: mapGym(populated) }, 'Gym created successfully'));
@@ -481,6 +496,10 @@ export const updateGym = asyncHandler(async (req, res) => {
   await gym.save();
 
   const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
+
+  // Invalidate gym caches
+  await invalidatePrefix('cache:gyms:');
+  await invalidatePrefix('cache:gym-detail:');
 
   return res
     .status(200)

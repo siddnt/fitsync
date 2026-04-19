@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon --ignore 'node_modules/' src/index.js",
     "start": "node src/index.js",
-    "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --forceExit --detectOpenHandles",
+    "test:report": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage --forceExit --detectOpenHandles",
+    "benchmark": "node src/scripts/benchmark-redis.js",
     "seed:analytics": "node src/scripts/seedAdminAnalytics.js",
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
@@ -22,6 +24,7 @@
     "supertest": "^7.1.1"
   },
   "dependencies": {
+    "@upstash/redis": "^1.37.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^1.20.3",
     "cloudinary": "^2.9.0",
@@ -35,6 +38,8 @@
     "express-rate-limit": "^7.5.0",
     "express-session": "^1.18.1",
     "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
+    "jest-html-reporters": "^3.1.7",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.12.1",
     "morgan": "^1.10.1",

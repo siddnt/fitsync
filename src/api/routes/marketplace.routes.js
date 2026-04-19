@@ -13,11 +13,12 @@ import {
   updateSellerOrderStatus,
 } from '../controllers/marketplace.controller.js';
 import { upload } from '../../middlewares/multer.middleware.js';
+import { cacheMiddleware } from '../../middlewares/cache.middleware.js';
 
 const router = Router();
 
-router.get('/products', listMarketplaceCatalogue);
-router.get('/products/:productId', getMarketplaceProduct);
+router.get('/products', cacheMiddleware('marketplace', 180), listMarketplaceCatalogue);
+router.get('/products/:productId', cacheMiddleware('marketplace-product', 180), getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
 router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
 

@@ -30,3 +30,6 @@ src/storage/uploads/**
 temp/
 .cache/
 client/dist/
+
+# Test reports
+test-report.html

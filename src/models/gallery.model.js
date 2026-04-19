@@ -47,6 +47,8 @@ gallerySchema.statics.getPublicImages = async function() {
         .sort({ createdAt: -1 });
 };
 
+gallerySchema.index({ gym: 1, isPublic: 1, createdAt: -1 });
+
 const Gallery = mongoose.model("Gallery", gallerySchema);
 
 export default Gallery; 

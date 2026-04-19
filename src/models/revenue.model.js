@@ -36,6 +36,8 @@ const revenueSchema = new mongoose.Schema(
     }
 );
 
+revenueSchema.index({ user: 1, type: 1, createdAt: -1 });
+
 const Revenue = mongoose.model("Revenue", revenueSchema);
 
-export default Revenue; 
+export default Revenue;
