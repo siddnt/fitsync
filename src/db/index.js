@@ -10,8 +10,17 @@ const connectDB = async () => {
             console.log("Using existing MongoDB connection");
             return dbInstance;
         }
+
+        let mongoUri = process.env.MONGODB_URI;
+
+        if (process.env.NODE_ENV === 'test') {
+            const { MongoMemoryServer } = await import('mongodb-memory-server');
+            const mongoServer = await MongoMemoryServer.create();
+            mongoUri = mongoServer.getUri();
+            console.log("Using MongoDB Memory Server for testing");
+        }
         
-        const connectionInstance = await mongoose.connect(process.env.MONGODB_URI, {
+        const connectionInstance = await mongoose.connect(mongoUri, {
             dbName: DB_NAME,
         });
 

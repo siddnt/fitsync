@@ -3,12 +3,14 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import app from '../src/app.js';
 import connectDB from '../src/db/index.js';
+import Product from '../src/models/product.model.js';
 
 dotenv.config({ path: '.env' });
 
 describe('Marketplace endpoints', () => {
   beforeAll(async () => {
     await connectDB();
+    await Product.init(); // Wait for text indexes to build
   });
 
   afterAll(async () => {

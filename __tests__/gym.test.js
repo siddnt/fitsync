@@ -3,12 +3,14 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import app from '../src/app.js';
 import connectDB from '../src/db/index.js';
+import Gym from '../src/models/gym.model.js';
 
 dotenv.config({ path: '.env' });
 
 describe('Gym endpoints', () => {
   beforeAll(async () => {
     await connectDB();
+    await Gym.init(); // Wait for text indexes to build
   });
 
   afterAll(async () => {
