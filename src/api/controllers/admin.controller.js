@@ -3,21 +3,23 @@ import User from '../../models/user.model.js';
 import Gym from '../../models/gym.model.js';
 import TrainerAssignment from '../../models/trainerAssignment.model.js';
 import TrainerProgress from '../../models/trainerProgress.model.js';
-import GymMembership from '../../models/gymMembership.model.js';
-import GymListingSubscription from '../../models/gymListingSubscription.model.js';
 import Booking from '../../models/booking.model.js';
-import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import {
   applyAdminToggleUpdates,
   loadAdminToggleState,
-  loadAdminToggles,
 } from '../../services/systemSettings.service.js';
 import { listAuditLogs, recordAuditLog } from '../../services/audit.service.js';
+import {
+  cancelMembershipsForUser,
+  cleanOrdersForUser,
+  deactivateGymsForOwner,
+  deactivateSellerProducts,
+  cascadeDeleteGym,
+} from '../../services/cascade.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
-import { invalidateCacheByTags } from '../../services/cache.service.js';
 
 const toObjectId = (value, label) => {
   if (!value) {
@@ -28,49 +30,6 @@ const toObjectId = (value, label) => {
   } catch (_error) {
     throw new ApiError(400, `${label} is invalid.`);
   }
-};
-
-const invalidateGymReadCaches = async (gymIds = []) =>
-  invalidateCacheByTags([
-    'gyms:list',
-    ...gymIds.map((gymId) => `gym:${gymId}`),
-  ]);
-
-const cancelMembershipsForUser = async (userId) => {
-  await GymMembership.updateMany(
-    { trainee: userId, status: { $in: ['active', 'paused'] } },
-    { $set: { status: 'cancelled' } },
-  );
-};
-
-const cleanOrdersForUser = async (userId) => {
-  await Order.updateMany(
-    { user: userId, status: { $ne: 'delivered' } },
-    { $set: { status: 'delivered', 'orderItems.$[].status': 'delivered' } },
-  );
-};
-
-const deactivateGymsForOwner = async (ownerId) => {
-  const gyms = await Gym.find({ owner: ownerId }).select('_id').lean();
-  if (!gyms.length) {
-    return [];
-  }
-
-  const gymIds = gyms.map((gym) => gym._id);
-
-  await Promise.all([
-    Gym.updateMany({ _id: { $in: gymIds } }, { $set: { status: 'suspended', isPublished: false } }),
-    GymListingSubscription.updateMany(
-      { gym: { $in: gymIds }, status: { $in: ['active', 'grace'] } },
-      { $set: { status: 'cancelled', autoRenew: false } },
-    ),
-    Booking.deleteMany({ gym: { $in: gymIds } }),
-    TrainerAssignment.deleteMany({ gym: { $in: gymIds } }),
-    TrainerProgress.deleteMany({ gym: { $in: gymIds } }),
-    GymMembership.updateMany({ gym: { $in: gymIds } }, { $set: { status: 'cancelled' } }),
-  ]);
-
-  return gymIds;
 };
 
 export const deleteUserAccount = asyncHandler(async (req, res) => {
@@ -108,6 +67,10 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
     );
   }
 
+  if (user.role === 'seller') {
+    cleanupTasks.push(deactivateSellerProducts(targetUserId));
+  }
+
   if (user.role === 'gym-owner') {
     const affectedGymIds = await deactivateGymsForOwner(targetUserId);
     if (affectedGymIds.length) {
@@ -119,7 +82,6 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
           ],
         }),
       );
-      cleanupTasks.push(invalidateGymReadCaches(affectedGymIds));
     }
   }
 
@@ -191,23 +153,7 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Gym not found.');
   }
 
-  const cleanupTasks = [
-    TrainerAssignment.deleteMany({ gym: gymId }),
-    TrainerProgress.deleteMany({ gym: gymId }),
-    GymMembership.updateMany({ gym: gymId }, { $set: { status: 'cancelled' } }),
-    Booking.deleteMany({ gym: gymId }),
-    GymListingSubscription.deleteMany({ gym: gymId }),
-    Revenue.deleteMany({
-      $or: [
-        { 'metadata.gym': gymId.toString() },
-        { 'metadata.gymId': gymId.toString() },
-      ],
-    }),
-  ];
-
-  await Promise.all(cleanupTasks);
-  await Gym.findByIdAndDelete(gymId);
-  await invalidateGymReadCaches([gymId]);
+  await cascadeDeleteGym(gymId);
   await recordAuditLog({
     actor: req.user?._id,
     actorRole: req.user?.role,

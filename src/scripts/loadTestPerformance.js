@@ -1,14 +1,12 @@
+import '../config/bootstrapEnv.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import dotenv from 'dotenv';
 import autocannon from 'autocannon';
 import mongoose from 'mongoose';
 import connectDB from '../db/index.js';
 import app from '../app.js';
 import { closeCache, initializeCache } from '../services/cache.service.js';
 import { initializeSearch, stopSearchSyncWorker } from '../services/search.service.js';
-
-dotenv.config({ path: './.env' });
 
 const REPORT_DIR = path.resolve('docs');
 const JSON_REPORT_PATH = path.join(REPORT_DIR, 'load-test-report.json');

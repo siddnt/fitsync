@@ -1,8 +1,8 @@
+import '../config/bootstrapEnv.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { performance } from 'node:perf_hooks';
-import dotenv from 'dotenv';
 import request from 'supertest';
 import app from '../app.js';
 import connectDB from '../db/index.js';
@@ -12,8 +12,6 @@ import {
   getCacheStatus,
   initializeCache,
 } from '../services/cache.service.js';
-
-dotenv.config({ path: './.env' });
 
 const REPORT_DIR = path.resolve('docs');
 const JSON_REPORT_PATH = path.join(REPORT_DIR, 'redis-cache-report.json');
@@ -111,6 +109,11 @@ const main = async () => {
   await connectDB();
   await initializeCache();
 
+  const cacheStatus = getCacheStatus();
+  if (cacheStatus.provider !== 'redis') {
+    throw new Error('Redis cache benchmark requires a live Redis connection. Start Redis and ensure REDIS_URL resolves before running this command.');
+  }
+
   const agent = request(app);
   const results = [];
 
@@ -132,6 +135,7 @@ const main = async () => {
   await mongoose.connection.close();
 
   console.log(`Cache benchmark written to ${JSON_REPORT_PATH}`);
+  process.exit(0);
 };
 
 main().catch(async (error) => {

@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-04-19T16:28:44.636Z",
+  "cache": {
+    "provider": "redis",
+    "redisConfigured": true,
+    "redisReady": true,
+    "lastRedisError": null
+  },
+  "results": [
+    {
+      "endpoint": {
+        "name": "Gym catalogue",
+        "path": "/api/gyms?page=1&limit=12"
+      },
+      "bypassAverageMs": 49.33,
+      "cachedAverageMs": 11.62,
+      "improvementPercent": 76.44,
+      "cacheStates": [
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT"
+      ],
+      "cacheProviders": [
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis"
+      ]
+    },
+    {
+      "endpoint": {
+        "name": "Marketplace catalogue",
+        "path": "/api/marketplace/products?page=1&pageSize=12"
+      },
+      "bypassAverageMs": 23.44,
+      "cachedAverageMs": 9.82,
+      "improvementPercent": 58.11,
+      "cacheStates": [
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT",
+        "HIT"
+      ],
+      "cacheProviders": [
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis",
+        "redis"
+      ]
+    }
+  ]
+}

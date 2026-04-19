@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-04-19T16:05:45.725Z",
+  "results": [
+    {
+      "label": "Gym catalogue text search",
+      "winningPlanStage": "SORT",
+      "indexesUsed": [
+        "name_text_description_text_tags_text_keyFeatures_text"
+      ],
+      "totalDocsExamined": 6,
+      "totalKeysExamined": 3,
+      "nReturned": 3
+    },
+    {
+      "label": "Marketplace catalogue text search",
+      "winningPlanStage": "SORT",
+      "indexesUsed": [
+        "product_search_text_idx"
+      ],
+      "totalDocsExamined": 4,
+      "totalKeysExamined": 4,
+      "nReturned": 2
+    },
+    {
+      "label": "Seller order lookup",
+      "winningPlanStage": "LIMIT",
+      "indexesUsed": [
+        "orderItems.seller_1_createdAt_-1"
+      ],
+      "totalDocsExamined": 0,
+      "totalKeysExamined": 0,
+      "nReturned": 0
+    }
+  ]
+}

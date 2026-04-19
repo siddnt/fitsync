@@ -11,6 +11,8 @@ if (outputFileIndex !== -1 && args[outputFileIndex + 1]) {
 }
 
 process.env.NODE_ENV = 'test';
+process.env.FITSYNC_ENV_PROFILE = 'test';
+process.env.DISABLE_DB_RECONNECT = 'true';
 
 const child = spawn(
   process.execPath,

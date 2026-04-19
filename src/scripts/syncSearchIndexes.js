@@ -1,9 +1,7 @@
-import dotenv from 'dotenv';
+import '../config/bootstrapEnv.js';
 import mongoose from 'mongoose';
 import connectDB from '../db/index.js';
 import { syncSearchIndexes } from '../services/search.service.js';
-
-dotenv.config({ path: './.env' });
 
 const main = async () => {
   await connectDB();

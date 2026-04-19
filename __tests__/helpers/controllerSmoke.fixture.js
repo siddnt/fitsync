@@ -1,6 +1,5 @@
 import request from 'supertest';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import app from '../../src/app.js';
 import connectDB from '../../src/db/index.js';
 import User from '../../src/models/user.model.js';
@@ -26,8 +25,6 @@ import GymImpressionDaily from '../../src/models/gymImpressionDaily.model.js';
 import SystemSetting from '../../src/models/systemSetting.model.js';
 import { DEFAULT_ADMIN_TOGGLES } from '../../src/services/systemSettings.service.js';
 import { flushGymImpressions } from '../../src/services/gymImpression.service.js';
-
-dotenv.config({ path: '.env' });
 
 export const runId = `smoke_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 const toggleKeys = Object.keys(DEFAULT_ADMIN_TOGGLES);

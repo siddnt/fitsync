@@ -65,6 +65,11 @@ CLOUDINARY_URL=
 ```
 - You can start from the committed `.env.example`.
 - Client: copy `client/.env.example` to `client/.env` and adjust as needed. By default the client proxies `/api` to `http://localhost:4000`.
+- Runtime env loading is profile-specific:
+  - app/server entrypoints load `.env.local` then `.env`
+  - tests load `.env.test.local` then `.env.test` and never fall back to `.env`
+  - review/report scripts load `.env.report.local`, `.env.report`, `.env.ops.local`, or `.env.ops` and never fall back to `.env`
+- Use `.env.test.example` and `.env.report.example` as the starting points for isolated test and review runs.
 
 ## Run in development
 Open two terminals:
@@ -101,8 +106,10 @@ node src/scripts/createAdminUser.js
 - `npm run client:dev` - client dev server
 - `npm run client:build` - client production build
 - `npm run client:preview` - preview the built client locally
-- `npm run db:analyze` - generate MongoDB query-plan reports in `docs/`
-- `npm run cache:benchmark` - benchmark cached vs uncached public endpoints and write a Redis report to `docs/`
+- `npm run review:stack:up` - start the local MongoDB, Redis, and Meilisearch services used for review evidence
+- `npm run review:stack:down` - stop the local MongoDB, Redis, and Meilisearch review services
+- `npm run db:analyze` - generate MongoDB query-plan reports in `docs/` using the isolated report env profile
+- `npm run cache:benchmark` - benchmark cached vs uncached public endpoints with a live Redis connection and write the Redis report to `docs/`
 - `npm run load:test` - run sustained HTTP load against public catalogue endpoints and write latency/throughput reports to `docs/`
 - `npm run search:sync` - rebuild the Meilisearch gym and marketplace indexes from MongoDB
 
@@ -130,7 +137,8 @@ node src/scripts/createAdminUser.js
 - Prometheus-compatible plaintext metrics are exposed at `GET /api/system/metrics/prometheus`.
 - Cache behaviour is visible through `X-Cache` and `X-Cache-Provider` response headers.
 - `npm run db:analyze` writes `docs/query-plan-report.json` and `docs/query-plan-report.md`.
-- `npm run cache:benchmark` writes `docs/redis-cache-report.json` and `docs/redis-cache-report.md`.
+- `npm run cache:benchmark` now requires `getCacheStatus().provider === 'redis'` and exits non-zero instead of producing a misleading memory-backed report.
+- `npm run cache:benchmark` writes `docs/redis-cache-report.json` and `docs/redis-cache-report.md` only when Redis is actually connected.
 - `npm run load:test` writes `docs/load-test-report.json` and `docs/load-test-report.md`.
 
 ## Build for production
@@ -180,6 +188,12 @@ Notes:
 - the API container connects to Meilisearch through `MEILISEARCH_HOST=http://meilisearch:7700`
 - uploaded files and request logs are stored in Docker volumes
 - you can override compose defaults with shell environment variables or a local `.env`
+- for a local end-review evidence run, `npm run review:stack:up` is the shortest way to start just MongoDB, Redis, and Meilisearch
+
+## Deployment Evidence
+- Record the final hosted frontend URL, API URL, Swagger URL, and health URL in `docs/deployment-evidence.md` before the review demo.
+- This repository includes the Docker assets needed to publish the API and web client on a managed host or VM.
+- The deployment evidence file is intentionally committed as a checklist/template so the final hosted URLs are review-ready instead of living only in chat or local notes.
 
 ## GitHub Actions
 The repository now includes `.github/workflows/ci.yml`.

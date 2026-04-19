@@ -1,3 +1,4 @@
+import "./config/bootstrapEnv.js";
 import express from "express";
 import compression from "compression";
 import cors from "cors";
@@ -9,15 +10,12 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import dotenv from "dotenv";
 import swaggerUiDist from "swagger-ui-dist";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 import apiRouter from "./api/routes/index.js";
 import { buildOpenApiDocument, renderSwaggerUiHtml } from "./docs/openapi.js";
 import { requestMetricsMiddleware } from "./services/observability.service.js";
-
-dotenv.config();
 
 // Create Express app
 const app = express();

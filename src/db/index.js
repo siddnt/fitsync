@@ -34,7 +34,8 @@ const connectDB = async () => {
             console.error("MongoDB connection error:", err);
         });
 
-        if (process.env.NODE_ENV !== 'test') {
+        const disableReconnect = String(process.env.DISABLE_DB_RECONNECT ?? '').toLowerCase() === 'true';
+        if (process.env.NODE_ENV !== 'test' && !disableReconnect) {
             // If the connection is closed, try to reconnect in non-test environments
             mongoose.connection.on('disconnected', () => {
                 console.log("MongoDB disconnected, trying to reconnect...");

@@ -197,7 +197,6 @@ export const deleteSeller = asyncHandler(async (req, res) => {
   await Promise.all([
     deactivateSellerProducts(userId),
     cleanOrdersForUser(userId),
-    Product.updateMany({ seller: userId }, { $set: { isPublished: false } }),
   ]);
 
   await User.findByIdAndDelete(userId);

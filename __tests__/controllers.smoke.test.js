@@ -1,8 +1,11 @@
 import { jest } from '@jest/globals';
 import GymMembership from '../src/models/gymMembership.model.js';
 import Order from '../src/models/order.model.js';
+import OutboxEvent from '../src/models/outboxEvent.model.js';
+import Product from '../src/models/product.model.js';
 import TrainerAssignment from '../src/models/trainerAssignment.model.js';
 import TrainerProgress from '../src/models/trainerProgress.model.js';
+import User from '../src/models/user.model.js';
 import stripe from '../src/services/stripe.service.js';
 import {
   apiCall,
@@ -901,6 +904,53 @@ describe('Controller route smoke coverage', () => {
         token: ctx.tokens.admin,
       });
       expect(res.status).toBe(200);
+    });
+
+    it('DELETE /api/admin/users/:userId deactivates seller products and queues catalogue cleanup', async () => {
+      const seller = await User.create({
+        firstName: 'Admin',
+        lastName: 'Delete Seller',
+        name: `${runId} Admin Delete Seller`,
+        email: `${runId}.admin-delete-seller@fitsync.dev`,
+        password: 'Test1234!',
+        role: 'seller',
+        status: 'active',
+        address: 'Mumbai',
+        age: 30,
+        gender: 'male',
+      });
+      trackId('users', seller._id);
+
+      const product = await Product.create({
+        seller: seller._id,
+        name: `${runId} Admin Delete Seller Product`,
+        description: 'Admin deletion cleanup target',
+        price: 1499,
+        mrp: 1799,
+        image: 'https://example.com/admin-delete-seller-product.jpg',
+        category: 'supplements',
+        stock: 8,
+        status: 'available',
+        isPublished: true,
+      });
+      trackId('products', product._id);
+
+      const res = await apiCall('delete', `/api/admin/users/${seller._id}`, {
+        token: ctx.tokens.admin,
+      });
+
+      expect(res.status).toBe(200);
+      await expect(User.findById(seller._id).lean()).resolves.toBeNull();
+      await expect(Product.findById(product._id).lean()).resolves.toEqual(expect.objectContaining({
+        _id: product._id,
+        isPublished: false,
+      }));
+
+      const outboxEvents = await OutboxEvent.find({ aggregateId: String(product._id) }).select('topic').lean();
+      expect(outboxEvents.map((event) => event.topic)).toEqual(expect.arrayContaining([
+        'product.cache.invalidate',
+        'product.search.upsert',
+      ]));
     });
 
     it('DELETE /api/admin/gyms/:gymId deletes a gym listing', async () => {

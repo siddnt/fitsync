@@ -1,13 +1,11 @@
+import '../config/bootstrapEnv.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import connectDB from '../db/index.js';
 import Gym from '../models/gym.model.js';
 import Product from '../models/product.model.js';
 import Order from '../models/order.model.js';
-
-dotenv.config({ path: './.env' });
 
 const REPORT_DIR = path.resolve('docs');
 const JSON_REPORT_PATH = path.join(REPORT_DIR, 'query-plan-report.json');
@@ -71,8 +69,6 @@ const toMarkdown = (report) => {
 const main = async () => {
   await fs.mkdir(REPORT_DIR, { recursive: true });
   await connectDB();
-
-  await Promise.all([Gym.init(), Product.init(), Order.init()]);
 
   const [gymExplain, productExplain, sellerOrderExplain] = await Promise.all([
     Gym.collection

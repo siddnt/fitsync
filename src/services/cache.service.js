@@ -612,8 +612,8 @@ export const clearAllCache = async () => {
       const iterator = client.scanIterator({ MATCH: `${CACHE_PREFIX}:*`, COUNT: 100 });
       const scopedKeys = [];
       // eslint-disable-next-line no-restricted-syntax
-      for await (const key of iterator) {
-        scopedKeys.push(key);
+      for await (const keys of iterator) {
+        scopedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
       }
       if (scopedKeys.length) {
         await client.del(scopedKeys);

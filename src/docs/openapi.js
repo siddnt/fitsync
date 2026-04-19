@@ -34,6 +34,18 @@ const queryParam = (name, description, type = 'string') => ({
   schema: { type },
 });
 
+const downloadResponse = (description = 'Download response') => ({
+  description,
+  content: {
+    'text/csv': {
+      schema: { type: 'string', format: 'binary' },
+    },
+    'application/pdf': {
+      schema: { type: 'string', format: 'binary' },
+    },
+  },
+});
+
 const endpoint = ({
   tag,
   summary,
@@ -80,6 +92,10 @@ const dashboardReads = [
   '/api/dashboards/admin/revenue',
   '/api/dashboards/admin/marketplace',
   '/api/dashboards/admin/insights',
+  '/api/dashboards/admin/ops',
+  '/api/dashboards/manager/overview',
+  '/api/dashboards/manager/sellers',
+  '/api/dashboards/manager/gym-owners',
 ];
 
 const dashboardPaths = Object.fromEntries(
@@ -108,13 +124,16 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
     { name: 'System' },
     { name: 'Auth' },
     { name: 'Gyms' },
+    { name: 'Bookings' },
     { name: 'Marketplace' },
     { name: 'Dashboards' },
     { name: 'Trainer' },
     { name: 'Owner' },
     { name: 'Admin' },
+    { name: 'Manager' },
     { name: 'Users' },
     { name: 'Contact' },
+    { name: 'Communications' },
     { name: 'Payments' },
   ],
   components: {
@@ -298,6 +317,52 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         success: 'Impression recorded',
       }),
     },
+    '/api/gyms/{gymId}/opens': {
+      post: endpoint({
+        tag: 'Gyms',
+        summary: 'Record gym detail open event',
+        parameters: [pathParam('gymId', 'Gym id')],
+        noContent: true,
+        success: 'Open event recorded',
+      }),
+    },
+    '/api/bookings/slots': {
+      get: endpoint({
+        tag: 'Bookings',
+        summary: 'List available booking slots',
+        security: bearerSecurity,
+        parameters: [
+          queryParam('gymId', 'Gym id'),
+          queryParam('trainerId', 'Trainer id'),
+          queryParam('date', 'Booking date'),
+        ],
+      }),
+    },
+    '/api/bookings/me': {
+      get: endpoint({
+        tag: 'Bookings',
+        summary: 'List my bookings',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/bookings': {
+      post: endpoint({
+        tag: 'Bookings',
+        summary: 'Create booking',
+        security: bearerSecurity,
+        requestBody: body(),
+        created: true,
+      }),
+    },
+    '/api/bookings/{bookingId}/status': {
+      patch: endpoint({
+        tag: 'Bookings',
+        summary: 'Update booking status',
+        security: bearerSecurity,
+        parameters: [pathParam('bookingId', 'Booking id')],
+        requestBody: body(),
+      }),
+    },
     ...dashboardPaths,
     '/api/dashboards/trainee/feedback': {
       post: endpoint({
@@ -306,6 +371,67 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         security: bearerSecurity,
         requestBody: body(),
       }),
+    },
+    '/api/dashboards/gym-owner/sponsorships/export': {
+      get: {
+        tags: ['Dashboards'],
+        summary: 'Export gym owner sponsorship report',
+        security: bearerSecurity,
+        parameters: [
+          queryParam('format', 'Download format: csv or pdf'),
+          queryParam('gymId', 'Optional gym id filter'),
+        ],
+        responses: {
+          200: downloadResponse('Sponsorship report download'),
+          401: json('Unauthorized', 'ErrorResponse'),
+        },
+      },
+    },
+    '/api/dashboards/gym-owner/memberships/export': {
+      get: {
+        tags: ['Dashboards'],
+        summary: 'Export gym owner memberships report',
+        security: bearerSecurity,
+        parameters: [
+          queryParam('format', 'Download format: csv or pdf'),
+          queryParam('gymId', 'Optional gym id filter'),
+        ],
+        responses: {
+          200: downloadResponse('Membership report download'),
+          401: json('Unauthorized', 'ErrorResponse'),
+        },
+      },
+    },
+    '/api/dashboards/admin/users/{userId}': {
+      get: endpoint({
+        tag: 'Dashboards',
+        summary: 'Read admin user detail view',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'User id')],
+      }),
+    },
+    '/api/dashboards/admin/gyms/{gymId}': {
+      get: endpoint({
+        tag: 'Dashboards',
+        summary: 'Read admin gym detail view',
+        security: bearerSecurity,
+        parameters: [pathParam('gymId', 'Gym id')],
+      }),
+    },
+    '/api/dashboards/admin/revenue/export': {
+      get: {
+        tags: ['Dashboards'],
+        summary: 'Export admin revenue report',
+        security: bearerSecurity,
+        parameters: [
+          queryParam('format', 'Download format: csv or pdf'),
+          queryParam('since', 'ISO date lower bound'),
+        ],
+        responses: {
+          200: downloadResponse('Revenue report download'),
+          401: json('Unauthorized', 'ErrorResponse'),
+        },
+      },
     },
     '/api/trainer/trainees/{traineeId}/attendance': {
       post: endpoint({
@@ -422,6 +548,154 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         ],
       }),
     },
+    '/api/admin/audit-logs/export': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Export audit logs report',
+        security: bearerSecurity,
+        parameters: [
+          queryParam('format', 'Download format: csv or pdf'),
+          queryParam('entityType', 'Entity type'),
+          queryParam('entityId', 'Entity id'),
+          queryParam('actor', 'Actor id'),
+          queryParam('action', 'Action key'),
+          queryParam('search', 'Free-text search'),
+          queryParam('limit', 'Result limit', 'integer'),
+        ],
+        responses: {
+          200: downloadResponse('Audit log report download'),
+          401: json('Unauthorized', 'ErrorResponse'),
+        },
+      },
+    },
+    '/api/manager/pending': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'List pending approvals',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/users/{userId}/approve': {
+      patch: endpoint({
+        tag: 'Manager',
+        summary: 'Approve user',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'User id')],
+      }),
+    },
+    '/api/manager/users/{userId}/reject': {
+      delete: endpoint({
+        tag: 'Manager',
+        summary: 'Reject user',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'User id')],
+      }),
+    },
+    '/api/manager/sellers': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'List sellers',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/sellers/{userId}/status': {
+      patch: endpoint({
+        tag: 'Manager',
+        summary: 'Update seller status',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'Seller id')],
+        requestBody: body(),
+      }),
+    },
+    '/api/manager/sellers/{userId}': {
+      delete: endpoint({
+        tag: 'Manager',
+        summary: 'Delete seller',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'Seller id')],
+      }),
+    },
+    '/api/manager/gym-owners': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'List gym owners',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/gym-owners/{userId}/status': {
+      patch: endpoint({
+        tag: 'Manager',
+        summary: 'Update gym owner status',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'Gym owner id')],
+        requestBody: body(),
+      }),
+    },
+    '/api/manager/gym-owners/{userId}': {
+      delete: endpoint({
+        tag: 'Manager',
+        summary: 'Delete gym owner',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'Gym owner id')],
+      }),
+    },
+    '/api/manager/users/{userId}': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'Read manager user detail view',
+        security: bearerSecurity,
+        parameters: [pathParam('userId', 'User id')],
+      }),
+    },
+    '/api/manager/gyms': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'List gyms for manager review',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/gyms/{gymId}': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'Read manager gym detail view',
+        security: bearerSecurity,
+        parameters: [pathParam('gymId', 'Gym id')],
+      }),
+      delete: endpoint({
+        tag: 'Manager',
+        summary: 'Delete gym as manager',
+        security: bearerSecurity,
+        parameters: [pathParam('gymId', 'Gym id')],
+      }),
+    },
+    '/api/manager/marketplace': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'Read manager marketplace summary',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/products': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'List products for manager review',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/manager/products/{productId}': {
+      get: endpoint({
+        tag: 'Manager',
+        summary: 'Read product buyer detail view',
+        security: bearerSecurity,
+        parameters: [pathParam('productId', 'Product id')],
+      }),
+      delete: endpoint({
+        tag: 'Manager',
+        summary: 'Delete product as manager',
+        security: bearerSecurity,
+        parameters: [pathParam('productId', 'Product id')],
+      }),
+    },
     '/api/owner/monetisation/options': {
       get: endpoint({ tag: 'Owner', summary: 'List monetisation options', security: bearerSecurity }),
     },
@@ -502,6 +776,20 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         parameters: [pathParam('productId', 'Product id')],
       }),
     },
+    '/api/marketplace/promos/public': {
+      get: endpoint({
+        tag: 'Marketplace',
+        summary: 'List public marketplace promo codes',
+      }),
+    },
+    '/api/marketplace/pricing': {
+      post: endpoint({
+        tag: 'Marketplace',
+        summary: 'Preview marketplace pricing',
+        security: bearerSecurity,
+        requestBody: body(),
+      }),
+    },
     '/api/marketplace/orders': {
       post: endpoint({
         tag: 'Marketplace',
@@ -509,6 +797,30 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         security: bearerSecurity,
         requestBody: body(),
         created: true,
+      }),
+    },
+    '/api/marketplace/checkout/create-session': {
+      post: endpoint({
+        tag: 'Marketplace',
+        summary: 'Create marketplace checkout session',
+        security: bearerSecurity,
+        requestBody: body(),
+        created: true,
+      }),
+    },
+    '/api/marketplace/checkout/order/{sessionId}': {
+      get: endpoint({
+        tag: 'Marketplace',
+        summary: 'Resolve marketplace order by Stripe checkout session',
+        security: bearerSecurity,
+        parameters: [pathParam('sessionId', 'Stripe checkout session id')],
+      }),
+    },
+    '/api/marketplace/webhook/stripe': {
+      post: endpoint({
+        tag: 'Marketplace',
+        summary: 'Receive Stripe marketplace webhook',
+        requestBody: body('GenericBody', false),
       }),
     },
     '/api/marketplace/products/{productId}/reviews': {
@@ -530,6 +842,29 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         requestBody: body(),
       }),
     },
+    '/api/marketplace/promos': {
+      get: endpoint({
+        tag: 'Marketplace',
+        summary: 'List marketplace promo codes',
+        security: bearerSecurity,
+      }),
+      post: endpoint({
+        tag: 'Marketplace',
+        summary: 'Create marketplace promo code',
+        security: bearerSecurity,
+        requestBody: body(),
+        created: true,
+      }),
+    },
+    '/api/marketplace/promos/{promoId}': {
+      patch: endpoint({
+        tag: 'Marketplace',
+        summary: 'Update marketplace promo code',
+        security: bearerSecurity,
+        parameters: [pathParam('promoId', 'Promo code id')],
+        requestBody: body(),
+      }),
+    },
     '/api/marketplace/seller/products': {
       get: endpoint({ tag: 'Marketplace', summary: 'List seller products', security: bearerSecurity }),
       post: endpoint({
@@ -541,6 +876,12 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
       }),
     },
     '/api/marketplace/seller/products/{productId}': {
+      get: endpoint({
+        tag: 'Marketplace',
+        summary: 'Get seller product',
+        security: bearerSecurity,
+        parameters: [pathParam('productId', 'Product id')],
+      }),
       put: endpoint({
         tag: 'Marketplace',
         summary: 'Update seller product',
@@ -628,6 +969,45 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         security: bearerSecurity,
       }),
     },
+    '/api/communications/recipients': {
+      get: endpoint({
+        tag: 'Communications',
+        summary: 'List internal communication recipients',
+        security: bearerSecurity,
+      }),
+    },
+    '/api/communications': {
+      get: endpoint({
+        tag: 'Communications',
+        summary: 'List internal conversations',
+        security: bearerSecurity,
+      }),
+      post: endpoint({
+        tag: 'Communications',
+        summary: 'Create internal conversation',
+        security: bearerSecurity,
+        requestBody: body(),
+        created: true,
+      }),
+    },
+    '/api/communications/{id}/reply': {
+      post: endpoint({
+        tag: 'Communications',
+        summary: 'Reply to internal conversation',
+        security: bearerSecurity,
+        parameters: [pathParam('id', 'Conversation id')],
+        requestBody: body(),
+      }),
+    },
+    '/api/communications/{id}/state': {
+      patch: endpoint({
+        tag: 'Communications',
+        summary: 'Update internal conversation state',
+        security: bearerSecurity,
+        parameters: [pathParam('id', 'Conversation id')],
+        requestBody: body(),
+      }),
+    },
     '/api/contact': {
       post: endpoint({ tag: 'Contact', summary: 'Submit contact message', requestBody: body(), created: true }),
       get: endpoint({
@@ -680,6 +1060,21 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
     },
     '/payments/cancelled': {
       get: endpoint({ tag: 'Payments', summary: 'Payment cancelled redirect' }),
+    },
+    '/api/payments/checkout/{sessionId}': {
+      get: endpoint({
+        tag: 'Payments',
+        summary: 'Resolve generic payment checkout session',
+        security: bearerSecurity,
+        parameters: [pathParam('sessionId', 'Stripe checkout session id')],
+      }),
+    },
+    '/api/payments/webhook/stripe': {
+      post: endpoint({
+        tag: 'Payments',
+        summary: 'Receive generic Stripe webhook',
+        requestBody: body('GenericBody', false),
+      }),
     },
   },
 });

@@ -1,14 +1,10 @@
-import dotenv from "dotenv";
+import "./config/bootstrapEnv.js";
 import connectDB from "./db/index.js";
 import app from "./app.js";
 import { closeCache, initializeCache } from "./services/cache.service.js";
 import { startGymImpressionFlushLoop, stopGymImpressionFlushLoop } from "./services/gymImpression.service.js";
 import { startOutboxWorker, stopOutboxWorker } from "./services/outbox.service.js";
 import { initializeSearch, startSearchSyncWorker, stopSearchSyncWorker } from "./services/search.service.js";
-
-dotenv.config({
-    path: "./.env"
-});
 
 process.on("uncaughtException", (err) => {
     console.log("UNCAUGHT EXCEPTION! Shutting down...");
