@@ -533,7 +533,7 @@ const GymDetailsPage = () => {
         <div className="gym-details__header-actions">
           <button type="button" onClick={handleShareGym}>Share</button>
           <button type="button" onClick={handleToggleSave}>{isSaved ? 'Saved' : 'Save'}</button>
-          <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
+          <Link to={`/support/new?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>
             Contact
           </Link>
           <a className="gym-details__header-actions-primary" href="#gym-membership-options">Join membership</a>
@@ -575,7 +575,7 @@ const GymDetailsPage = () => {
         {gym.contact?.email ? (
           <a href={`mailto:${gym.contact.email}?subject=${encodeURIComponent(`Enquiry about ${gym.name}`)}`}>Email gym</a>
         ) : null}
-        <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>Contact support</Link>
+        <Link to={`/support/new?gymId=${gym.id}&subject=${encodeURIComponent(`Question about ${gym.name}`)}`}>Contact support</Link>
         {websiteUrl ? <a href={websiteUrl} target="_blank" rel="noreferrer">Visit website</a> : null}
       </div>
 
@@ -755,7 +755,7 @@ const GymDetailsPage = () => {
         <div className="gym-details__cta-row">
           <Link to="/dashboard/trainee/sessions">Open booking dashboard</Link>
           <a href="#gym-membership-options">Join membership first</a>
-          <Link to={`/contact?gymId=${gym.id}&subject=${encodeURIComponent(`Trainer enquiry for ${gym.name}`)}`}>
+          <Link to={`/support/new?gymId=${gym.id}&subject=${encodeURIComponent(`Trainer enquiry for ${gym.name}`)}`}>
             Ask about sessions
           </Link>
         </div>

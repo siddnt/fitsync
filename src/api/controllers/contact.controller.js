@@ -6,6 +6,7 @@ import Gym from '../../models/gym.model.js';
 import User from '../../models/user.model.js';
 import { recordAuditLog } from '../../services/audit.service.js';
 import { createNotification } from '../../services/notification.service.js';
+import { getFileUrl } from '../../utils/fileUpload.js';
 
 const MANAGER_OPEN_STATUSES = ['new', 'read', 'in-progress', 'responded'];
 const SUPPORT_ASSIGNEE_ROLES = new Set(['admin', 'manager']);
@@ -21,6 +22,63 @@ const resolveSupportNotificationLink = (role) => {
 
   return '/dashboard';
 };
+
+const ensureTicketIsOpen = (contact, actionLabel = 'continue this conversation') => {
+  if (String(contact?.status ?? '').trim().toLowerCase() !== 'closed') {
+    return;
+  }
+
+  throw new ApiError(
+    409,
+    `This support ticket is closed. Create a new ticket to ${actionLabel}.`,
+  );
+};
+
+const mapContactAttachment = (attachment = {}) => ({
+  id: attachment?._id ?? null,
+  originalName: attachment.originalName ?? attachment.filename ?? 'Attachment',
+  filename: attachment.filename ?? '',
+  mimeType: attachment.mimeType ?? '',
+  size: attachment.size ?? 0,
+  url: attachment.filename ? getFileUrl(attachment.filename) : '',
+});
+
+const mapUserFacingReply = (reply = {}) => ({
+  id: reply?._id ?? null,
+  author: reply.author
+    ? {
+        id: reply.author._id ?? reply.author,
+        name: reply.author.name ?? 'Support team',
+        role: reply.author.role ?? reply.authorRole ?? 'support',
+      }
+    : null,
+  authorRole: reply.author?.role ?? reply.authorRole ?? 'support',
+  message: reply.message ?? '',
+  createdAt: reply.createdAt ?? null,
+});
+
+const mapUserFacingContactMessage = (contact = {}) => ({
+  id: contact._id,
+  subject: contact.subject ?? '',
+  category: contact.category ?? 'general',
+  priority: contact.priority ?? 'normal',
+  message: contact.message ?? '',
+  status: contact.status ?? 'new',
+  createdAt: contact.createdAt ?? null,
+  updatedAt: contact.updatedAt ?? null,
+  gym: contact.gym
+    ? {
+        id: contact.gym._id ?? contact.gym,
+        name: contact.gym.name ?? 'Linked gym',
+      }
+    : null,
+  attachments: Array.isArray(contact.attachments)
+    ? contact.attachments.map(mapContactAttachment)
+    : [],
+  replies: Array.isArray(contact.replies)
+    ? contact.replies.map(mapUserFacingReply)
+    : [],
+});
 
 const resolveOptionalGymId = async (gymId) => {
   if (!gymId) {
@@ -94,6 +152,16 @@ const ensureManagerOwnsContact = (contact, user, actionLabel = 'manage this supp
   }
 
   throw new ApiError(403, `Managers can only ${actionLabel} when the ticket is assigned to them.`);
+};
+
+const ensureContactOwner = (contact, user, actionLabel = 'reply to this support ticket') => {
+  const submittedBy = String(contact?.submittedBy?._id ?? contact?.submittedBy ?? '').trim();
+
+  if (submittedBy && submittedBy === String(user?._id ?? '')) {
+    return;
+  }
+
+  throw new ApiError(403, `You can only ${actionLabel} on tickets submitted from your account.`);
 };
 
 const resolveSupportAssignee = async (assignedTo) => {
@@ -231,6 +299,7 @@ export const submitContactForm = asyncHandler(async (req, res) => {
   const contact = await Contact.create({
     name,
     email,
+    submittedBy: req.user?._id ?? null,
     subject,
     category,
     priority,
@@ -268,6 +337,21 @@ export const submitContactForm = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(new ApiResponse(201, contact, 'Message sent successfully'));
+});
+
+export const getMyContactMessages = asyncHandler(async (req, res) => {
+  const messages = await Contact.find({ submittedBy: req.user?._id })
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .populate({ path: 'replies.author', select: 'name role' })
+    .populate({ path: 'gym', select: 'name' });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { messages: messages.map(mapUserFacingContactMessage) },
+      'Your support tickets were fetched successfully',
+    ),
+  );
 });
 
 export const getContactMessages = asyncHandler(async (req, res) => {
@@ -311,13 +395,14 @@ export const updateMessageStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid status');
   }
 
-  const existingMessage = await Contact.findById(id).select('_id assignedTo');
+  const existingMessage = await Contact.findById(id).select('_id assignedTo status');
 
   if (!existingMessage) {
     throw new ApiError(404, 'Message not found');
   }
 
   ensureManagerOwnsContact(existingMessage, req.user, 'update this support ticket');
+  ensureTicketIsOpen(existingMessage, 'continue the conversation');
 
   const message = await Contact.findByIdAndUpdate(
     id,
@@ -348,11 +433,13 @@ export const assignMessage = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { assignedTo, status = 'in-progress', gymId, autoAssignManager = false } = req.body ?? {};
   const resolvedGymId = await resolveOptionalGymId(gymId);
-  const existingMessage = await Contact.findById(id).select('_id assignedTo');
+  const existingMessage = await Contact.findById(id).select('_id assignedTo status');
 
   if (!existingMessage) {
     throw new ApiError(404, 'Message not found');
   }
+
+  ensureTicketIsOpen(existingMessage, 'continue the conversation');
 
   if (req.user?.role === 'manager') {
     const currentAssignee = String(existingMessage.assignedTo ?? '').trim();
@@ -412,36 +499,97 @@ export const assignMessage = asyncHandler(async (req, res) => {
 export const replyToMessage = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { message: replyMessage, closeAfterReply = false } = req.body ?? {};
+  const normalizedReply = String(replyMessage ?? '').trim();
+  const isSupportStaff = ['admin', 'manager'].includes(req.user?.role);
 
-  if (!replyMessage?.trim()) {
+  if (!normalizedReply) {
     throw new ApiError(400, 'Reply message is required');
   }
 
-  const message = await Contact.findById(id);
+  const message = await Contact.findById(id).populate({ path: 'assignedTo', select: '_id role name email' });
   if (!message) {
     throw new ApiError(404, 'Message not found');
   }
 
-  ensureManagerOwnsContact(message, req.user, 'reply to this support ticket');
+  ensureTicketIsOpen(message, 'continue the conversation');
+
+  if (isSupportStaff) {
+    ensureManagerOwnsContact(message, req.user, 'reply to this support ticket');
+
+    message.replies.push({
+      author: req.user?._id ?? null,
+      authorRole: req.user?.role ?? 'admin',
+      message: normalizedReply,
+      createdAt: new Date(),
+    });
+    message.status = closeAfterReply ? 'closed' : 'responded';
+    await message.save({ validateBeforeSave: false });
+
+    await recordAuditLog({
+      actor: req.user?._id,
+      actorRole: req.user?.role,
+      action: 'support.replied',
+      entityType: 'contact',
+      entityId: message._id,
+      summary: 'Support reply sent',
+      metadata: { closeAfterReply },
+    });
+
+    if (message.submittedBy) {
+      await createNotification({
+        user: message.submittedBy,
+        type: 'support-reply',
+        title: closeAfterReply ? 'Support replied and closed your ticket' : 'Support replied to your ticket',
+        message: `${req.user?.role === 'manager' ? 'Manager' : 'Admin'} replied to ${message.subject || 'your support ticket'}.`,
+        link: '/support',
+        metadata: {
+          contactId: message._id,
+          closeAfterReply,
+        },
+      });
+    }
+
+    return res.status(200).json(new ApiResponse(200, message, 'Reply added successfully'));
+  }
+
+  ensureContactOwner(message, req.user, 'continue this support ticket');
+
+  if (closeAfterReply) {
+    throw new ApiError(400, 'Only support staff can close a ticket from the reply action.');
+  }
 
   message.replies.push({
     author: req.user?._id ?? null,
-    authorRole: req.user?.role ?? 'admin',
-    message: replyMessage.trim(),
+    authorRole: req.user?.role ?? 'user',
+    message: normalizedReply,
     createdAt: new Date(),
   });
-  message.status = closeAfterReply ? 'closed' : 'responded';
+  message.status = 'in-progress';
   await message.save({ validateBeforeSave: false });
 
   await recordAuditLog({
     actor: req.user?._id,
     actorRole: req.user?.role,
-    action: 'support.replied',
+    action: 'support.customer_replied',
     entityType: 'contact',
     entityId: message._id,
-    summary: 'Support reply sent',
-    metadata: { closeAfterReply },
+    summary: 'Customer replied to support ticket',
+    metadata: { assignedTo: message.assignedTo?._id ?? message.assignedTo ?? null },
   });
+
+  if (message.assignedTo?._id) {
+    await createNotification({
+      user: message.assignedTo._id,
+      type: 'support-customer-reply',
+      title: 'Customer replied to a support ticket',
+      message: `${req.user?.name ?? message.name ?? 'A user'} replied to ${message.subject || 'an assigned support ticket'}.`,
+      link: resolveSupportNotificationLink(message.assignedTo.role),
+      metadata: {
+        contactId: message._id,
+        customerId: req.user?._id ?? null,
+      },
+    });
+  }
 
   return res.status(200).json(new ApiResponse(200, message, 'Reply added successfully'));
 });

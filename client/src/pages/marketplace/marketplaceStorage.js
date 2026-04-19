@@ -4,24 +4,6 @@ const PROMO_CODE_KEY = 'marketplacePromoCode';
 const MAX_VIEWED_PRODUCTS = 8;
 const MAX_SAVED_ADDRESSES = 5;
 
-export const MARKETPLACE_PROMO_CODES = [
-  {
-    code: 'WELCOMEKIT',
-    label: 'Welcome kit',
-    summary: 'Adds a welcome-pack note for first-time marketplace deliveries.',
-  },
-  {
-    code: 'PRIORITYPACK',
-    label: 'Priority packing',
-    summary: 'Flags the order for faster seller handling in this demo flow.',
-  },
-  {
-    code: 'RECOVERPLUS',
-    label: 'Recovery support',
-    summary: 'Adds a follow-up recovery and returns support note after delivery.',
-  },
-];
-
 const canUseLocalStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
 const safeRead = (key, fallback) => {
@@ -58,11 +40,6 @@ const buildAddressSignature = (address = {}) => [
 ]
   .map((segment) => String(segment ?? '').trim().toLowerCase())
   .join('|');
-
-export const getMarketplacePromoDefinition = (code) => {
-  const normalized = normalisePromoCode(code);
-  return MARKETPLACE_PROMO_CODES.find((entry) => entry.code === normalized) ?? null;
-};
 
 export const readMarketplacePromoCode = () => {
   const raw = safeRead(PROMO_CODE_KEY, '');

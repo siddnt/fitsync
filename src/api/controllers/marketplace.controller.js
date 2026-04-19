@@ -4,6 +4,7 @@ import Order from '../../models/order.model.js';
 import Revenue from '../../models/revenue.model.js';
 import ProductReview from '../../models/productReview.model.js';
 import PaymentSession from '../../models/paymentSession.model.js';
+import MarketplacePromoCode from '../../models/marketplacePromoCode.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
@@ -112,6 +113,87 @@ const MARKETPLACE_SELLER_SELECT = 'name firstName lastName email role profile pr
 const MARKETPLACE_REVIEW_SELECT = 'rating title comment createdAt isVerifiedPurchase user';
 const MARKETPLACE_REVIEW_USER_SELECT = 'name profilePicture role';
 const SELLER_PRODUCT_DETAIL_SELECT = 'name description price mrp image category stock status isPublished createdAt updatedAt metrics metadata';
+const MARKETPLACE_PROMO_CODE_SELECT = 'code label description discountType discountValue minOrderAmount maxDiscountAmount usageLimit usedCount isPublic active startsAt endsAt createdBy createdAt updatedAt';
+const PROMO_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const normaliseMarketplacePromoCode = (value) =>
+  String(value ?? '').trim().toUpperCase();
+
+const roundMarketplaceAmount = (value) =>
+  Math.round((Number(value) || 0) * 100) / 100;
+
+const buildMarketplacePromoSnapshot = (promo, discountAmount = 0) => {
+  if (!promo?._id) {
+    return null;
+  }
+
+  return {
+    promoId: promo._id,
+    code: promo.code,
+    label: promo.label,
+    description: promo.description ?? '',
+    discountType: promo.discountType,
+    discountValue: Number(promo.discountValue) || 0,
+    discountAmount: roundMarketplaceAmount(discountAmount),
+  };
+};
+
+const mapMarketplacePromoForAdmin = (promo = {}) => ({
+  id: promo._id,
+  code: promo.code ?? '',
+  label: promo.label ?? '',
+  description: promo.description ?? '',
+  discountType: promo.discountType ?? 'percentage',
+  discountValue: Number(promo.discountValue) || 0,
+  minOrderAmount: Number(promo.minOrderAmount) || 0,
+  maxDiscountAmount: promo.maxDiscountAmount === null || promo.maxDiscountAmount === undefined
+    ? null
+    : Number(promo.maxDiscountAmount) || 0,
+  usageLimit: promo.usageLimit === null || promo.usageLimit === undefined
+    ? null
+    : Number(promo.usageLimit) || 0,
+  usedCount: Number(promo.usedCount) || 0,
+  isPublic: Boolean(promo.isPublic),
+  active: Boolean(promo.active),
+  startsAt: promo.startsAt ?? null,
+  endsAt: promo.endsAt ?? null,
+  createdAt: promo.createdAt ?? null,
+  updatedAt: promo.updatedAt ?? null,
+  createdBy: promo.createdBy?._id
+    ? {
+        id: promo.createdBy._id,
+        name: promo.createdBy.name ?? 'Admin',
+        email: promo.createdBy.email ?? '',
+      }
+    : null,
+});
+
+const mapMarketplacePromoForPublic = (promo = {}) => ({
+  id: promo._id,
+  code: promo.code ?? '',
+  label: promo.label ?? '',
+  description: promo.description ?? '',
+  discountType: promo.discountType ?? 'percentage',
+  discountValue: Number(promo.discountValue) || 0,
+  minOrderAmount: Number(promo.minOrderAmount) || 0,
+  maxDiscountAmount: promo.maxDiscountAmount === null || promo.maxDiscountAmount === undefined
+    ? null
+    : Number(promo.maxDiscountAmount) || 0,
+});
+
+const generateMarketplacePromoCodeValue = async () => {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const candidate = Array.from({ length: 10 }, () =>
+      PROMO_CODE_CHARSET[Math.floor(Math.random() * PROMO_CODE_CHARSET.length)]).join('');
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await MarketplacePromoCode.exists({ code: candidate });
+    if (!exists) {
+      return candidate;
+    }
+  }
+
+  return `FIT${Date.now().toString().slice(-8)}`;
+};
 
 const ensureSellerActive = (user) => {
   if (!user) {
@@ -603,6 +685,33 @@ const reserveInventoryForMarketplaceOrder = async (preparedItems = [], { session
   }
 };
 
+const previewMarketplaceOrderItems = async (preparedItems = [], { session } = {}) => {
+  if (!preparedItems.length) {
+    return [];
+  }
+
+  const products = await Product.find({
+    _id: { $in: preparedItems.map((entry) => entry.productId) },
+    isPublished: true,
+    status: 'available',
+  })
+    .select(MARKETPLACE_ORDER_PRODUCT_SELECT)
+    .session(session ?? null)
+    .lean();
+
+  const productById = new Map(products.map((product) => [toIdString(product._id), product]));
+
+  return preparedItems.map(({ productId, quantity }) => {
+    const product = productById.get(toIdString(productId));
+
+    if (!product || Number(product.stock) < quantity) {
+      throw new ApiError(400, 'One or more products are unavailable in the requested quantity.');
+    }
+
+    return { product, quantity };
+  });
+};
+
 const releaseMarketplaceInventoryReservations = async (reservations = [], { session } = {}) => {
   if (!reservations.length) {
     return;
@@ -629,6 +738,146 @@ const releaseMarketplaceInventoryReservations = async (reservations = [], { sess
       },
     })),
     { ordered: false, session },
+  );
+};
+
+const calculateMarketplaceOrderPricing = (orderItems = [], promo = null) => {
+  const subtotal = roundMarketplaceAmount(
+    orderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0),
+  );
+  const tax = 0;
+  const shippingCost = 0;
+  const discountAmount = Math.min(
+    subtotal,
+    roundMarketplaceAmount(Number(promo?.discountAmount) || 0),
+  );
+  const total = roundMarketplaceAmount(Math.max(0, subtotal - discountAmount + tax + shippingCost));
+
+  return {
+    subtotal,
+    tax,
+    shippingCost,
+    discountAmount,
+    total,
+    promo: discountAmount > 0 ? promo : null,
+  };
+};
+
+const assertMarketplacePromoState = (promo, subtotal) => {
+  if (!promo || !promo.active) {
+    throw new ApiError(400, 'That promo code is invalid or inactive.');
+  }
+
+  const now = new Date();
+  if (promo.startsAt && new Date(promo.startsAt) > now) {
+    throw new ApiError(400, 'This promo code is not active yet.');
+  }
+
+  if (promo.endsAt && new Date(promo.endsAt) < now) {
+    throw new ApiError(400, 'This promo code has expired.');
+  }
+
+  if ((Number(promo.minOrderAmount) || 0) > subtotal) {
+    throw new ApiError(
+      400,
+      `This promo code requires a minimum order of Rs ${(Number(promo.minOrderAmount) || 0).toLocaleString('en-IN')}.`,
+    );
+  }
+
+  const usageLimit = Number(promo.usageLimit);
+  if (Number.isFinite(usageLimit) && usageLimit > 0 && (Number(promo.usedCount) || 0) >= usageLimit) {
+    throw new ApiError(400, 'This promo code has reached its usage limit.');
+  }
+};
+
+const computeMarketplacePromoDiscountAmount = (promo, subtotal) => {
+  if (!promo) {
+    return 0;
+  }
+
+  let discountAmount = 0;
+  if (promo.discountType === 'fixed') {
+    discountAmount = Number(promo.discountValue) || 0;
+  } else {
+    discountAmount = subtotal * ((Number(promo.discountValue) || 0) / 100);
+  }
+
+  if (promo.maxDiscountAmount !== null && promo.maxDiscountAmount !== undefined) {
+    discountAmount = Math.min(discountAmount, Number(promo.maxDiscountAmount) || 0);
+  }
+
+  return Math.min(subtotal, roundMarketplaceAmount(Math.max(0, discountAmount)));
+};
+
+const resolveApplicableMarketplacePromo = async ({ promoCode, subtotal, session } = {}) => {
+  const normalizedCode = normaliseMarketplacePromoCode(promoCode);
+  if (!normalizedCode) {
+    return null;
+  }
+
+  const promo = await MarketplacePromoCode.findOne({ code: normalizedCode })
+    .select(MARKETPLACE_PROMO_CODE_SELECT)
+    .session(session ?? null);
+
+  if (!promo) {
+    throw new ApiError(400, 'That promo code is invalid or inactive.');
+  }
+
+  assertMarketplacePromoState(promo, subtotal);
+
+  const discountAmount = computeMarketplacePromoDiscountAmount(promo, subtotal);
+  if (discountAmount <= 0) {
+    throw new ApiError(400, 'This promo code does not apply to the current order.');
+  }
+
+  return buildMarketplacePromoSnapshot(promo, discountAmount);
+};
+
+const reserveMarketplacePromoUsage = async (promoId, { session } = {}) => {
+  if (!promoId) {
+    return null;
+  }
+
+  const updatedPromo = await MarketplacePromoCode.findOneAndUpdate(
+    {
+      _id: promoId,
+      $or: [
+        { usageLimit: null },
+        { $expr: { $lt: ['$usedCount', '$usageLimit'] } },
+      ],
+    },
+    { $inc: { usedCount: 1 } },
+    { new: true, session },
+  );
+
+  if (!updatedPromo) {
+    throw new ApiError(409, 'This promo code has reached its usage limit.');
+  }
+
+  return updatedPromo;
+};
+
+const releaseMarketplacePromoUsage = async (promoId, { session } = {}) => {
+  if (!promoId) {
+    return;
+  }
+
+  await MarketplacePromoCode.findByIdAndUpdate(
+    promoId,
+    [
+      {
+        $set: {
+          usedCount: {
+            $cond: [
+              { $gt: ['$usedCount', 0] },
+              { $subtract: ['$usedCount', 1] },
+              0,
+            ],
+          },
+        },
+      },
+    ],
+    { session },
   );
 };
 
@@ -779,6 +1028,17 @@ const mapBuyerOrder = (order) => ({
   subtotal: order.subtotal,
   tax: order.tax,
   shippingCost: order.shippingCost,
+  discountAmount: Number(order.discountAmount) || 0,
+  promo: order.promo
+    ? {
+        code: order.promo.code ?? '',
+        label: order.promo.label ?? '',
+        description: order.promo.description ?? '',
+        discountType: order.promo.discountType ?? 'percentage',
+        discountValue: Number(order.promo.discountValue) || 0,
+        discountAmount: Number(order.promo.discountAmount) || 0,
+      }
+    : null,
   total: order.total,
   status: deriveSellerOrderStatus(order.orderItems || []),
   paymentMethod: order.paymentMethod,
@@ -947,6 +1207,8 @@ export const finalizeMarketplacePaymentSession = async ({
     subtotal: orderSnapshot.subtotal,
     tax: orderSnapshot.tax,
     shippingCost: orderSnapshot.shippingCost,
+    discountAmount: orderSnapshot.discountAmount ?? 0,
+    promo: orderSnapshot.promo ?? null,
     total: orderSnapshot.total,
     orderNumber,
   }], { session });
@@ -1384,11 +1646,354 @@ export const getSellerProduct = asyncHandler(async (req, res) => {
     }, 'Seller product fetched successfully'));
 });
 
+export const listPublicMarketplacePromos = asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const promos = await MarketplacePromoCode.find({ active: true, isPublic: true })
+    .sort({ createdAt: -1 })
+    .select(MARKETPLACE_PROMO_CODE_SELECT)
+    .lean();
+
+  const visiblePromos = promos.filter((promo) => {
+    if (promo.startsAt && new Date(promo.startsAt) > now) {
+      return false;
+    }
+    if (promo.endsAt && new Date(promo.endsAt) < now) {
+      return false;
+    }
+    const usageLimit = Number(promo.usageLimit);
+    if (Number.isFinite(usageLimit) && usageLimit > 0 && (Number(promo.usedCount) || 0) >= usageLimit) {
+      return false;
+    }
+    return true;
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { promos: visiblePromos.map(mapMarketplacePromoForPublic) },
+      'Marketplace promo codes fetched successfully',
+    ),
+  );
+});
+
+export const previewMarketplacePricing = asyncHandler(async (req, res) => {
+  ensureMarketplaceBuyerEligible(req.user);
+
+  const { items, promoCode } = req.body ?? {};
+  if (!Array.isArray(items) || !items.length) {
+    throw new ApiError(400, 'Select at least one product to preview order pricing.');
+  }
+
+  const preparedItems = prepareMarketplaceOrderItems(items);
+  const previewItems = await previewMarketplaceOrderItems(preparedItems);
+  const orderItems = previewItems.map(({ product, quantity }) => ({
+    seller: product.seller ?? undefined,
+    product: product._id,
+    name: product.name,
+    quantity,
+    price: product.price,
+    image: product.image,
+  }));
+
+  const basePricing = calculateMarketplaceOrderPricing(orderItems);
+  const promoSnapshot = await resolveApplicableMarketplacePromo({
+    promoCode,
+    subtotal: basePricing.subtotal,
+  });
+  const pricing = calculateMarketplaceOrderPricing(orderItems, promoSnapshot);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { pricing },
+      promoSnapshot ? 'Promo code applied successfully' : 'Marketplace pricing preview fetched successfully',
+    ),
+  );
+});
+
+export const listMarketplacePromoCodes = asyncHandler(async (_req, res) => {
+  const promos = await MarketplacePromoCode.find()
+    .sort({ createdAt: -1 })
+    .populate({ path: 'createdBy', select: 'name email' })
+    .select(MARKETPLACE_PROMO_CODE_SELECT)
+    .lean();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { promos: promos.map(mapMarketplacePromoForAdmin) },
+      'Marketplace promo codes fetched successfully',
+    ),
+  );
+});
+
+export const createMarketplacePromoCode = asyncHandler(async (req, res) => {
+  const {
+    code,
+    label,
+    description = '',
+    discountType = 'percentage',
+    discountValue,
+    minOrderAmount = 0,
+    maxDiscountAmount = null,
+    usageLimit = null,
+    isPublic = true,
+    active = true,
+    startsAt = null,
+    endsAt = null,
+  } = req.body ?? {};
+
+  const normalizedLabel = String(label ?? '').trim();
+  if (!normalizedLabel) {
+    throw new ApiError(400, 'Promo label is required.');
+  }
+
+  if (!['percentage', 'fixed'].includes(String(discountType ?? '').trim())) {
+    throw new ApiError(400, 'Discount type must be percentage or fixed.');
+  }
+
+  const numericDiscountValue = Number(discountValue);
+  if (!Number.isFinite(numericDiscountValue) || numericDiscountValue <= 0) {
+    throw new ApiError(400, 'Discount value must be greater than zero.');
+  }
+
+  if (discountType === 'percentage' && numericDiscountValue > 100) {
+    throw new ApiError(400, 'Percentage promo codes cannot exceed 100%.');
+  }
+
+  const numericMinOrderAmount = Number(minOrderAmount);
+  if (!Number.isFinite(numericMinOrderAmount) || numericMinOrderAmount < 0) {
+    throw new ApiError(400, 'Minimum order amount must be zero or higher.');
+  }
+
+  const numericMaxDiscountAmount = maxDiscountAmount === null || maxDiscountAmount === undefined || maxDiscountAmount === ''
+    ? null
+    : Number(maxDiscountAmount);
+  if (numericMaxDiscountAmount !== null && (!Number.isFinite(numericMaxDiscountAmount) || numericMaxDiscountAmount < 0)) {
+    throw new ApiError(400, 'Maximum discount amount must be zero or higher.');
+  }
+
+  const numericUsageLimit = usageLimit === null || usageLimit === undefined || usageLimit === ''
+    ? null
+    : Number(usageLimit);
+  if (numericUsageLimit !== null && (!Number.isFinite(numericUsageLimit) || numericUsageLimit <= 0)) {
+    throw new ApiError(400, 'Usage limit must be greater than zero.');
+  }
+
+  const parsedStartsAt = startsAt ? new Date(startsAt) : null;
+  const parsedEndsAt = endsAt ? new Date(endsAt) : null;
+  if (parsedStartsAt && Number.isNaN(parsedStartsAt.getTime())) {
+    throw new ApiError(400, 'Promo start date is invalid.');
+  }
+  if (parsedEndsAt && Number.isNaN(parsedEndsAt.getTime())) {
+    throw new ApiError(400, 'Promo end date is invalid.');
+  }
+  if (parsedStartsAt && parsedEndsAt && parsedEndsAt < parsedStartsAt) {
+    throw new ApiError(400, 'Promo end date cannot be before the start date.');
+  }
+
+  const normalizedCode = normaliseMarketplacePromoCode(code) || await generateMarketplacePromoCodeValue();
+
+  const existing = await MarketplacePromoCode.exists({ code: normalizedCode });
+  if (existing) {
+    throw new ApiError(409, 'That promo code already exists.');
+  }
+
+  const promo = await MarketplacePromoCode.create({
+    code: normalizedCode,
+    label: normalizedLabel,
+    description: String(description ?? '').trim(),
+    discountType,
+    discountValue: roundMarketplaceAmount(numericDiscountValue),
+    minOrderAmount: roundMarketplaceAmount(numericMinOrderAmount),
+    maxDiscountAmount: discountType === 'percentage' && numericMaxDiscountAmount !== null
+      ? roundMarketplaceAmount(numericMaxDiscountAmount)
+      : null,
+    usageLimit: numericUsageLimit,
+    isPublic: Boolean(isPublic),
+    active: Boolean(active),
+    startsAt: parsedStartsAt,
+    endsAt: parsedEndsAt,
+    createdBy: req.user?._id,
+  });
+
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'marketplace.promo.created',
+    entityType: 'marketplace-promo',
+    entityId: promo._id,
+    summary: `Marketplace promo ${promo.code} created`,
+    metadata: {
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      isPublic: promo.isPublic,
+      active: promo.active,
+    },
+  });
+
+  await promo.populate({ path: 'createdBy', select: 'name email' });
+
+  return res.status(201).json(
+    new ApiResponse(
+      201,
+      { promo: mapMarketplacePromoForAdmin(promo) },
+      'Marketplace promo code created successfully',
+    ),
+  );
+});
+
+export const updateMarketplacePromoCode = asyncHandler(async (req, res) => {
+  const { promoId } = req.params;
+  const promo = await MarketplacePromoCode.findById(promoId);
+
+  if (!promo) {
+    throw new ApiError(404, 'Promo code not found.');
+  }
+
+  const updates = req.body ?? {};
+
+  if (updates.code !== undefined) {
+    const nextCode = normaliseMarketplacePromoCode(updates.code);
+    if (!nextCode) {
+      throw new ApiError(400, 'Promo code cannot be empty.');
+    }
+
+    const duplicate = await MarketplacePromoCode.exists({
+      _id: { $ne: promo._id },
+      code: nextCode,
+    });
+    if (duplicate) {
+      throw new ApiError(409, 'That promo code already exists.');
+    }
+
+    promo.code = nextCode;
+  }
+
+  if (updates.label !== undefined) {
+    const nextLabel = String(updates.label ?? '').trim();
+    if (!nextLabel) {
+      throw new ApiError(400, 'Promo label cannot be empty.');
+    }
+    promo.label = nextLabel;
+  }
+
+  if (updates.description !== undefined) {
+    promo.description = String(updates.description ?? '').trim();
+  }
+
+  if (updates.discountType !== undefined) {
+    const nextType = String(updates.discountType ?? '').trim();
+    if (!['percentage', 'fixed'].includes(nextType)) {
+      throw new ApiError(400, 'Discount type must be percentage or fixed.');
+    }
+    promo.discountType = nextType;
+  }
+
+  if (updates.discountValue !== undefined) {
+    const nextValue = Number(updates.discountValue);
+    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+      throw new ApiError(400, 'Discount value must be greater than zero.');
+    }
+    if (promo.discountType === 'percentage' && nextValue > 100) {
+      throw new ApiError(400, 'Percentage promo codes cannot exceed 100%.');
+    }
+    promo.discountValue = roundMarketplaceAmount(nextValue);
+  }
+
+  if (updates.minOrderAmount !== undefined) {
+    const nextMinOrderAmount = Number(updates.minOrderAmount);
+    if (!Number.isFinite(nextMinOrderAmount) || nextMinOrderAmount < 0) {
+      throw new ApiError(400, 'Minimum order amount must be zero or higher.');
+    }
+    promo.minOrderAmount = roundMarketplaceAmount(nextMinOrderAmount);
+  }
+
+  if (updates.maxDiscountAmount !== undefined) {
+    if (updates.maxDiscountAmount === null || updates.maxDiscountAmount === '') {
+      promo.maxDiscountAmount = null;
+    } else {
+      const nextMaxDiscount = Number(updates.maxDiscountAmount);
+      if (!Number.isFinite(nextMaxDiscount) || nextMaxDiscount < 0) {
+        throw new ApiError(400, 'Maximum discount amount must be zero or higher.');
+      }
+      promo.maxDiscountAmount = roundMarketplaceAmount(nextMaxDiscount);
+    }
+  }
+
+  if (updates.usageLimit !== undefined) {
+    if (updates.usageLimit === null || updates.usageLimit === '') {
+      promo.usageLimit = null;
+    } else {
+      const nextUsageLimit = Number(updates.usageLimit);
+      if (!Number.isFinite(nextUsageLimit) || nextUsageLimit <= 0) {
+        throw new ApiError(400, 'Usage limit must be greater than zero.');
+      }
+      if (nextUsageLimit < (Number(promo.usedCount) || 0)) {
+        throw new ApiError(400, 'Usage limit cannot be lower than the current used count.');
+      }
+      promo.usageLimit = nextUsageLimit;
+    }
+  }
+
+  if (updates.isPublic !== undefined) {
+    promo.isPublic = Boolean(updates.isPublic);
+  }
+
+  if (updates.active !== undefined) {
+    promo.active = Boolean(updates.active);
+  }
+
+  if (updates.startsAt !== undefined) {
+    promo.startsAt = updates.startsAt ? new Date(updates.startsAt) : null;
+    if (promo.startsAt && Number.isNaN(promo.startsAt.getTime())) {
+      throw new ApiError(400, 'Promo start date is invalid.');
+    }
+  }
+
+  if (updates.endsAt !== undefined) {
+    promo.endsAt = updates.endsAt ? new Date(updates.endsAt) : null;
+    if (promo.endsAt && Number.isNaN(promo.endsAt.getTime())) {
+      throw new ApiError(400, 'Promo end date is invalid.');
+    }
+  }
+
+  if (promo.startsAt && promo.endsAt && promo.endsAt < promo.startsAt) {
+    throw new ApiError(400, 'Promo end date cannot be before the start date.');
+  }
+
+  await promo.save();
+
+  await recordAuditLog({
+    actor: req.user?._id,
+    actorRole: req.user?.role,
+    action: 'marketplace.promo.updated',
+    entityType: 'marketplace-promo',
+    entityId: promo._id,
+    summary: `Marketplace promo ${promo.code} updated`,
+    metadata: {
+      active: promo.active,
+      isPublic: promo.isPublic,
+      usageLimit: promo.usageLimit,
+    },
+  });
+
+  await promo.populate({ path: 'createdBy', select: 'name email' });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { promo: mapMarketplacePromoForAdmin(promo) },
+      'Marketplace promo code updated successfully',
+    ),
+  );
+});
+
 export const createMarketplaceOrder = asyncHandler(async (req, res) => {
   ensureMarketplaceBuyerEligible(req.user);
 
   const userId = req.user?._id;
-  const { items, shippingAddress, paymentMethod = 'Cash on Delivery' } = req.body ?? {};
+  const { items, shippingAddress, paymentMethod = 'Cash on Delivery', promoCode } = req.body ?? {};
 
   if (!userId) {
     throw new ApiError(401, 'You must be signed in to place an order.');
@@ -1406,8 +2011,6 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Please provide a complete shipping address.');
   }
 
-  const tax = 0;
-  const shippingCost = 0;
   const session = await mongoose.startSession();
   let orderId;
   let productIds = [];
@@ -1435,18 +2038,30 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
         }],
       }));
 
-      const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
-      const total = subtotal + tax + shippingCost;
+      const basePricing = calculateMarketplaceOrderPricing(orderItems);
+      const promoSnapshot = await resolveApplicableMarketplacePromo({
+        promoCode,
+        subtotal: basePricing.subtotal,
+        session,
+      });
+
+      if (promoSnapshot?.promoId) {
+        await reserveMarketplacePromoUsage(promoSnapshot.promoId, { session });
+      }
+
+      const pricing = calculateMarketplaceOrderPricing(orderItems, promoSnapshot);
       const orderNumber = await generateOrderNumber();
       const [createdOrder] = await Order.create([{
         user: userId,
         orderItems,
         shippingAddress,
         paymentMethod,
-        subtotal,
-        tax,
-        shippingCost,
-        total,
+        subtotal: pricing.subtotal,
+        tax: pricing.tax,
+        shippingCost: pricing.shippingCost,
+        discountAmount: pricing.discountAmount,
+        promo: pricing.promo,
+        total: pricing.total,
         orderNumber,
       }], { session });
 
@@ -1475,7 +2090,7 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
   ensureMarketplaceBuyerEligible(req.user);
 
   const userId = req.user?._id;
-  const { items, shippingAddress } = req.body ?? {};
+  const { items, shippingAddress, promoCode } = req.body ?? {};
 
   if (!userId) {
     throw new ApiError(401, 'You must be signed in to create a checkout session.');
@@ -1493,8 +2108,6 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
     throw new ApiError(400, 'Please provide a complete shipping address.');
   }
 
-  const tax = 0;
-  const shippingCost = 0;
   const session = await mongoose.startSession();
   let paymentSessionId;
   let stripeSession;
@@ -1513,8 +2126,21 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
         image: product.image,
       }));
 
-      const subtotal = orderItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0);
-      const total = subtotal + tax + shippingCost;
+      const basePricing = calculateMarketplaceOrderPricing(orderItems);
+      const promoSnapshot = await resolveApplicableMarketplacePromo({
+        promoCode,
+        subtotal: basePricing.subtotal,
+        session,
+      });
+
+      if (promoSnapshot?.promoId) {
+        await reserveMarketplacePromoUsage(promoSnapshot.promoId, { session });
+      }
+
+      const pricing = calculateMarketplaceOrderPricing(orderItems, promoSnapshot);
+      if (pricing.total <= 0) {
+        throw new ApiError(400, 'This promo code reduces the order total to zero. Use Cash on Delivery to place this order.');
+      }
 
       // Create payment session record
       const paymentSession = await PaymentSession.create([{
@@ -1522,33 +2148,45 @@ export const createMarketplaceCheckoutSession = asyncHandler(async (req, res) =>
         type: 'shop',
         orderSnapshot: {
           items: orderItems,
-          subtotal,
-          tax,
-          shippingCost,
-          total,
+          subtotal: pricing.subtotal,
+          tax: pricing.tax,
+          shippingCost: pricing.shippingCost,
+          discountAmount: pricing.discountAmount,
+          promo: pricing.promo,
+          total: pricing.total,
           shippingAddress,
         },
         currency: 'inr',
-        amount: total,
+        amount: pricing.total,
         metadata: {
-          items: items.map(item => ({ productId: item.productId, quantity: item.quantity })),
+          items: items.map((item) => ({ productId: item.productId ?? item.id, quantity: item.quantity })),
+          promoCode: pricing.promo?.code ?? null,
+          promoId: pricing.promo?.promoId ?? null,
         },
       }], { session });
 
       paymentSessionId = paymentSession[0]._id;
 
-      // Create Stripe Checkout Session
-      const lineItems = orderItems.map((item) => ({
+      const unitsCount = orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      const orderDescription = orderItems
+        .map((item) => item.name)
+        .slice(0, 3)
+        .join(', ');
+      const summaryDescription = pricing.promo
+        ? `${orderDescription}${orderItems.length > 3 ? '...' : ''} | Promo ${pricing.promo.code} applied`
+        : `${orderDescription}${orderItems.length > 3 ? '...' : ''}`;
+
+      const lineItems = [{
         price_data: {
           currency: 'inr',
           product_data: {
-            name: item.name,
-            images: item.image ? [item.image] : [],
+            name: unitsCount === 1 ? 'FitSync marketplace item' : `FitSync marketplace order (${unitsCount} items)`,
+            description: summaryDescription,
           },
-          unit_amount: Math.round(item.price * 100), // Convert to paise/cents
+          unit_amount: Math.round(pricing.total * 100),
         },
-        quantity: item.quantity,
-      }));
+        quantity: 1,
+      }];
 
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
@@ -1755,6 +2393,7 @@ export const handleStripeWebhook = asyncHandler(async (req, res) => {
               quantity: Number(item?.quantity) || 0,
             }))
             .filter((entry) => entry.product?._id && entry.quantity > 0);
+          const promoId = paymentSession.orderSnapshot?.promo?.promoId ?? null;
 
           const expirySession = await mongoose.startSession();
 
@@ -1770,6 +2409,10 @@ export const handleStripeWebhook = asyncHandler(async (req, res) => {
               );
 
               await releaseMarketplaceInventoryReservations(reservations, {
+                session: expirySession,
+              });
+
+              await releaseMarketplacePromoUsage(promoId, {
                 session: expirySession,
               });
             });

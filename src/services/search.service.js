@@ -97,6 +97,8 @@ const mapGymSearchDocument = (gym) => ({
   keyFeatures: gym.keyFeatures ?? [],
   city: gym.location?.city ?? '',
   cityNormalized: normalizeToken(gym.location?.city),
+  postalCode: gym.location?.postalCode ?? '',
+  postalCodeNormalized: normalizeToken(gym.location?.postalCode),
   state: gym.location?.state ?? '',
   ownerName: [gym.owner?.firstName, gym.owner?.lastName].filter(Boolean).join(' ').trim() || gym.owner?.name || '',
   status: gym.status,
@@ -267,8 +269,8 @@ export const initializeSearch = async () => {
     try {
       await Promise.all([
         ensureIndex(GYM_INDEX_UID, 'id', {
-          searchableAttributes: ['name', 'description', 'tags', 'amenities', 'keyFeatures', 'city', 'ownerName'],
-          filterableAttributes: ['status', 'isPublished', 'cityNormalized', 'amenitiesNormalized', 'sponsorshipStatus'],
+          searchableAttributes: ['name', 'description', 'tags', 'amenities', 'keyFeatures', 'city', 'postalCode', 'ownerName'],
+          filterableAttributes: ['status', 'isPublished', 'cityNormalized', 'postalCodeNormalized', 'amenitiesNormalized', 'sponsorshipStatus'],
           sortableAttributes: ['sponsorshipRank', 'impressions', 'createdAtTs', 'updatedAtTs'],
         }),
         ensureIndex(PRODUCT_INDEX_UID, 'id', {
@@ -674,7 +676,8 @@ export const searchGymIndex = async (query, {
   const filters = ['status = "active"', 'isPublished = true'];
 
   if (city) {
-    filters.push(`cityNormalized = "${escapeFilterValue(normalizeToken(city))}"`);
+    const locationToken = escapeFilterValue(normalizeToken(city));
+    filters.push(`(cityNormalized = "${locationToken}" OR postalCodeNormalized = "${locationToken}")`);
   }
 
   amenities.filter(Boolean).forEach((amenity) => {

@@ -70,7 +70,7 @@ const GymFilters = ({
       </label>
 
       <label>
-        <span>City</span>
+        <span>City or PIN code</span>
         <Controller
           control={control}
           name="city"
@@ -87,9 +87,9 @@ const GymFilters = ({
                 handleFieldChange('city', suggestion.label);
               }}
               suggestions={citySuggestions}
-              placeholder="e.g. Mumbai"
-              ariaLabel="Filter gyms by city"
-              noResultsText="No city suggestions match."
+              placeholder="e.g. Mumbai or 400001"
+              ariaLabel="Filter gyms by city or PIN code"
+              noResultsText="No city or PIN suggestions match."
               className="gym-filters__search"
               inputClassName="gym-filters__search-input"
             />

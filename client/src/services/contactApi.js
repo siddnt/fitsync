@@ -8,6 +8,13 @@ export const contactApi = apiSlice.injectEndpoints({
                 method: 'POST',
                 body: data,
             }),
+            invalidatesTags: ['Contact'],
+        }),
+        getMyContactMessages: builder.query({
+            query: () => ({
+                url: '/contact/mine',
+            }),
+            providesTags: ['Contact'],
         }),
         getContactMessages: builder.query({
             query: (params) => ({
@@ -45,6 +52,7 @@ export const contactApi = apiSlice.injectEndpoints({
 
 export const {
     useSubmitContactFormMutation,
+    useGetMyContactMessagesQuery,
     useGetContactMessagesQuery,
     useUpdateMessageStatusMutation,
     useAssignMessageMutation,

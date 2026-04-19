@@ -3,6 +3,8 @@ import { Field, reduxForm } from 'redux-form';
 import FormField from '../../components/forms/FormField.jsx';
 import ChipMultiSelect from '../../components/forms/ChipMultiSelect.jsx';
 import { AMENITY_OPTIONS } from '../../constants/amenities.js';
+
+const WEEKDAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 import { validateMembershipPricingValues } from './helpers.js';
 import MembershipPricingSection from './MembershipPricingSection.jsx';
 import './GymForms.css';
@@ -47,6 +49,19 @@ const GymEditFormComponent = ({
         <Field name="contact.website" component={FormField} label="Website" placeholder="https://fitsyncgym.com" />
         <Field name="schedule.open" component={FormField} label="Opens" placeholder="06:00" />
         <Field name="schedule.close" component={FormField} label="Closes" placeholder="22:00" />
+      </div>
+      <div className="gym-form__section-fields">
+        <div className="gym-form__highlight-row">
+          <span className="gym-form__highlight-label">Working days</span>
+          <div className="gym-form__highlight-control">
+            <Field
+              name="schedule.workingDays"
+              component={ChipMultiSelect}
+              options={WEEKDAY_OPTIONS}
+              helperText="Pick the days the gym is open. Opening hours apply to every selected day."
+            />
+          </div>
+        </div>
       </div>
     </section>
 

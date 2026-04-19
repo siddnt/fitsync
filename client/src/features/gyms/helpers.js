@@ -201,9 +201,14 @@ export const transformGymPayload = (values) => {
     payload.contact = contact;
   }
 
+  const rawWorkingDays = values?.schedule?.workingDays;
+  const workingDays = Array.isArray(rawWorkingDays)
+    ? rawWorkingDays.map((day) => String(day ?? '').trim()).filter(Boolean)
+    : null;
   const schedule = buildSection([
     ['openTime', trimToUndefined(values?.schedule?.open)],
     ['closeTime', trimToUndefined(values?.schedule?.close)],
+    ['workingDays', workingDays && workingDays.length ? workingDays : undefined],
   ]);
   if (schedule) {
     payload.schedule = schedule;

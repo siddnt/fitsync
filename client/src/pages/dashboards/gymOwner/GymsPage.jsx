@@ -124,6 +124,7 @@ const GymOwnerGymsPage = () => {
       schedule: {
         open: details.schedule?.openTime ?? details.schedule?.open ?? '',
         close: details.schedule?.closeTime ?? details.schedule?.close ?? '',
+        workingDays: Array.isArray(details.schedule?.workingDays) ? details.schedule.workingDays : [],
       },
       keyFeatures: Array.isArray(details.keyFeatures)
         ? details.keyFeatures

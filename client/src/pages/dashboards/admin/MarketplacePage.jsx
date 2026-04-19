@@ -4,6 +4,11 @@ import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
+import {
+  useCreateMarketplacePromoCodeMutation,
+  useGetMarketplacePromoCodesQuery,
+  useUpdateMarketplacePromoCodeMutation,
+} from '../../../services/marketplaceApi.js';
 import { downloadCsvFile } from '../../../utils/csvExport.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
 import SearchSuggestInput from '../../../components/dashboard/SearchSuggestInput.jsx';
@@ -17,6 +22,38 @@ const formatAddress = (address) => ([
   [address?.city, address?.state].filter(Boolean).join(', '),
   address?.zipCode,
 ].filter(Boolean).join(' | ') || 'Address unavailable');
+
+const formatPromoDiscount = (promo) => {
+  if (!promo) {
+    return 'No discount';
+  }
+
+  if (promo.discountType === 'fixed') {
+    return `${formatCurrency({ amount: promo.discountValue })} off`;
+  }
+
+  const capLabel = promo.maxDiscountAmount
+    ? ` up to ${formatCurrency({ amount: promo.maxDiscountAmount })}`
+    : '';
+
+  return `${promo.discountValue}% off${capLabel}`;
+};
+
+const formatPromoWindow = (promo) => {
+  if (!promo?.startsAt && !promo?.endsAt) {
+    return 'No schedule';
+  }
+
+  if (promo?.startsAt && !promo?.endsAt) {
+    return `Starts ${formatDateTime(promo.startsAt)}`;
+  }
+
+  if (!promo?.startsAt && promo?.endsAt) {
+    return `Ends ${formatDateTime(promo.endsAt)}`;
+  }
+
+  return `${formatDateTime(promo.startsAt)} - ${formatDateTime(promo.endsAt)}`;
+};
 
 const buildOrderHealth = (order) => {
   const items = Array.isArray(order?.items) ? order.items : [];
@@ -40,16 +77,44 @@ const buildOrderHealth = (order) => {
 const AdminMarketplacePage = () => {
   const [searchParams] = useSearchParams();
   const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
+  const {
+    data: promoResponse,
+    isLoading: isPromosLoading,
+    isError: isPromosError,
+    refetch: refetchPromos,
+  } = useGetMarketplacePromoCodesQuery();
   const rawOrders = data?.data?.orders;
+  const rawPromos = promoResponse?.data?.promos;
+  const [createPromoCode, { isLoading: isCreatingPromo }] = useCreateMarketplacePromoCodeMutation();
+  const [updatePromoCode, { isLoading: isUpdatingPromo }] = useUpdateMarketplacePromoCodeMutation();
 
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') ?? '');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [activeOrderId, setActiveOrderId] = useState('');
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    label: '',
+    description: '',
+    discountType: 'percentage',
+    discountValue: '10',
+    minOrderAmount: '0',
+    maxDiscountAmount: '',
+    usageLimit: '',
+    isPublic: true,
+    startsAt: '',
+    endsAt: '',
+  });
+  const [promoMessage, setPromoMessage] = useState('');
+  const [promoError, setPromoError] = useState('');
 
   const orders = useMemo(
     () => (Array.isArray(rawOrders) ? rawOrders : []),
     [rawOrders],
+  );
+  const promos = useMemo(
+    () => (Array.isArray(rawPromos) ? rawPromos : []),
+    [rawPromos],
   );
 
   const statusOptions = useMemo(() => {
@@ -83,6 +148,80 @@ const AdminMarketplacePage = () => {
     setSearchTerm('');
     setStatusFilter('all');
     setCategoryFilter('all');
+  };
+
+  const promoSummary = useMemo(() => ({
+    total: promos.length,
+    active: promos.filter((promo) => promo?.active).length,
+    public: promos.filter((promo) => promo?.isPublic).length,
+    totalRedemptions: promos.reduce((sum, promo) => sum + (Number(promo?.usedCount) || 0), 0),
+  }), [promos]);
+
+  const resetPromoForm = () => {
+    setPromoForm({
+      code: '',
+      label: '',
+      description: '',
+      discountType: 'percentage',
+      discountValue: '10',
+      minOrderAmount: '0',
+      maxDiscountAmount: '',
+      usageLimit: '',
+      isPublic: true,
+      startsAt: '',
+      endsAt: '',
+    });
+  };
+
+  const handlePromoFieldChange = (field, value) => {
+    setPromoForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreatePromo = async (event) => {
+    event.preventDefault();
+    setPromoError('');
+    setPromoMessage('');
+
+    try {
+      const response = await createPromoCode({
+        code: promoForm.code.trim() || undefined,
+        label: promoForm.label.trim(),
+        description: promoForm.description.trim(),
+        discountType: promoForm.discountType,
+        discountValue: Number(promoForm.discountValue),
+        minOrderAmount: Number(promoForm.minOrderAmount || 0),
+        maxDiscountAmount: promoForm.maxDiscountAmount === '' ? null : Number(promoForm.maxDiscountAmount),
+        usageLimit: promoForm.usageLimit === '' ? null : Number(promoForm.usageLimit),
+        isPublic: promoForm.isPublic,
+        startsAt: promoForm.startsAt || null,
+        endsAt: promoForm.endsAt || null,
+      }).unwrap();
+
+      const createdCode = response?.data?.promo?.code ?? 'Promo';
+      setPromoMessage(`${createdCode} created successfully.`);
+      resetPromoForm();
+    } catch (error) {
+      setPromoError(error?.data?.message || 'Could not create the promo code.');
+    }
+  };
+
+  const handlePromoToggle = async (promo, field) => {
+    if (!promo?.id) {
+      return;
+    }
+
+    setPromoError('');
+    setPromoMessage('');
+
+    try {
+      await updatePromoCode({
+        promoId: promo.id,
+        [field]: !promo[field],
+      }).unwrap();
+      setPromoMessage(`${promo.code} updated successfully.`);
+    } catch (error) {
+      setPromoError(error?.data?.message || `Could not update ${promo.code}.`);
+    }
   };
 
   const filteredOrders = useMemo(() => {
@@ -392,6 +531,189 @@ const AdminMarketplacePage = () => {
       </DashboardSection>
 
       <DashboardSection
+        title="Promo Codes"
+        className="dashboard-section--span-12"
+        action={(
+          <button type="button" onClick={() => refetchPromos()}>
+            Refresh promos
+          </button>
+        )}
+      >
+        <div className="stat-grid">
+          <div className="stat-card">
+            <small>Total promos</small>
+            <strong>{promoSummary.total}</strong>
+            <small>{promoSummary.active} active right now</small>
+          </div>
+          <div className="stat-card">
+            <small>Public promos</small>
+            <strong>{promoSummary.public}</strong>
+            <small>Visible to customers in the cart</small>
+          </div>
+          <div className="stat-card">
+            <small>Total redemptions</small>
+            <strong>{promoSummary.totalRedemptions}</strong>
+            <small>Reserved and completed usages combined</small>
+          </div>
+        </div>
+
+        <form className="users-toolbar" onSubmit={handleCreatePromo} style={{ marginTop: '1rem' }}>
+          <input
+            value={promoForm.code}
+            onChange={(event) => handlePromoFieldChange('code', event.target.value.toUpperCase())}
+            placeholder="Code (leave blank to auto-generate)"
+            aria-label="Promo code"
+          />
+          <input
+            value={promoForm.label}
+            onChange={(event) => handlePromoFieldChange('label', event.target.value)}
+            placeholder="Label"
+            aria-label="Promo label"
+            required
+          />
+          <input
+            value={promoForm.description}
+            onChange={(event) => handlePromoFieldChange('description', event.target.value)}
+            placeholder="Description"
+            aria-label="Promo description"
+          />
+          <select
+            value={promoForm.discountType}
+            onChange={(event) => handlePromoFieldChange('discountType', event.target.value)}
+            aria-label="Discount type"
+          >
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed amount</option>
+          </select>
+          <input
+            type="number"
+            min="1"
+            step="0.01"
+            value={promoForm.discountValue}
+            onChange={(event) => handlePromoFieldChange('discountValue', event.target.value)}
+            placeholder="Discount value"
+            aria-label="Discount value"
+            required
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={promoForm.minOrderAmount}
+            onChange={(event) => handlePromoFieldChange('minOrderAmount', event.target.value)}
+            placeholder="Min order"
+            aria-label="Minimum order amount"
+          />
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={promoForm.maxDiscountAmount}
+            onChange={(event) => handlePromoFieldChange('maxDiscountAmount', event.target.value)}
+            placeholder="Max discount"
+            aria-label="Maximum discount amount"
+          />
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={promoForm.usageLimit}
+            onChange={(event) => handlePromoFieldChange('usageLimit', event.target.value)}
+            placeholder="Usage limit"
+            aria-label="Usage limit"
+          />
+          <input
+            type="datetime-local"
+            value={promoForm.startsAt}
+            onChange={(event) => handlePromoFieldChange('startsAt', event.target.value)}
+            aria-label="Promo start date"
+          />
+          <input
+            type="datetime-local"
+            value={promoForm.endsAt}
+            onChange={(event) => handlePromoFieldChange('endsAt', event.target.value)}
+            aria-label="Promo end date"
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={promoForm.isPublic}
+              onChange={(event) => handlePromoFieldChange('isPublic', event.target.checked)}
+            />
+            <span>Public</span>
+          </label>
+          <button type="submit" className="users-toolbar__refresh" disabled={isCreatingPromo}>
+            {isCreatingPromo ? 'Creating...' : 'Create promo'}
+          </button>
+        </form>
+
+        {promoError ? <p className="dashboard-message dashboard-message--error">{promoError}</p> : null}
+        {promoMessage ? <p className="dashboard-message dashboard-message--success">{promoMessage}</p> : null}
+
+        {isPromosLoading ? (
+          <SkeletonPanel lines={6} />
+        ) : isPromosError ? (
+          <EmptyState message="We could not load marketplace promo codes." />
+        ) : promos.length ? (
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Limits</th>
+                <th>Schedule</th>
+                <th>Visibility</th>
+                <th>Usage</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {promos.map((promo) => (
+                <tr key={promo.id}>
+                  <td>
+                    <strong>{promo.code}</strong>
+                    <div><small>{promo.label}</small></div>
+                    {promo.description ? <div><small>{promo.description}</small></div> : null}
+                  </td>
+                  <td>{formatPromoDiscount(promo)}</td>
+                  <td>
+                    <div><small>Min {formatCurrency({ amount: promo.minOrderAmount })}</small></div>
+                    <div><small>{promo.usageLimit ? `${promo.usedCount}/${promo.usageLimit} used` : `${promo.usedCount} used`}</small></div>
+                  </td>
+                  <td><small>{formatPromoWindow(promo)}</small></td>
+                  <td>
+                    <div><small>{promo.active ? 'Active' : 'Inactive'}</small></div>
+                    <div><small>{promo.isPublic ? 'Public' : 'Private'}</small></div>
+                  </td>
+                  <td>{promo.usedCount}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="order-item-card__action"
+                      onClick={() => handlePromoToggle(promo, 'active')}
+                      disabled={isUpdatingPromo}
+                    >
+                      {promo.active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      className="order-item-card__action"
+                      onClick={() => handlePromoToggle(promo, 'isPublic')}
+                      disabled={isUpdatingPromo}
+                    >
+                      {promo.isPublic ? 'Hide' : 'Show'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState message="No promo codes yet. Create the first marketplace promo above." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection
         title="Orders"
         className="dashboard-section--span-12"
         action={(
@@ -618,11 +940,15 @@ const AdminMarketplacePage = () => {
                   <strong>{formatCurrency(activeOrder.total)}</strong>
                   <p>
                     Subtotal {formatCurrency(activeOrder.subtotal)}
+                    {activeOrder.discountAmount ? ` | Discount ${formatCurrency(activeOrder.discountAmount)}` : ''}
                     {' | '}
                     Tax {formatCurrency(activeOrder.tax)}
                     {' | '}
                     Shipping {formatCurrency(activeOrder.shippingCost)}
                   </p>
+                  {activeOrder.promo ? (
+                    <small>Promo {activeOrder.promo.code}: {activeOrder.promo.description || activeOrder.promo.label}</small>
+                  ) : null}
                 </div>
                 <div className="order-info-card">
                   <small>Status</small>

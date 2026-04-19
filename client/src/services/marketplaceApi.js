@@ -26,6 +26,17 @@ export const marketplaceApi = apiSlice.injectEndpoints({
         { type: 'Marketplace', id: 'CATALOG' },
       ],
     }),
+    getMarketplacePublicPromos: builder.query({
+      query: () => '/marketplace/promos/public',
+      providesTags: ['Marketplace'],
+    }),
+    previewMarketplacePricing: builder.mutation({
+      query: (payload) => ({
+        url: '/marketplace/pricing',
+        method: 'POST',
+        body: payload,
+      }),
+    }),
     createMarketplaceOrder: builder.mutation({
       query: (payload) => ({
         url: '/marketplace/orders',
@@ -47,6 +58,26 @@ export const marketplaceApi = apiSlice.injectEndpoints({
     }),
     getOrderByStripeSession: builder.query({
       query: (sessionId) => `/marketplace/checkout/order/${sessionId}`,
+    }),
+    getMarketplacePromoCodes: builder.query({
+      query: () => '/marketplace/promos',
+      providesTags: ['Marketplace', 'Dashboard'],
+    }),
+    createMarketplacePromoCode: builder.mutation({
+      query: (payload) => ({
+        url: '/marketplace/promos',
+        method: 'POST',
+        body: payload,
+      }),
+      invalidatesTags: ['Marketplace', 'Dashboard'],
+    }),
+    updateMarketplacePromoCode: builder.mutation({
+      query: ({ promoId, ...payload }) => ({
+        url: `/marketplace/promos/${promoId}`,
+        method: 'PATCH',
+        body: payload,
+      }),
+      invalidatesTags: ['Marketplace', 'Dashboard'],
     }),
     submitProductReview: builder.mutation({
       query: ({ productId, ...payload }) => ({
@@ -75,9 +106,14 @@ export const marketplaceApi = apiSlice.injectEndpoints({
 export const {
   useGetMarketplaceCatalogQuery,
   useGetMarketplaceProductQuery,
+  useGetMarketplacePublicPromosQuery,
+  usePreviewMarketplacePricingMutation,
   useCreateMarketplaceOrderMutation,
   useCreateMarketplaceCheckoutSessionMutation,
   useGetOrderByStripeSessionQuery,
+  useGetMarketplacePromoCodesQuery,
+  useCreateMarketplacePromoCodeMutation,
+  useUpdateMarketplacePromoCodeMutation,
   useSubmitProductReviewMutation,
   useRequestOrderItemReturnMutation,
 } = marketplaceApi;

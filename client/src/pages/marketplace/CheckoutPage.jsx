@@ -3,9 +3,10 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import './CheckoutPage.css';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { cartActions } from '../../features/cart/cartSlice.js';
-import { 
+import {
   useCreateMarketplaceOrderMutation,
-  useCreateMarketplaceCheckoutSessionMutation 
+  useCreateMarketplaceCheckoutSessionMutation,
+  usePreviewMarketplacePricingMutation,
 } from '../../services/marketplaceApi.js';
 import { formatCurrency } from '../../utils/format.js';
 import {
@@ -16,7 +17,7 @@ import {
   writePendingOrderSnapshot,
 } from './checkoutState.js';
 import {
-  getMarketplacePromoDefinition,
+  clearMarketplacePromoCode,
   readMarketplacePromoCode,
   readSavedCheckoutAddresses,
   saveCheckoutAddress,
@@ -39,6 +40,24 @@ const initialAddressState = (user) => ({
   paymentMethod: 'Cash on Delivery',
 });
 
+const buildBasePricing = (items = []) => {
+  const subtotal = items.reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0,
+  );
+  const tax = 0;
+  const shippingCost = 0;
+
+  return {
+    subtotal,
+    tax,
+    shippingCost,
+    discountAmount: 0,
+    total: subtotal + tax + shippingCost,
+    promo: null,
+  };
+};
+
 const CheckoutPage = () => {
   const items = useAppSelector((state) => state.cart.items);
   const { user } = useAppSelector((state) => state.auth);
@@ -48,20 +67,19 @@ const CheckoutPage = () => {
   const [searchParams] = useSearchParams();
   const [createOrder, { isLoading: isCreatingOrder }] = useCreateMarketplaceOrderMutation();
   const [createCheckoutSession, { isLoading: isCreatingSession }] = useCreateMarketplaceCheckoutSessionMutation();
+  const [previewMarketplacePricing] = usePreviewMarketplacePricingMutation();
   const [formState, setFormState] = useState(() => initialAddressState(user));
   const [error, setError] = useState(null);
   const [order, setOrder] = useState(null);
   const [saveAddressForLater, setSaveAddressForLater] = useState(true);
   const [savedAddresses, setSavedAddresses] = useState([]);
+  const [pricing, setPricing] = useState(null);
+  const [promoNotice, setPromoNotice] = useState(null);
 
   const isLoading = isCreatingOrder || isCreatingSession;
   const isCardPayment = formState.paymentMethod === 'Credit / Debit Card';
   const isBuyNowMode = searchParams.get('mode') === 'buy-now';
   const userAddressKey = user?._id ?? user?.id ?? user?.email ?? '';
-  const appliedPromo = useMemo(
-    () => getMarketplacePromoDefinition(readMarketplacePromoCode()),
-    [],
-  );
 
   const buyNowStateItem = useMemo(
     () => normalizeCheckoutItem(location.state?.checkoutMode === 'buy-now' ? location.state?.checkoutItem : null),
@@ -92,6 +110,9 @@ const CheckoutPage = () => {
     [buyNowItem, isBuyNowMode, items],
   );
 
+  const basePricing = useMemo(() => buildBasePricing(checkoutItems), [checkoutItems]);
+  const displayPricing = pricing ?? basePricing;
+
   useEffect(() => {
     setFormState((prev) => ({
       ...prev,
@@ -109,17 +130,50 @@ const CheckoutPage = () => {
     setSavedAddresses(readSavedCheckoutAddresses(userAddressKey));
   }, [userAddressKey]);
 
-  const totals = useMemo(() => {
-    const subtotal = checkoutItems.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0,
-    );
-    const tax = 0;
-    const shipping = 0;
-    const total = subtotal + tax + shipping;
+  useEffect(() => {
+    if (!user || !checkoutItems.length) {
+      setPricing(null);
+      setPromoNotice(null);
+      return;
+    }
 
-    return { subtotal, tax, shipping, total };
-  }, [checkoutItems]);
+    const promoCode = readMarketplacePromoCode();
+    if (!promoCode) {
+      setPricing(null);
+      setPromoNotice(null);
+      return;
+    }
+
+    let ignore = false;
+
+    previewMarketplacePricing({ items: checkoutItems, promoCode })
+      .unwrap()
+      .then((response) => {
+        if (ignore) {
+          return;
+        }
+
+        setPricing(response?.data?.pricing ?? null);
+        if (response?.data?.pricing?.discountAmount > 0) {
+          setPromoNotice(`${promoCode} saved ${formatCurrency(response.data.pricing.discountAmount)} on this order.`);
+        } else {
+          setPromoNotice(`${promoCode} is active for this order.`);
+        }
+      })
+      .catch((apiError) => {
+        if (ignore) {
+          return;
+        }
+
+        clearMarketplacePromoCode();
+        setPricing(null);
+        setPromoNotice(apiError?.data?.message || 'The saved promo code no longer applies.');
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [checkoutItems, previewMarketplacePricing, user]);
 
   const handleChange = (event) => {
     const { name } = event.target;
@@ -202,8 +256,9 @@ const CheckoutPage = () => {
       setSavedAddresses(saveCheckoutAddress(userAddressKey, shippingAddress));
     }
 
+    const appliedPromoCode = displayPricing.promo?.code ?? null;
+
     try {
-      // Handle card payment with Stripe redirect
       if (formState.paymentMethod === 'Credit / Debit Card') {
         const payload = {
           items: checkoutItems.map((item) => ({
@@ -211,9 +266,9 @@ const CheckoutPage = () => {
             quantity: item.quantity,
           })),
           shippingAddress,
+          promoCode: appliedPromoCode,
         };
 
-        // Store order snapshot in sessionStorage for success page
         const orderSnapshot = {
           checkoutMode: isBuyNowMode ? 'buy-now' : 'cart',
           items: checkoutItems.map((item) => ({
@@ -223,28 +278,25 @@ const CheckoutPage = () => {
             price: item.price,
             image: item.image,
           })),
-          subtotal: totals.subtotal,
-          tax: totals.tax,
-          shippingCost: totals.shipping,
-          total: totals.total,
+          subtotal: displayPricing.subtotal,
+          tax: displayPricing.tax,
+          shippingCost: displayPricing.shippingCost,
+          discountAmount: displayPricing.discountAmount,
+          total: displayPricing.total,
           shippingAddress: payload.shippingAddress,
-          promoCode: appliedPromo?.code ?? null,
-          promoLabel: appliedPromo?.label ?? null,
-          promoSummary: appliedPromo?.summary ?? null,
+          promo: displayPricing.promo ?? null,
         };
         writePendingOrderSnapshot(orderSnapshot);
 
         const response = await createCheckoutSession(payload).unwrap();
         const checkoutUrl = response?.data?.checkoutUrl;
-        
+
         if (checkoutUrl) {
-          // Redirect to Stripe Checkout
           window.location.href = checkoutUrl;
         } else {
           setError('Failed to create checkout session. Please try again.');
         }
       } else {
-        // Handle Cash on Delivery
         const payload = {
           items: checkoutItems.map((item) => ({
             productId: item.id,
@@ -252,15 +304,12 @@ const CheckoutPage = () => {
           })),
           shippingAddress,
           paymentMethod: formState.paymentMethod,
+          promoCode: appliedPromoCode,
         };
 
         const response = await createOrder(payload).unwrap();
-        setOrder(response?.data?.order ? {
-          ...response.data.order,
-          promoCode: appliedPromo?.code ?? null,
-          promoLabel: appliedPromo?.label ?? null,
-          promoSummary: appliedPromo?.summary ?? null,
-        } : null);
+        setOrder(response?.data?.order ?? null);
+        clearMarketplacePromoCode();
         if (isBuyNowMode) {
           clearBuyNowCheckoutItem();
         } else {
@@ -288,8 +337,8 @@ const CheckoutPage = () => {
         </header>
         <div className="checkout-success">
           <p className="checkout-success__number">Order number: {order.orderNumber}</p>
-          {order.promoSummary ? (
-            <p className="checkout-success__info">Promo perk: {order.promoSummary}</p>
+          {order.promo?.description ? (
+            <p className="checkout-success__info">Promo applied: {order.promo.description}</p>
           ) : null}
           <ul className="checkout-success__items">
             {(order.items ?? []).map((item) => (
@@ -509,26 +558,38 @@ const CheckoutPage = () => {
           <dl>
             <div>
               <dt>Subtotal</dt>
-              <dd>{formatCurrency(totals.subtotal)}</dd>
+              <dd>{formatCurrency(displayPricing.subtotal)}</dd>
             </div>
+            {displayPricing.discountAmount > 0 ? (
+              <div className="checkout-summary__discount">
+                <dt>Promo discount</dt>
+                <dd>-{formatCurrency(displayPricing.discountAmount)}</dd>
+              </div>
+            ) : null}
             <div>
               <dt>Shipping</dt>
-              <dd>{totals.shipping ? formatCurrency(totals.shipping) : 'Free'}</dd>
+              <dd>{displayPricing.shippingCost ? formatCurrency(displayPricing.shippingCost) : 'Free'}</dd>
             </div>
             <div>
               <dt>Tax</dt>
-              <dd>{totals.tax ? formatCurrency(totals.tax) : 'N/A'}</dd>
+              <dd>{displayPricing.tax ? formatCurrency(displayPricing.tax) : 'N/A'}</dd>
             </div>
             <div className="checkout-summary__total">
               <dt>Total</dt>
-              <dd>{formatCurrency(totals.total)}</dd>
+              <dd>{formatCurrency(displayPricing.total)}</dd>
             </div>
           </dl>
-          {appliedPromo ? (
+          {displayPricing.promo ? (
             <div className="checkout-summary__promo">
-              <strong>Promo perk: {appliedPromo.label}</strong>
-              <p>{appliedPromo.summary}</p>
-              <small>Live pricing remains unchanged in this demo checkout.</small>
+              <strong>Promo applied: {displayPricing.promo.code}</strong>
+              <p>{displayPricing.promo.description || `${displayPricing.promo.label} is active for this order.`}</p>
+              {promoNotice ? <small>{promoNotice}</small> : null}
+            </div>
+          ) : promoNotice ? (
+            <div className="checkout-summary__promo">
+              <strong>Promo update</strong>
+              <p>{promoNotice}</p>
+              <small>Apply another code from the cart if needed.</small>
             </div>
           ) : null}
         </aside>

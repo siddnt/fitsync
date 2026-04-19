@@ -91,8 +91,13 @@ const ContactPage = () => {
       <div className="contact-overlay" />
       <div className="contact-container">
         <div className="contact-header">
-          <h1>Get in Touch</h1>
-          <p>Route support requests with the right context so billing, membership, technical, and marketplace issues reach the correct queue faster.</p>
+          <h1>Open a Support Ticket</h1>
+          <p>Route billing, membership, technical, and marketplace issues to the right support queue with enough context for a faster reply.</p>
+          {user ? (
+            <div className="contact-page__actions">
+              <Link to="/support" className="secondary-button">View my tickets</Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="contact-insights">
@@ -119,10 +124,16 @@ const ContactPage = () => {
           </div>
         ) : null}
 
+        {user ? (
+          <div className="contact-context">
+            Signed-in tickets and admin or manager replies appear in <Link to="/support">Support</Link>.
+          </div>
+        ) : null}
+
         {isSuccess ? (
           <div className="contact-success">
             <span className="success-icon">OK</span>
-            Message sent successfully. We will get back to you soon.
+            Message sent successfully. {user ? <Link to="/support">View the reply thread in Support.</Link> : 'We will get back to you soon.'}
           </div>
         ) : null}
 

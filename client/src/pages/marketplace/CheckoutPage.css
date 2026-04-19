@@ -186,6 +186,10 @@
   color: var(--muted-text-color);
 }
 
+.checkout-summary dl .checkout-summary__discount {
+  color: #86efac;
+}
+
 .checkout-summary dl dt {
   font-weight: 500;
 }

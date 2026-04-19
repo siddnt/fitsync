@@ -96,9 +96,11 @@ export const buildInvoiceMarkup = (order) => {
           <div class="card">
             <h3>Order summary</h3>
             <div class="totals-row"><span>Subtotal</span><span>${escapeHtml(formatCurrency(order?.subtotal))}</span></div>
+            ${Number(order?.discountAmount ?? 0) > 0 ? `<div class="totals-row"><span>Promo discount</span><span>-${escapeHtml(formatCurrency(order?.discountAmount))}</span></div>` : ''}
             <div class="totals-row"><span>Tax</span><span>${escapeHtml(formatCurrency(order?.tax))}</span></div>
             <div class="totals-row"><span>Shipping</span><span>${escapeHtml(formatCurrency(order?.shippingCost))}</span></div>
             <div class="totals-row total-strong"><span>Total</span><span>${escapeHtml(formatCurrency(order?.total))}</span></div>
+            ${order?.promo?.code ? `<p class="muted" style="margin-top: 8px;">Promo ${escapeHtml(order.promo.code)}${order?.promo?.description ? ` • ${escapeHtml(order.promo.description)}` : ''}</p>` : ''}
           </div>
         </div>
 
@@ -142,9 +144,11 @@ const buildInvoicePdfString = (order) => {
     '',
     'Summary',
     `Subtotal: ${formatPdfAmount(order?.subtotal)}`,
+    ...(Number(order?.discountAmount ?? 0) > 0 ? [`Promo discount: -${formatPdfAmount(order?.discountAmount)}`] : []),
     `Tax: ${formatPdfAmount(order?.tax)}`,
     `Shipping: ${formatPdfAmount(order?.shippingCost)}`,
     `Total: ${formatPdfAmount(order?.total)}`,
+    ...(order?.promo?.code ? [`Promo: ${order.promo.code}${order?.promo?.description ? ` - ${order.promo.description}` : ''}`] : []),
     '',
     'Items',
     ...(itemLines.length ? itemLines : ['No items recorded']),

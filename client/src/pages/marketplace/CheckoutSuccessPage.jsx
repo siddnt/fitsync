@@ -11,6 +11,7 @@ import {
   clearPendingOrderSnapshot,
   readPendingOrderSnapshot,
 } from './checkoutState.js';
+import { clearMarketplacePromoCode } from './marketplaceStorage.js';
 
 const MAX_POLLS = 12;
 const POLL_INTERVAL_MS = 5000;
@@ -26,7 +27,7 @@ const CheckoutSuccessPage = () => {
   );
   const [pollCount, setPollCount] = useState(0);
   const pendingOrderSnapshot = readPendingOrderSnapshot();
-  const promoSummary = orderData?.promoSummary ?? pendingOrderSnapshot?.promoSummary ?? null;
+  const promo = orderData?.promo ?? pendingOrderSnapshot?.promo ?? null;
 
   const {
     data: orderResponse,
@@ -56,6 +57,7 @@ const CheckoutSuccessPage = () => {
       setOrderData(orderResponse.data.order);
       setFetchError(null);
       clearPendingOrderSnapshot();
+      clearMarketplacePromoCode();
       if (pendingOrderSnapshot?.checkoutMode === 'buy-now') {
         clearBuyNowCheckoutItem();
       } else {
@@ -227,6 +229,12 @@ const CheckoutSuccessPage = () => {
             <span>Subtotal</span>
             <span>{formatCurrency(orderData.subtotal)}</span>
           </div>
+          {orderData.discountAmount > 0 ? (
+            <div className="checkout-success__total-row">
+              <span>Promo discount</span>
+              <span>-{formatCurrency(orderData.discountAmount)}</span>
+            </div>
+          ) : null}
           {orderData.shippingCost > 0 ? (
             <div className="checkout-success__total-row">
               <span>Shipping</span>
@@ -291,10 +299,14 @@ const CheckoutSuccessPage = () => {
           </p>
         </div>
 
-        {promoSummary ? (
+        {promo ? (
           <div className="checkout-success__address">
             <h3>Promo perk applied</h3>
-            <p>{promoSummary}</p>
+            <p>
+              {promo?.code ? `${promo.code}: ` : ''}
+              {promo?.description || promo?.label || 'Promo discount applied to this order.'}
+              {promo?.discountAmount > 0 ? ` You saved ${formatCurrency(promo.discountAmount)}.` : ''}
+            </p>
           </div>
         ) : null}
 
@@ -346,7 +358,7 @@ const CheckoutSuccessPage = () => {
             <small>Returns and refunds</small>
             <strong>Review the return window</strong>
             <p>Delivered items can be returned from your orders page once the seller marks them fulfilled. Refund amounts and seller notes will appear item by item.</p>
-            <Link to="/contact?subject=Marketplace%20return%20question" className="btn btn-secondary">
+            <Link to="/support/new?subject=Marketplace%20return%20question" className="btn btn-secondary">
               Ask about returns
             </Link>
           </div>

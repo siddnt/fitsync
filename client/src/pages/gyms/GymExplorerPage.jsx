@@ -167,6 +167,7 @@ const GymExplorerPage = () => {
     enrichedGyms.flatMap((gym) => [
       { id: `name-${gym.id}`, label: gym.name, meta: `${gym.city ?? 'Unknown city'} gym` },
       { id: `city-${gym.id}`, label: gym.city, meta: `City | ${gym.name ?? 'Unnamed gym'}` },
+      { id: `postal-${gym.id}`, label: gym.postalCode, meta: `PIN | ${gym.name ?? 'Unnamed gym'}` },
       ...((gym.amenities || []).map((amenity, index) => ({
         id: `amenity-${gym.id}-${index}`,
         label: amenity,
@@ -177,11 +178,18 @@ const GymExplorerPage = () => {
   ), [enrichedGyms, filters.search]);
 
   const citySuggestions = useMemo(() => buildSuggestionList(
-    enrichedGyms.map((gym) => ({
-      id: `city-${gym.id}`,
-      label: gym.city,
-      meta: gym.name ?? 'Listed gym',
-    })),
+    enrichedGyms.flatMap((gym) => ([
+      {
+        id: `city-${gym.id}`,
+        label: gym.city,
+        meta: `${gym.name ?? 'Listed gym'} | City`,
+      },
+      {
+        id: `postal-${gym.id}`,
+        label: gym.postalCode,
+        meta: `${gym.name ?? 'Listed gym'} | PIN code`,
+      },
+    ])),
     filters.city,
   ), [enrichedGyms, filters.city]);
 

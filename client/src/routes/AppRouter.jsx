@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 const LandingPage = lazy(() => import('../pages/landing/LandingPage.jsx'));
@@ -51,12 +51,18 @@ const DashboardLanding = lazy(() => import('../pages/dashboards/DashboardLanding
 const NotFoundPage = lazy(() => import('../pages/errors/NotFoundPage.jsx'));
 const AboutPage = lazy(() => import('../pages/about/AboutPage.jsx'));
 const ContactPage = lazy(() => import('../pages/contact/ContactPage.jsx'));
+const SupportHistoryPage = lazy(() => import('../pages/contact/SupportHistoryPage.jsx'));
 const PrivacyPage = lazy(() => import('../pages/privacy/PrivacyPage.jsx'));
 const TermsPage = lazy(() => import('../pages/terms/TermsPage.jsx'));
 
 const routeFallback = (
   <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>
 );
+
+const LegacyRouteRedirect = ({ to }) => {
+  const location = useLocation();
+  return <Navigate replace to={`${to}${location.search}${location.hash}`} />;
+};
 
 const AppRouter = () => (
   <BrowserRouter>
@@ -65,7 +71,10 @@ const AppRouter = () => (
         <Route element={<AppLayout />}>
           <Route index element={<LandingPage />} />
           <Route path="about" element={<AboutPage />} />
-          <Route path="contact" element={<ContactPage />} />
+          <Route path="support" element={<SupportHistoryPage />} />
+          <Route path="support/new" element={<ContactPage />} />
+          <Route path="contact" element={<LegacyRouteRedirect to="/support/new" />} />
+          <Route path="contact/history" element={<LegacyRouteRedirect to="/support" />} />
           <Route path="privacy" element={<PrivacyPage />} />
           <Route path="terms" element={<TermsPage />} />
           <Route path="gyms" element={<GymExplorerPage />} />

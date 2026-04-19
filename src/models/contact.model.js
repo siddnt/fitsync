@@ -12,6 +12,11 @@ const contactSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    submittedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
     subject: {
       type: String,
       trim: true,
@@ -123,6 +128,7 @@ const contactSchema = new mongoose.Schema(
 contactSchema.index({ status: 1, priority: 1, createdAt: -1 });
 contactSchema.index({ assignedTo: 1, status: 1, createdAt: -1 });
 contactSchema.index({ gym: 1, status: 1, createdAt: -1 });
+contactSchema.index({ submittedBy: 1, createdAt: -1 });
 
 const Contact = mongoose.model("Contact", contactSchema);
 

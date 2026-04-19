@@ -1015,12 +1015,21 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
       id: order._id,
       orderNumber: order.orderNumber,
       subtotal: formatCurrency(order.subtotal, 'INR'),
+      discountAmount: formatCurrency(order.discountAmount ?? 0, 'INR'),
       tax: formatCurrency(order.tax, 'INR'),
       shippingCost: formatCurrency(order.shippingCost, 'INR'),
       total: formatCurrency(order.total, 'INR'),
       status: summariseOrderStatus(order),
       paymentMethod: order.paymentMethod ?? 'Cash on Delivery',
       createdAt: order.createdAt,
+      promo: order.promo
+        ? {
+            code: order.promo.code ?? '',
+            label: order.promo.label ?? '',
+            description: order.promo.description ?? '',
+            discountAmount: formatCurrency(order.promo.discountAmount ?? 0, 'INR'),
+          }
+        : null,
       itemsCount: items.reduce((total, item) => total + (item.quantity || 0), 0),
       shippingAddress: order.shippingAddress ?? null,
       items,
@@ -3700,6 +3709,7 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
       id: order._id,
       orderNumber: order.orderNumber,
       subtotal: formatCurrency(order.subtotal, 'INR'),
+      discountAmount: formatCurrency(order.discountAmount ?? 0, 'INR'),
       tax: formatCurrency(order.tax, 'INR'),
       shippingCost: formatCurrency(order.shippingCost, 'INR'),
       total: formatCurrency(order.total, 'INR'),
@@ -3707,6 +3717,14 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
       paymentMethod: order.paymentMethod ?? 'Cash on Delivery',
       createdAt: order.createdAt,
       shippingAddress: order.shippingAddress ?? null,
+      promo: order.promo
+        ? {
+            code: order.promo.code ?? '',
+            label: order.promo.label ?? '',
+            description: order.promo.description ?? '',
+            discountAmount: formatCurrency(order.promo.discountAmount ?? 0, 'INR'),
+          }
+        : null,
       user: toContact(order.user),
       seller: toContact(sellerEntity),
       items: order.orderItems?.map((item) => ({

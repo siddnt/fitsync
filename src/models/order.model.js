@@ -155,6 +155,40 @@ const addressSchema = new mongoose.Schema({
     }
 });
 
+const promoSnapshotSchema = new mongoose.Schema({
+    promoId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MarketplacePromoCode",
+        default: null
+    },
+    code: {
+        type: String,
+        trim: true,
+        uppercase: true
+    },
+    label: {
+        type: String,
+        trim: true
+    },
+    description: {
+        type: String,
+        trim: true
+    },
+    discountType: {
+        type: String,
+        enum: ["percentage", "fixed"]
+    },
+    discountValue: {
+        type: Number,
+        min: 0
+    },
+    discountAmount: {
+        type: Number,
+        min: 0,
+        default: 0
+    }
+}, { _id: false });
+
 // Order Schema
 const orderSchema = new mongoose.Schema(
     {
@@ -188,6 +222,16 @@ const orderSchema = new mongoose.Schema(
             type: Number,
             required: true,
             default: 0
+        },
+        discountAmount: {
+            type: Number,
+            required: true,
+            default: 0,
+            min: 0
+        },
+        promo: {
+            type: promoSnapshotSchema,
+            default: null
         },
         total: {
             type: Number,

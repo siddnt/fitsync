@@ -1,14 +1,67 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Link } from 'react-router-dom';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import GymMembershipActions from './GymMembershipActions.jsx';
 import { useGetGymReviewsQuery, useSubmitGymReviewMutation } from '../../../services/gymsApi.js';
-import { formatDate, formatStatus } from '../../../utils/format.js';
+import { formatStatus, formatDate } from '../../../utils/format.js';
+import '../GymDetailsPage.css';
+
+const WEEKDAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 const parseAmount = (value) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+};
+
+const normalizeWebsiteUrl = (value) => {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
+const buildMapLink = (gym) => {
+  const parts = [gym?.location?.address, gym?.location?.city, gym?.location?.state].filter(Boolean);
+  if (!parts.length) {
+    return '';
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}`;
+};
+
+const buildWeeklyHours = (schedule = {}) => {
+  const rawDays = Array.isArray(schedule?.workingDays) ? schedule.workingDays : [];
+  const publishedDays = new Set(
+    rawDays.map((day) => String(day ?? '').trim().slice(0, 3).toLowerCase()).filter(Boolean),
+  );
+  const hasHours = Boolean(schedule?.open && schedule?.close);
+  const hoursLabel = hasHours ? `Open ${schedule.open} - ${schedule.close}` : 'Hours not published';
+  const assumeAllDays = hasHours && publishedDays.size === 0;
+  return WEEKDAY_ORDER.map((day) => {
+    const isOpen = assumeAllDays || publishedDays.has(day.slice(0, 3));
+    return {
+      key: day,
+      label: formatStatus(day),
+      hours: isOpen ? hoursLabel : 'Closed',
+    };
+  });
+};
+
+const getTrainerMeta = (trainer) => {
+  const parts = [];
+  if (typeof trainer?.experienceYears === 'number' && trainer.experienceYears > 0) {
+    parts.push(`${trainer.experienceYears}+ years experience`);
+  }
+  if (typeof trainer?.mentoredCount === 'number' && trainer.mentoredCount > 0) {
+    parts.push(`${trainer.mentoredCount} trainees supported`);
+  }
+  if (Array.isArray(trainer?.specializations) && trainer.specializations.length) {
+    parts.push(trainer.specializations.slice(0, 3).join(', '));
+  }
+  return parts;
 };
 
 const Icon = ({ name }) => {
@@ -197,11 +250,7 @@ const GymHighlight = ({
     gym.contact?.email,
     gym.contact?.website,
   ].filter(Boolean).join(' | ') || 'Contact details not published';
-  const workingDays = Array.isArray(gym.schedule?.workingDays)
-    ? gym.schedule.workingDays
-    : Array.isArray(gym.schedule?.days)
-      ? gym.schedule.days
-      : [];
+  const workingDays = Array.isArray(gym.schedule?.workingDays) ? gym.schedule.workingDays : [];
   const workingDayLabel = workingDays.length
     ? workingDays.map((day) => formatStatus(day)).join(', ')
     : 'Working days not published';
@@ -212,8 +261,23 @@ const GymHighlight = ({
     ? `${trainers.length} trainer${trainers.length > 1 ? 's' : ''} available`
     : 'Trainer roster not published';
 
-  const heroImage = Array.isArray(gym.gallery) ? gym.gallery.find(Boolean) : null;
+  const mediaGallery = Array.isArray(gym.gallery) ? gym.gallery.filter(Boolean) : [];
+  const heroImage = mediaGallery[0] ?? null;
   const heroInitial = (gym.name ?? 'G').trim().charAt(0).toUpperCase();
+
+  const websiteUrl = normalizeWebsiteUrl(gym.contact?.website);
+  const mapLink = buildMapLink(gym);
+  const weeklyHours = buildWeeklyHours(gym.schedule);
+  const pricingPlans = (Array.isArray(gym.pricing?.plans) ? gym.pricing.plans : [])
+    .filter((plan) => Number(plan?.price ?? plan?.mrp) > 0)
+    .sort((left, right) => Number(left?.price ?? left?.mrp ?? 0) - Number(right?.price ?? right?.mrp ?? 0));
+  const facilityPills = [...new Set([
+    ...(Array.isArray(gym.keyFeatures) ? gym.keyFeatures : []),
+    ...(Array.isArray(gym.amenities) ? gym.amenities : []),
+    ...(Array.isArray(gym.tags) ? gym.tags : []),
+    ...(Array.isArray(gym.features) ? gym.features : []),
+  ].map((entry) => String(entry ?? '').trim()).filter(Boolean))];
+  const locationLine = [gym.location?.city, gym.location?.state].filter(Boolean).join(', ');
 
   return (
     <article className="gym-highlight">
@@ -272,6 +336,15 @@ const GymHighlight = ({
         currency={currencyPrefix}
       />
 
+      <div className="gym-details__quick-actions">
+        {mapLink ? <a href={mapLink} target="_blank" rel="noreferrer">Open in Maps</a> : null}
+        {gym.contact?.phone ? <a href={`tel:${gym.contact.phone}`}>Call gym</a> : null}
+        {gym.contact?.email ? (
+          <a href={`mailto:${gym.contact.email}?subject=${encodeURIComponent(`Enquiry about ${gym.name}`)}`}>Email gym</a>
+        ) : null}
+        {websiteUrl ? <a href={websiteUrl} target="_blank" rel="noreferrer">Visit website</a> : null}
+      </div>
+
       <section className="gym-highlight__meta">
         <div>
           <span className="gym-highlight__meta-icon"><Icon name="user" /></span>
@@ -308,6 +381,35 @@ const GymHighlight = ({
             <span>{trainerSummary}</span>
           </div>
         </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="tag" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Pricing</strong>
+            <span>
+              {headlinePrice !== null
+                ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}${headlinePlanLabel ? ` / ${headlinePlanLabel}` : ''}`
+                : 'Pricing not published'}
+            </span>
+          </div>
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="star" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Ratings</strong>
+            <span>
+              {gym.analytics?.ratingCount
+                ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from ${gym.analytics.ratingCount} reviews`
+                : 'No ratings yet'}
+            </span>
+          </div>
+        </div>
+        <div>
+          <span className="gym-highlight__meta-icon"><Icon name="badge" /></span>
+          <div className="gym-highlight__meta-content">
+            <strong>Membership</strong>
+            <span>{membership ? `Your status: ${formatStatus(membership.status)}` : 'Open to new memberships'}</span>
+          </div>
+        </div>
       </section>
 
       <div className="gym-highlight__split">
@@ -334,43 +436,131 @@ const GymHighlight = ({
         </section>
       </div>
 
-      <section className="gym-highlight__meta">
-        <div>
-          <span className="gym-highlight__meta-icon"><Icon name="tag" /></span>
-          <div className="gym-highlight__meta-content">
-            <strong>Pricing</strong>
-            <span>
-              {headlinePrice !== null
-                ? `${currencyPrefix}${headlinePrice.toLocaleString('en-IN')}${headlinePlanLabel ? ` starting with ${headlinePlanLabel}` : ''}`
-                : 'Pricing not published'}
-            </span>
-          </div>
+      {mediaGallery.length > 1 ? (
+        <div className="gym-details__media-grid">
+          {mediaGallery.slice(0, 5).map((image, index) => (
+            <div key={`${image}-${index}`} className="gym-details__media-thumb">
+              <img src={image} alt={`${gym.name} gallery ${index + 1}`} />
+            </div>
+          ))}
         </div>
-        <div>
-          <span className="gym-highlight__meta-icon"><Icon name="star" /></span>
-          <div className="gym-highlight__meta-content">
-            <strong>Ratings</strong>
-            <span>
-              {gym.analytics?.ratingCount
-                ? `${(Number(gym.analytics?.rating ?? 0)).toFixed(1)} / 5 from ${gym.analytics.ratingCount} reviews`
-                : 'No ratings yet'}
-            </span>
+      ) : null}
+
+      {pricingPlans.length ? (
+        <section className="gym-details__section">
+          <div className="gym-details__section-header">
+            <h2>Membership plans</h2>
+            <p>Compare durations and discounts before you join.</p>
           </div>
-        </div>
-        <div>
-          <span className="gym-highlight__meta-icon"><Icon name="badge" /></span>
-          <div className="gym-highlight__meta-content">
-            <strong>Membership</strong>
-            <span>{membership ? `Your status: ${formatStatus(membership.status)}` : 'Open to new memberships'}</span>
+          <div className="gym-details__plan-grid">
+            {pricingPlans.map((plan) => {
+              const planPrice = Number(plan.price ?? plan.mrp ?? 0);
+              const planMrp = Number(plan.mrp ?? plan.price ?? 0);
+              const hasDiscount = Number.isFinite(planMrp) && planMrp > planPrice;
+              return (
+                <article key={plan.code ?? plan.label} className="gym-details__plan-card">
+                  <small>{plan.durationMonths ? `${plan.durationMonths} month${plan.durationMonths > 1 ? 's' : ''}` : 'Flexible duration'}</small>
+                  <strong>{plan.label}</strong>
+                  <p className="gym-details__plan-price">
+                    {currencyPrefix}{planPrice.toLocaleString('en-IN')}
+                  </p>
+                  {hasDiscount ? (
+                    <p className="gym-details__plan-note">
+                      MRP {currencyPrefix}{planMrp.toLocaleString('en-IN')} | Save {Math.round(((planMrp - planPrice) / planMrp) * 100)}%
+                    </p>
+                  ) : (
+                    <p className="gym-details__plan-note">Current listed plan price.</p>
+                  )}
+                </article>
+              );
+            })}
           </div>
-        </div>
-        <div>
-          <span className="gym-highlight__meta-icon"><Icon name="arrow" /></span>
-          <div className="gym-highlight__meta-content">
-            <strong>More details</strong>
-            <span><Link to={`/gyms/${gym.id}`}>Open full gym profile</Link></span>
+        </section>
+      ) : null}
+
+      <section className="gym-details__grid">
+        <article>
+          <h2>Location</h2>
+          <p>{gym.location?.address || 'Address pending'}</p>
+          {locationLine && locationLine.toLowerCase() !== String(gym.location?.address ?? '').trim().toLowerCase() ? (
+            <p>{locationLine}</p>
+          ) : null}
+          {gym.location?.coordinates?.lat && gym.location?.coordinates?.lng ? (
+            <p>
+              {Number(gym.location.coordinates.lat).toFixed(5)}, {Number(gym.location.coordinates.lng).toFixed(5)}
+            </p>
+          ) : null}
+          {mapLink ? <a href={mapLink} target="_blank" rel="noreferrer">Get directions</a> : null}
+        </article>
+        <article>
+          <h2>Contact</h2>
+          <p>{gym.contact?.phone || 'Phone not published'}</p>
+          <p>{gym.contact?.email || 'Email not published'}</p>
+          <p>{websiteUrl || 'Website not published'}</p>
+        </article>
+        <article>
+          <h2>Facilities and focus</h2>
+          {facilityPills.length ? (
+            <div className="gym-details__chips">
+              {facilityPills.map((feature) => (
+                <span key={feature}>{feature}</span>
+              ))}
+            </div>
+          ) : (
+            <p>No amenities or focus areas have been published yet.</p>
+          )}
+        </article>
+        <article>
+          <h2>Weekly hours</h2>
+          <div className="gym-details__hours-list">
+            {weeklyHours.map((entry) => (
+              <div key={entry.key} className="gym-details__hours-row">
+                <span>{entry.label}</span>
+                <strong>{entry.hours}</strong>
+              </div>
+            ))}
           </div>
+        </article>
+      </section>
+
+      <section className="gym-details__section">
+        <div className="gym-details__section-header">
+          <h2>Trainer preview</h2>
+          <p>Meet the active trainers currently assigned to this gym.</p>
         </div>
+        {trainers.length ? (
+          <div className="gym-details__trainer-grid">
+            {trainers.slice(0, 6).map((trainer) => (
+              <article key={trainer.id} className="gym-details__trainer-card">
+                <div className="gym-details__trainer-avatar">
+                  {trainer.profilePicture ? (
+                    <img src={trainer.profilePicture} alt={trainer.name} />
+                  ) : (
+                    <span>{trainer.name?.slice(0, 1) ?? 'T'}</span>
+                  )}
+                </div>
+                <div>
+                  <h3>{trainer.name}</h3>
+                  <p>{trainer.headline || 'Active trainer at this gym'}</p>
+                </div>
+                <div className="gym-details__trainer-meta">
+                  {getTrainerMeta(trainer).length ? (
+                    getTrainerMeta(trainer).map((entry) => <span key={entry}>{entry}</span>)
+                  ) : (
+                    <span>Profile details will appear once the trainer completes them.</span>
+                  )}
+                </div>
+                <p className="gym-details__trainer-bio">
+                  {trainer.bio || 'Trainer biography will appear once published.'}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="gym-details__empty-card">
+            <p>No active trainers are assigned to this gym yet.</p>
+          </div>
+        )}
       </section>
 
       <section className="gym-highlight__reviews">
@@ -485,14 +675,24 @@ GymHighlight.propTypes = {
     }),
     location: PropTypes.shape({
       address: PropTypes.string,
+      city: PropTypes.string,
+      state: PropTypes.string,
+      coordinates: PropTypes.shape({
+        lat: PropTypes.number,
+        lng: PropTypes.number,
+      }),
     }),
+    gallery: PropTypes.arrayOf(PropTypes.string),
+    keyFeatures: PropTypes.arrayOf(PropTypes.string),
+    amenities: PropTypes.arrayOf(PropTypes.string),
+    tags: PropTypes.arrayOf(PropTypes.string),
     contact: PropTypes.shape({
       phone: PropTypes.string,
       email: PropTypes.string,
       website: PropTypes.string,
     }),
     schedule: PropTypes.shape({
-      days: PropTypes.arrayOf(PropTypes.string),
+      workingDays: PropTypes.arrayOf(PropTypes.string),
       open: PropTypes.string,
       close: PropTypes.string,
     }),
@@ -538,6 +738,12 @@ GymHighlight.propTypes = {
     PropTypes.shape({
       id: PropTypes.string.isRequired,
       name: PropTypes.string.isRequired,
+      profilePicture: PropTypes.string,
+      headline: PropTypes.string,
+      bio: PropTypes.string,
+      experienceYears: PropTypes.number,
+      mentoredCount: PropTypes.number,
+      specializations: PropTypes.arrayOf(PropTypes.string),
     }),
   ),
   userId: PropTypes.string,

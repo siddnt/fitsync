@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { authActions } from '../auth/authSlice.js';
 
 const initialState = {
   items: [],
@@ -63,6 +64,9 @@ const cartSlice = createSlice({
     clearCart(state) {
       state.items = [];
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(authActions.signOut, () => initialState);
   },
 });
 

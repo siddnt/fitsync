@@ -1,5 +1,28 @@
 import mongoose from "mongoose";
 
+const promoSnapshotSchema = new mongoose.Schema(
+    {
+        promoId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "MarketplacePromoCode",
+            default: null
+        },
+        code: String,
+        label: String,
+        description: String,
+        discountType: {
+            type: String,
+            enum: ["percentage", "fixed"]
+        },
+        discountValue: Number,
+        discountAmount: {
+            type: Number,
+            default: 0
+        }
+    },
+    { _id: false }
+);
+
 const orderSnapshotSchema = new mongoose.Schema(
     {
         items: [
@@ -15,6 +38,14 @@ const orderSnapshotSchema = new mongoose.Schema(
         subtotal: Number,
         tax: Number,
         shippingCost: Number,
+        discountAmount: {
+            type: Number,
+            default: 0
+        },
+        promo: {
+            type: promoSnapshotSchema,
+            default: null
+        },
         total: Number,
         shippingAddress: {
             firstName: String,

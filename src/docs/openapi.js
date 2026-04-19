@@ -220,7 +220,7 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         description: 'Indexed text search with Meilisearch fallback, stale-while-revalidate caching, ETag, and Last-Modified headers.',
         parameters: [
           queryParam('search', 'Keyword search'),
-          queryParam('city', 'City filter'),
+          queryParam('city', 'City or PIN code filter'),
           queryParam('amenities', 'Amenity filter'),
           queryParam('pagination', 'Set to `cursor` to enable cursor-based pagination for browse results'),
           queryParam('cursor', 'Opaque cursor returned from a previous browse response'),
@@ -637,6 +637,13 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
         parameters: [queryParam('status', 'Status filter')],
       }),
     },
+    '/api/contact/mine': {
+      get: endpoint({
+        tag: 'Contact',
+        summary: 'List my contact messages',
+        security: bearerSecurity,
+      }),
+    },
     '/api/contact/{id}/status': {
       patch: endpoint({
         tag: 'Contact',
@@ -658,7 +665,7 @@ export const buildOpenApiDocument = ({ origin = '/' } = {}) => ({
     '/api/contact/{id}/reply': {
       post: endpoint({
         tag: 'Contact',
-        summary: 'Reply to contact message',
+        summary: 'Reply to or continue a support ticket conversation',
         security: bearerSecurity,
         parameters: [pathParam('id', 'Contact id')],
         requestBody: body(),

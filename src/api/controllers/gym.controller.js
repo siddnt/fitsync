@@ -92,15 +92,48 @@ const normalizeLocationInput = (location) => {
 const normalizeSearchTerm = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const buildFilters = ({ city, amenities }) => {
-  const filter = { status: 'active', isPublished: true };
+const mergeFilterClause = (baseFilter, clause) => {
+  if (!clause) {
+    return baseFilter;
+  }
 
-  if (city) {
-    filter['location.city'] = { $regex: city, $options: 'i' };
+  const nextFilter = { ...baseFilter };
+  const existingAnd = Array.isArray(nextFilter.$and) ? nextFilter.$and : [];
+
+  if (existingAnd.length) {
+    nextFilter.$and = [...existingAnd, clause];
+    return nextFilter;
+  }
+
+  nextFilter.$and = [clause];
+  return nextFilter;
+};
+
+const buildLocationFilterClause = (value) => {
+  const normalized = normalizeSearchTerm(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const locationRegex = new RegExp(escapeRegex(normalized), 'i');
+  return {
+    $or: [
+      { 'location.city': locationRegex },
+      { 'location.postalCode': locationRegex },
+    ],
+  };
+};
+
+const buildFilters = ({ city, amenities }) => {
+  let filter = { status: 'active', isPublished: true };
+
+  const locationClause = buildLocationFilterClause(city);
+  if (locationClause) {
+    filter = mergeFilterClause(filter, locationClause);
   }
 
   if (amenities?.length) {
-    filter.amenities = { $all: amenities };
+    filter = mergeFilterClause(filter, { amenities: { $all: amenities } });
   }
 
   return filter;
@@ -263,7 +296,9 @@ const mapGym = (gym) => ({
         .join(', '),
     city: gym.location?.city,
     state: gym.location?.state,
+    postalCode: gym.location?.postalCode,
   },
+  postalCode: gym.location?.postalCode,
   pricing: mapGymPricing(gym.pricing),
   contact: gym.contact,
   schedule: {
@@ -375,10 +410,7 @@ const resolveGymSearchPlan = async (query = {}, { offset = 0, limit = 20 } = {})
     };
   }
 
-  const textFilters = {
-    ...baseFilters,
-    $text: { $search: search },
-  };
+  const textFilters = mergeFilterClause(baseFilters, { $text: { $search: search } });
 
   const textTotal = await Gym.countDocuments(textFilters);
   if (textTotal > 0) {
@@ -391,8 +423,7 @@ const resolveGymSearchPlan = async (query = {}, { offset = 0, limit = 20 } = {})
   }
 
   const partialRegex = new RegExp(escapeRegex(search), 'i');
-  const partialFilters = {
-    ...baseFilters,
+  const partialFilters = mergeFilterClause(baseFilters, {
     $or: [
       { name: partialRegex },
       { description: partialRegex },
@@ -400,8 +431,9 @@ const resolveGymSearchPlan = async (query = {}, { offset = 0, limit = 20 } = {})
       { amenities: partialRegex },
       { keyFeatures: partialRegex },
       { 'location.city': partialRegex },
+      { 'location.postalCode': partialRegex },
     ],
-  };
+  });
 
   const partialTotal = await Gym.countDocuments(partialFilters);
   if (partialTotal > 0) {

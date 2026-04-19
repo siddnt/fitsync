@@ -39,6 +39,8 @@ const deriveOrderReference = (message) => {
   return match?.[0] ?? '';
 };
 
+const isClosedTicket = (message) => String(message?.status ?? '').trim().toLowerCase() === 'closed';
+
 const MessagesPage = () => {
   const currentUser = useAppSelector((state) => state.auth.user);
   const [statusFilter, setStatusFilter] = useState('');
@@ -210,6 +212,7 @@ const MessagesPage = () => {
             const replyDraft = replyDrafts[msg._id] ?? '';
             const resolvedAssignee = assignmentOverrides[msg._id] ?? msg.assignedTo ?? null;
             const orderReference = deriveOrderReference(msg);
+            const ticketClosed = isClosedTicket(msg);
 
             return (
               <div key={msg._id} className={`message-card ${msg.status}`}>
@@ -245,9 +248,9 @@ const MessagesPage = () => {
                       type="button"
                       className="messages-action"
                       onClick={() => handleAssignToMe(msg._id)}
-                      disabled={isAssigning}
+                      disabled={isAssigning || ticketClosed}
                     >
-                      {isAssigning ? 'Assigning...' : 'Assign to me'}
+                      {ticketClosed ? 'Closed ticket' : isAssigning ? 'Assigning...' : 'Assign to me'}
                     </button>
                   </div>
                 </div>
@@ -278,6 +281,7 @@ const MessagesPage = () => {
                       id={`status-${msg._id}`}
                       value={draftStatus}
                       onChange={(event) => setStatusDrafts((prev) => ({ ...prev, [msg._id]: event.target.value }))}
+                      disabled={ticketClosed}
                     >
                       <option value="new">New</option>
                       <option value="read">Read</option>
@@ -293,6 +297,7 @@ const MessagesPage = () => {
                       id={`priority-${msg._id}`}
                       value={draftPriority}
                       onChange={(event) => setPriorityDrafts((prev) => ({ ...prev, [msg._id]: event.target.value }))}
+                      disabled={ticketClosed}
                     >
                       <option value="low">Low</option>
                       <option value="normal">Normal</option>
@@ -306,7 +311,8 @@ const MessagesPage = () => {
                       id={`notes-${msg._id}`}
                       value={draftNotes}
                       onChange={(event) => setInternalNotesDrafts((prev) => ({ ...prev, [msg._id]: event.target.value }))}
-                      placeholder="Optional internal handoff notes"
+                      placeholder={ticketClosed ? 'Closed tickets are locked.' : 'Optional internal handoff notes'}
+                      disabled={ticketClosed}
                     />
                   </div>
 
@@ -314,11 +320,17 @@ const MessagesPage = () => {
                     type="button"
                     className="messages-action"
                     onClick={() => handleStatusChange(msg._id)}
-                    disabled={isUpdatingStatus}
+                    disabled={isUpdatingStatus || ticketClosed}
                   >
-                    {isUpdatingStatus ? 'Saving...' : 'Save ticket'}
+                    {ticketClosed ? 'Ticket locked' : isUpdatingStatus ? 'Saving...' : 'Save ticket'}
                   </button>
                 </div>
+
+                {ticketClosed ? (
+                  <p className="messages-closed-note">
+                    This ticket is closed. To continue the discussion, the user must open a new support ticket.
+                  </p>
+                ) : null}
 
                 <div className="message-replies">
                   <h4>Replies</h4>
@@ -344,24 +356,25 @@ const MessagesPage = () => {
                     id={`reply-${msg._id}`}
                     value={replyDraft}
                     onChange={(event) => setReplyDrafts((prev) => ({ ...prev, [msg._id]: event.target.value }))}
-                    placeholder="Write an internal or customer-facing response"
+                    placeholder={ticketClosed ? 'Closed tickets cannot be replied to.' : 'Write an internal or customer-facing response'}
+                    disabled={ticketClosed}
                   />
                   <div className="message-reply-actions">
                     <button
                       type="button"
                       className="messages-action"
                       onClick={() => handleReply(msg._id, false)}
-                      disabled={isReplying}
+                      disabled={isReplying || ticketClosed}
                     >
-                      {isReplying ? 'Sending...' : 'Reply'}
+                      {ticketClosed ? 'Ticket closed' : isReplying ? 'Sending...' : 'Reply'}
                     </button>
                     <button
                       type="button"
                       className="messages-action messages-action--secondary"
                       onClick={() => handleReply(msg._id, true)}
-                      disabled={isReplying}
+                      disabled={isReplying || ticketClosed}
                     >
-                      {isReplying ? 'Closing...' : 'Reply and close'}
+                      {ticketClosed ? 'Already closed' : isReplying ? 'Closing...' : 'Reply and close'}
                     </button>
                   </div>
                 </div>

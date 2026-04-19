@@ -52,6 +52,12 @@
   text-align: center;
 }
 
+.contact-page__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
 .contact-header h1 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -138,6 +144,12 @@
   display: flex;
   gap: 0.75rem;
   justify-content: center;
+}
+
+.contact-context a,
+.contact-success a {
+  color: #fff;
+  font-weight: 700;
 }
 
 .success-icon {

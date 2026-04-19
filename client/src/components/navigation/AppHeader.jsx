@@ -14,7 +14,9 @@ import './AppHeader.css';
 const AppHeader = () => {
   const { user } = useAppSelector((state) => state.auth);
   const cartItemCount = useAppSelector((state) =>
-    state.cart.items.reduce((total, item) => total + (item.quantity || 0), 0),
+    user
+      ? state.cart.items.reduce((total, item) => total + (item.quantity || 0), 0)
+      : 0,
   );
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -116,12 +118,13 @@ const AppHeader = () => {
           <NavLink to="/gyms">Gyms</NavLink>
           <NavLink to="/about">About Us</NavLink>
           <NavLink to="/marketplace">Marketplace</NavLink>
+          <NavLink to="/support">Support</NavLink>
           <NavLink
             to="/cart"
             className={({ isActive }) => `app-header__cart${isActive ? ' active' : ''}`}
           >
             Cart
-            {cartItemCount > 0 ? (
+            {user && cartItemCount > 0 ? (
               <span className="app-header__cart-count">{cartItemCount}</span>
             ) : null}
           </NavLink>
