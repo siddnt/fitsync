@@ -8,6 +8,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import toObjectId from '../../utils/toObjectId.js';
 import { MODERN_ITEM_STATUSES, normaliseOrderItemStatus } from '../../utils/orderStatus.js';
+import { invalidatePrefix } from '../../services/redis.service.js';
 
 const SELLER_PAYOUT_RATE = 0.85;
 
@@ -349,11 +350,17 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
   }
 
   if (search && search.trim()) {
-    const term = escapeRegex(search.trim());
-    filters.$or = [
-      { name: { $regex: term, $options: 'i' } },
-      { description: { $regex: term, $options: 'i' } },
-    ];
+    const term = search.trim();
+    // Use $text search for 3+ char queries (leverages text index)
+    if (term.length >= 3) {
+      filters.$text = { $search: term };
+    } else {
+      const escaped = escapeRegex(term);
+      filters.$or = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { description: { $regex: escaped, $options: 'i' } },
+      ];
+    }
   }
 
   const resolvedPageSize = Math.min(Math.max(Number(pageSize) || 24, 6), 60);
@@ -576,6 +583,9 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     })
     .lean();
 
+  // Invalidate marketplace caches
+  await invalidatePrefix('cache:marketplace');
+
   return res
     .status(201)
     .json(new ApiResponse(201, { order: mapBuyerOrder(populated) }, 'Order placed successfully'));
@@ -652,6 +662,9 @@ export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
+
+  // Invalidate marketplace product cache
+  await invalidatePrefix('cache:marketplace-product:');
 
   return res
     .status(201)
@@ -766,6 +779,9 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     isPublished: publishFlag,
     metadata: metadataEntries.length ? new Map(metadataEntries) : undefined,
   });
+
+  // Invalidate marketplace caches
+  await invalidatePrefix('cache:marketplace');
 
   return res
     .status(201)
@@ -893,6 +909,9 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
 
   await product.save();
 
+  // Invalidate marketplace caches
+  await invalidatePrefix('cache:marketplace');
+
   return res
     .status(200)
     .json(new ApiResponse(200, { product: mapProduct(product) }, 'Product updated successfully'));
@@ -907,6 +926,9 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
   }
 
   await product.deleteOne();
+
+  // Invalidate marketplace caches
+  await invalidatePrefix('cache:marketplace');
 
   return res
     .status(200)

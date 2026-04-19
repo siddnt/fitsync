@@ -58,6 +58,18 @@ npm run client:dev
 ```
 Serves at `http://localhost:5173` and proxies `/api` to the server.
 
+## Client install note
+If the client fails on Windows with a Rollup native module error such as `@rollup/rollup-win32-x64-msvc`, reinstall the client dependencies:
+```
+Remove-Item -Recurse -Force client/node_modules
+npm install --prefix client
+```
+Then start the client again with `npm run client:dev`.
+
+## API documentation
+- Swagger UI: `http://localhost:4000/api/docs`
+- Raw OpenAPI JSON: `http://localhost:4000/api/docs.json`
+
 ## Admin quick start
 - Create an admin user:
 ```

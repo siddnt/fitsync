@@ -32,6 +32,7 @@ const reviewSchema = new mongoose.Schema(
 
 // Compound index to ensure a user can only review a gym once
 reviewSchema.index({ user: 1, gym: 1 }, { unique: true });
+reviewSchema.index({ gym: 1, updatedAt: -1 });
 
 const Review = mongoose.model("Review", reviewSchema);
 

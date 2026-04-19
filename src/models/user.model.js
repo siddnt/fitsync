@@ -201,6 +201,8 @@ userSchema.methods.generateRefreshToken = function () {
     );
 };
 
+userSchema.index({ role: 1, status: 1 });
+
 const User = mongoose.model("User", userSchema);
 export { User };  // Keep named export for backward compatibility 
-export default User;  // Default export for cleaner imports 
+export default User;  // Default export for cleaner imports

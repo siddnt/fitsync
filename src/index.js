@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
 import app from "./app.js";
+import { initRedis } from "./services/redis.service.js";
 
 // Environment variables
 dotenv.config({
@@ -18,6 +19,9 @@ process.on("uncaughtException", (err) => {
 // Connect to database
 connectDB()
     .then(() => {
+        // Initialise Redis cache (non-blocking, app works without it)
+        initRedis();
+
         // Start the server
         const PORT = process.env.PORT || 4000;
         

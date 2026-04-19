@@ -72,5 +72,9 @@ productSchema.pre("validate", function (next) {
     next();
 });
 
+productSchema.index({ category: 1, isPublished: 1, status: 1 });
+productSchema.index({ isPublished: 1, price: 1 });
+productSchema.index({ name: 'text', description: 'text' });
+
 const Product = mongoose.model("Product", productSchema);
 export default Product;

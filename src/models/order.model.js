@@ -187,6 +187,10 @@ orderSchema.pre("save", async function(next) {
 });
 */
 
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ 'orderItems.product': 1 });
+orderSchema.index({ 'orderItems.seller': 1, createdAt: -1 });
+
 const Order = mongoose.model("Order", orderSchema);
 
-export default Order; 
+export default Order;

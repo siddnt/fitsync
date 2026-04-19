@@ -13,10 +13,11 @@ import {
 import { joinGym, leaveGym, getMyGymMembership, listGymTrainers } from '../controllers/gymMembership.controller.js';
 import { verifyJWT, authorizeRoles } from '../../middlewares/auth.middleware.js';
 import { upload } from '../../middlewares/multer.middleware.js';
+import { cacheMiddleware } from '../../middlewares/cache.middleware.js';
 
 const router = Router();
 
-router.get('/', listGyms);
+router.get('/', cacheMiddleware('gyms', 300), listGyms);
 router.post('/', verifyJWT, authorizeRoles('gym-owner', 'admin'), createGym);
 router.get('/:gymId/trainers', listGymTrainers);
 router.get(
@@ -38,7 +39,7 @@ router.post(
 	authorizeRoles('trainee'),
 	submitGymReview,
 );
-router.get('/:gymId/reviews', listGymReviews);
+router.get('/:gymId/reviews', cacheMiddleware('gym-reviews', 300), listGymReviews);
 router.get('/:gymId/gallery', getGymGallery);
 router.post(
 	'/:gymId/gallery',
@@ -47,8 +48,9 @@ router.post(
 	upload.single('photo'),
 	uploadGymGalleryPhoto,
 );
-router.get('/:gymId', getGymById);
+router.get('/:gymId', cacheMiddleware('gym-detail', 300), getGymById);
 router.post('/:gymId/impressions', recordImpression);
 router.put('/:gymId', verifyJWT, authorizeRoles('gym-owner', 'admin'), updateGym);
 
 export default router;
+

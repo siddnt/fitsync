@@ -188,6 +188,7 @@ const gymSchema = new mongoose.Schema(
 gymSchema.index({ "location.city": 1, createdAt: -1 });
 gymSchema.index({ status: 1, isPublished: 1 });
 gymSchema.index({ owner: 1 });
+gymSchema.index({ name: 'text', description: 'text', tags: 'text' });
 
 gymSchema.set("toJSON", { virtuals: true });
 
