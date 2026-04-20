@@ -119,7 +119,7 @@ const MarketplaceProductPage = () => {
       <section className="product-detail__grid">
         <div className="product-detail__media">
           {product.image ? (
-            <img src={product.image} alt={product.name} style={!inStock ? { filter: 'grayscale(100%)' } : {}} />
+            <img src={product.image} alt={product.name} style={!inStock ? { filter: 'grayscale(100%)' } : {}} onError={(e) => { e.target.style.display = 'none'; }} />
           ) : (
             <div className="product-detail__placeholder">
               {(product.name ?? '?').slice(0, 1)}

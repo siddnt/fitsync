@@ -335,7 +335,7 @@ function GymGallerySection({ gymPhotos, memberPhotos, fallbackGallery, gymName, 
           <span className={`${prefix}__gallery-tag`}>Photos</span>
           <div className={`${prefix}__gallery-grid`}>
             {gymPhotos.slice(0, limit).map((p) => (
-              <img key={p.id} src={p.imageUrl} alt={p.title} />
+              <img key={p.id} src={p.imageUrl} alt={p.title} onError={(e) => { e.target.style.display = 'none'; }} />
             ))}
           </div>
         </div>
@@ -346,7 +346,7 @@ function GymGallerySection({ gymPhotos, memberPhotos, fallbackGallery, gymName, 
           <span className={`${prefix}__gallery-tag`}>Photos uploaded by our members</span>
           <div className={`${prefix}__gallery-grid`}>
             {memberPhotos.slice(0, limit).map((p) => (
-              <img key={p.id} src={p.imageUrl} alt={p.title} />
+              <img key={p.id} src={p.imageUrl} alt={p.title} onError={(e) => { e.target.style.display = 'none'; }} />
             ))}
           </div>
         </div>
@@ -357,7 +357,7 @@ function GymGallerySection({ gymPhotos, memberPhotos, fallbackGallery, gymName, 
           <span className={`${prefix}__gallery-tag`}>Photos</span>
           <div className={`${prefix}__gallery-grid`}>
             {allPhotos.slice(0, limit).map((image) => (
-              <img key={image} src={image} alt={gymName} />
+              <img key={image} src={image} alt={gymName} onError={(e) => { e.target.style.display = 'none'; }} />
             ))}
           </div>
         </div>

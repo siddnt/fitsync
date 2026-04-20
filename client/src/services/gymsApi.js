@@ -93,7 +93,6 @@ export const gymsApi = apiSlice.injectEndpoints({
         method: 'POST',
       }),
       invalidatesTags: (_result, _error, id) => [
-        { type: 'Gym', id },
         { type: 'Analytics', id: 'GYM_IMPRESSIONS' },
       ],
     }),
