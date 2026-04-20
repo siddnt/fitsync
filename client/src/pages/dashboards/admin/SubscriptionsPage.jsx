@@ -8,16 +8,16 @@ import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const TYPE_OPTIONS = [
-  { value: 'all',      label: 'All types' },
-  { value: 'listing',  label: 'Listing Subscriptions' },
+  { value: 'all', label: 'All types' },
+  { value: 'listing', label: 'Listing Subscriptions' },
   { value: 'sponsorship', label: 'Sponsorships' },
 ];
 
 const AdminSubscriptionsPage = () => {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery({ page });
-  
-  const currentItems = data?.data?.combinedSubscriptions ?? [];
+  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery();
+  const listingSubs = data?.data?.listingSubscriptions ?? [];
+  const sponsorships = data?.data?.sponsorships ?? [];
   const pagination = data?.data?.pagination ?? {};
 
   const [typeFilter, setTypeFilter] = useState('all');
@@ -26,20 +26,24 @@ const AdminSubscriptionsPage = () => {
 
   useEffect(() => { setPage(1); }, [searchTerm, statusFilter, typeFilter]);
 
-  const typeFilteredItems = useMemo(() => {
-    if (typeFilter === 'listing') return currentItems.filter(i => i._type === 'listing');
-    if (typeFilter === 'sponsorship') return currentItems.filter(i => i._type === 'sponsorship');
-    return currentItems;
-  }, [typeFilter, currentItems]);
+  /* Derive visible rows based on type filter */
+  const currentItems = useMemo(() => {
+    if (typeFilter === 'listing') return listingSubs.map((i) => ({ ...i, _type: 'listing' }));
+    if (typeFilter === 'sponsorship') return sponsorships.map((i) => ({ ...i, _type: 'sponsorship' }));
+    return [
+      ...listingSubs.map((i) => ({ ...i, _type: 'listing' })),
+      ...sponsorships.map((i) => ({ ...i, _type: 'sponsorship' })),
+    ];
+  }, [typeFilter, listingSubs, sponsorships]);
 
   const statusOptions = useMemo(() => {
-    const values = new Set(typeFilteredItems.map((i) => i.status).filter(Boolean));
+    const values = new Set(currentItems.map((i) => i.status).filter(Boolean));
     return ['all', ...values];
-  }, [typeFilteredItems]);
+  }, [currentItems]);
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    return typeFilteredItems.filter((i) => {
+    return currentItems.filter((i) => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false;
       if (!query) return true;
       const haystacks = [
@@ -48,36 +52,29 @@ const AdminSubscriptionsPage = () => {
       ].filter(Boolean).map((v) => v.toLowerCase());
       return haystacks.some((v) => v.includes(query));
     });
-  }, [typeFilteredItems, searchTerm, statusFilter]);
+  }, [currentItems, searchTerm, statusFilter]);
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); };
 
-  const limit = pagination.limit ?? 10;
-  const totalItems = pagination.total ?? 0;
-  const totalPages = pagination.totalPages ?? 1;
+  const limit = 10;
+  const totalPages = Math.ceil(filtered.length / limit) || 1;
+  const totalItems = filtered.length;
   const startIndex = (page - 1) * limit + 1;
   const endIndex = Math.min(page * limit, totalItems);
-  
-  const pagedItems = filtered; // The backend already combined and paginated to the limit!
+  const pagedItems = filtered.slice((page - 1) * limit, page * limit);
 
-  const listingSummary = useMemo(() => {
-    const all = currentItems.filter(i => i._type === 'listing');
-    return {
-      total: all.length,
-      active: all.filter((s) => s.status === 'active').length,
-      totalRevenue: all.reduce((s, sub) => s + (sub.amount ?? 0), 0),
-    };
-  }, [currentItems]);
+  const listingSummary = useMemo(() => ({
+    total: listingSubs.length,
+    active: listingSubs.filter((s) => s.status === 'active').length,
+    totalRevenue: listingSubs.reduce((s, sub) => s + (sub.amount ?? 0), 0),
+  }), [listingSubs]);
 
-  const sponsorshipSummary = useMemo(() => {
-    const all = currentItems.filter(i => i._type === 'sponsorship');
-    return {
-      total: all.length,
-      active: all.filter((s) => s.status === 'active').length,
-      expired: all.filter((s) => s.status === 'expired').length,
-    };
-  }, [currentItems]);
+  const sponsorshipSummary = useMemo(() => ({
+    total: sponsorships.length,
+    active: sponsorships.filter((s) => s.status === 'active').length,
+    expired: sponsorships.filter((s) => s.status === 'expired').length,
+  }), [sponsorships]);
 
   if (isLoading) {
     return (

@@ -2809,20 +2809,27 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
 export const getAdminSubscriptions = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
 
-  const [listingSubs, sponsoredGyms] = await Promise.all([
+  const [listingTotal, sponsorTotal, listingSubs, sponsoredGyms] = await Promise.all([
+    GymListingSubscription.countDocuments(),
+    Gym.countDocuments({ 'sponsorship.status': { $in: ['active', 'expired'] } }),
     GymListingSubscription.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: 'gym', select: 'name location.city' })
       .populate({ path: 'owner', select: 'name email' })
       .lean(),
     Gym.find({ 'sponsorship.status': { $in: ['active', 'expired'] } })
       .select('name location.city owner sponsorship createdAt')
       .populate({ path: 'owner', select: 'name email' })
+      .sort({ 'sponsorship.expiresAt': -1 })
+      .skip(skip)
+      .limit(limit)
       .lean(),
   ]);
 
   const listingData = listingSubs.map((s) => ({
     id: s._id,
-    _type: 'listing',
     gym: s.gym ? { id: s.gym._id, name: s.gym.name, city: s.gym.location?.city } : null,
     owner: s.owner ? { id: s.owner._id, name: s.owner.name, email: s.owner.email } : null,
     planCode: s.planCode,
@@ -2838,7 +2845,6 @@ export const getAdminSubscriptions = asyncHandler(async (req, res) => {
 
   const sponsorshipData = sponsoredGyms.map((g) => ({
     id: g._id,
-    _type: 'sponsorship',
     gym: { id: g._id, name: g.name, city: g.location?.city },
     owner: g.owner ? { id: g.owner._id, name: g.owner.name, email: g.owner.email } : null,
     package: g.sponsorship?.package ?? g.sponsorship?.tier ?? 'N/A',
@@ -2847,16 +2853,13 @@ export const getAdminSubscriptions = asyncHandler(async (req, res) => {
     createdAt: g.createdAt,
   }));
 
-  const combined = [...listingData, ...sponsorshipData].sort(
-    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-  );
-
-  const total = combined.length;
-  const paginatedCombined = combined.slice(skip, skip + limit);
-
   return res.status(200).json(new ApiResponse(200, {
-    combinedSubscriptions: paginatedCombined,
-    pagination: paginationMeta(total, page, limit),
+    listingSubscriptions: listingData,
+    sponsorships: sponsorshipData,
+    pagination: {
+      listingSubscriptions: paginationMeta(listingTotal, page, limit),
+      sponsorships: paginationMeta(sponsorTotal, page, limit),
+    },
   }, 'Admin subscriptions fetched successfully'));
 });
 
