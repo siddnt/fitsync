@@ -40,6 +40,7 @@ REFRESH_TOKEN_SECRET=dev-refresh-secret
 STRIPE_PUBLISHABLE_KEY=pk_test_dummy
 STRIPE_SECRET_KEY=sk_test_dummy
 STRIPE_WEBHOOK_SECRET=whsec_dummy
+SOLR_URL=http://localhost:8983/solr/fitsync
 CLOUDINARY_URL= # or CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET
 ```
 - Client: copy `.env.example` inside `client/` to `.env` and adjust as needed (default proxies `/api` to `http://localhost:4000`).
@@ -83,6 +84,8 @@ node src/scripts/createAdminUser.js
 - `npm run dev` — API dev server with nodemon
 - `npm start` — API production start
 - `npm test` — backend tests (Jest)
+- `npm run benchmark` — role-aware Redis benchmark across cache-enabled endpoints
+- `npm run reindex:solr` — rebuild Solr search index from MongoDB
 - `npm run client:dev` — client dev server
 - `npm run client:build` — client production build
 - `npm run client:preview` — preview built client locally

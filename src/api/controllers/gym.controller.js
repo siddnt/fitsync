@@ -10,6 +10,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
+import { indexGymDocument, isSolrReady, searchGymIds } from '../../services/solr.service.js';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
 
@@ -50,6 +51,24 @@ const normalizeLocationInput = (location) => {
   }
 
   return sanitized;
+};
+
+const toArrayQueryValues = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry ?? '').split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 };
 
 const buildFilters = ({ search, city, amenities }) => {
@@ -194,25 +213,61 @@ const mapGym = (gym) => ({
 
 
 export const listGyms = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const filters = buildFilters(req.query);
+  const resolvedPage = Math.max(Number(req.query?.page) || 1, 1);
+  const resolvedLimit = Math.max(Number(req.query?.limit) || 20, 1);
+  const searchTerm = typeof req.query?.search === 'string' ? req.query.search.trim() : '';
 
-  const [gyms, total] = await Promise.all([
-    Gym.find(filters)
-      .populate({ path: 'owner', select: 'name firstName lastName role' })
-      .sort({ 'sponsorship.status': -1, 'analytics.impressions': -1 })
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit)),
-    Gym.countDocuments(filters),
-  ]);
+  let gyms = [];
+  let total = 0;
+  let usedSolr = false;
+
+  if (searchTerm && isSolrReady()) {
+    const solrResult = await searchGymIds(searchTerm, {
+      page: resolvedPage,
+      limit: resolvedLimit,
+      city: req.query?.city,
+      amenities: toArrayQueryValues(req.query?.amenities),
+    });
+
+    if (solrResult) {
+      usedSolr = true;
+      total = solrResult.total;
+
+      if (solrResult.ids.length) {
+        const fetchedGyms = await Gym.find({ _id: { $in: solrResult.ids } })
+          .populate({ path: 'owner', select: 'name firstName lastName role' })
+          .lean();
+
+        const byId = new Map(fetchedGyms.map((gym) => [String(gym._id), gym]));
+        gyms = solrResult.ids
+          .map((id) => byId.get(String(id)))
+          .filter(Boolean);
+      }
+    }
+  }
+
+  if (!usedSolr) {
+    const filters = buildFilters(req.query);
+
+    const fallbackResult = await Promise.all([
+      Gym.find(filters)
+        .populate({ path: 'owner', select: 'name firstName lastName role' })
+        .sort({ 'sponsorship.status': -1, 'analytics.impressions': -1 })
+        .skip((resolvedPage - 1) * resolvedLimit)
+        .limit(resolvedLimit),
+      Gym.countDocuments(filters),
+    ]);
+
+    [gyms, total] = fallbackResult;
+  }
 
   const payload = {
     gyms: gyms.map(mapGym),
     pagination: {
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / Number(limit) || 1),
+      page: resolvedPage,
+      limit: resolvedLimit,
+      totalPages: Math.ceil(total / resolvedLimit || 1),
     },
   };
 
@@ -454,6 +509,7 @@ export const createGym = asyncHandler(async (req, res) => {
       },
     ];
     await subscriptionRecord.save();
+    await indexGymDocument(gym);
 
     return res.status(201).json(
       new ApiResponse(
@@ -527,6 +583,7 @@ export const updateGym = asyncHandler(async (req, res) => {
   gym.lastUpdatedBy = req.user._id;
 
   await gym.save();
+  await indexGymDocument(gym);
 
   const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
 

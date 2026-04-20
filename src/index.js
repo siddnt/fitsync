@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import connectDB from "./db/index.js";
 import app from "./app.js";
 import { initRedis } from "./services/redis.service.js";
+import { initSolr } from "./services/solr.service.js";
 
 // Environment variables
 dotenv.config({
@@ -21,6 +22,7 @@ connectDB()
     .then(() => {
         // Initialise Redis cache (non-blocking, app works without it)
         initRedis();
+        initSolr();
 
         // Start the server
         const PORT = process.env.PORT || 4000;

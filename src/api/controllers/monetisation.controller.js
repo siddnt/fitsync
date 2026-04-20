@@ -12,6 +12,7 @@ import {
   resolveSponsorshipPackage,
 } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
+import { indexGymDocument } from '../../services/solr.service.js';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -178,6 +179,13 @@ export const fulfillListingSubscription = async (subscriptionId, { sessionId, re
         },
       },
     );
+
+    const refreshedGym = await Gym.findById(subscription.gym._id).lean();
+    if (refreshedGym) {
+      await indexGymDocument(refreshedGym);
+    }
+  } else if (subscription.gym) {
+    await indexGymDocument(subscription.gym);
   }
 
   await subscription.save();
@@ -344,6 +352,7 @@ export const fulfillSponsorship = async (gymId, tier, sessionId, ownerId, receip
   gym.sponsorship.amount = packageDetails.amount;
   gym.sponsorship.monthlyBudget = packageDetails.monthlyBudget;
   await gym.save();
+  await indexGymDocument(gym);
 
   await recordRevenue({
     amount: packageDetails.amount,

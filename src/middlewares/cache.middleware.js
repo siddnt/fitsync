@@ -11,8 +11,9 @@ export const cacheMiddleware = (prefix, ttl = 300) => {
   return async (req, res, next) => {
     if (!isReady()) return next();
 
-    // Build a deterministic cache key from the prefix + URL (includes query params)
-    const key = `cache:${prefix}:${req.originalUrl}`;
+    const userScope = req.user?._id ? `user:${req.user._id}` : 'public';
+    // Build a deterministic cache key from prefix + requester scope + URL.
+    const key = `cache:${prefix}:${userScope}:${req.originalUrl}`;
 
     try {
       const cached = await cacheGet(key);

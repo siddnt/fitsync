@@ -10,6 +10,12 @@ import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import toObjectId from '../../utils/toObjectId.js';
 import { MODERN_ITEM_STATUSES, normaliseOrderItemStatus } from '../../utils/orderStatus.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
+import {
+  indexProductDocument,
+  isSolrReady,
+  removeProductDocument,
+  searchProductIds,
+} from '../../services/solr.service.js';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -334,12 +340,13 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
   } = req.query ?? {};
 
   const filters = { isPublished: true };
+  const inStockOnly = parseBoolean(inStock, false);
 
   if (category && category !== 'all') {
     filters.category = normaliseCategory(category);
   }
 
-  if (parseBoolean(inStock, false)) {
+  if (inStockOnly) {
     filters.status = 'available';
     filters.stock = { $gt: 0 };
   }
@@ -354,13 +361,13 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
     filters.price = { ...(filters.price ?? {}), $lte: maxPriceValue };
   }
 
-  if (search && search.trim()) {
-    const term = search.trim();
-    // Use $text search for 3+ char queries (leverages text index)
-    if (term.length >= 3) {
-      filters.$text = { $search: term };
+  const searchTerm = typeof search === 'string' ? search.trim() : '';
+  if (searchTerm && !isSolrReady()) {
+    // Use Mongo text/regex search when Solr is unavailable.
+    if (searchTerm.length >= 3) {
+      filters.$text = { $search: searchTerm };
     } else {
-      const escaped = escapeRegex(term);
+      const escaped = escapeRegex(searchTerm);
       filters.$or = [
         { name: { $regex: escaped, $options: 'i' } },
         { description: { $regex: escaped, $options: 'i' } },
@@ -381,17 +388,53 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
     sortStage = { createdAt: -1 };
   }
 
-  const baseQuery = Product.find(filters)
-    .populate({ path: 'seller', select: 'name firstName lastName email role' })
-    .sort(sortStage)
-    .skip(skip)
-    .limit(resolvedPageSize)
-    .lean();
+  let products = [];
+  let total = 0;
+  let usedSolr = false;
 
-  const [products, total] = await Promise.all([
-    baseQuery,
-    Product.countDocuments(filters),
-  ]);
+  if (searchTerm && isSolrReady()) {
+    const solrResult = await searchProductIds(searchTerm, {
+      page: resolvedPage,
+      limit: resolvedPageSize,
+      category: filters.category,
+      minPrice: minPriceValue,
+      maxPrice: maxPriceValue,
+      inStock: inStockOnly,
+      sort,
+    });
+
+    if (solrResult) {
+      usedSolr = true;
+      total = solrResult.total;
+
+      if (solrResult.ids.length) {
+        const fetchedProducts = await Product.find({ _id: { $in: solrResult.ids }, ...filters })
+          .populate({ path: 'seller', select: 'name firstName lastName email role' })
+          .lean();
+
+        const byId = new Map(fetchedProducts.map((product) => [String(product._id), product]));
+        products = solrResult.ids
+          .map((id) => byId.get(String(id)))
+          .filter(Boolean);
+      }
+    }
+  }
+
+  if (!usedSolr) {
+    const baseQuery = Product.find(filters)
+      .populate({ path: 'seller', select: 'name firstName lastName email role' })
+      .sort(sortStage)
+      .skip(skip)
+      .limit(resolvedPageSize)
+      .lean();
+
+    const fallbackResult = await Promise.all([
+      baseQuery,
+      Product.countDocuments(filters),
+    ]);
+
+    [products, total] = fallbackResult;
+  }
 
   const productIds = products.map((product) => product._id);
   const [salesStats, reviewStats] = await Promise.all([
@@ -614,6 +657,7 @@ export const fulfillMarketplaceOrder = async (orderId) => {
     product.stock = updatedStock;
     if (updatedStock === 0) product.status = 'out-of-stock';
     await product.save();
+    await indexProductDocument(product);
   }));
 
   const populated = await Order.findById(order._id)
@@ -819,6 +863,7 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     isPublished: publishFlag,
     metadata: metadataEntries.length ? new Map(metadataEntries) : undefined,
   });
+  await indexProductDocument(product);
 
   // Invalidate marketplace caches
   await invalidatePrefix('cache:marketplace');
@@ -948,6 +993,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
   }
 
   await product.save();
+  await indexProductDocument(product);
 
   // Invalidate marketplace caches
   await invalidatePrefix('cache:marketplace');
@@ -966,6 +1012,7 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
   }
 
   await product.deleteOne();
+  await removeProductDocument(productId);
 
   // Invalidate marketplace caches
   await invalidatePrefix('cache:marketplace');
