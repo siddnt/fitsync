@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -6,34 +6,35 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminGymsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteGymMutation } from '../../../services/adminApi.js';
 import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const AdminGymsPage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminGymsQuery();
-  const [deleteGym, { isLoading: isDeleting }] = useDeleteGymMutation();
-  const gyms = data?.data?.gyms ?? [];
-  const [notice, setNotice] = useState(null);
-  const [errorNotice, setErrorNotice] = useState(null);
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const statusOptions = useMemo(() => {
-    const values = new Set(gyms.map((g) => g.status).filter(Boolean));
-    return ['all', ...values];
-  }, [gyms]);
+  const { data, isLoading, isError, refetch } = useGetAdminGymsQuery({ page, search: searchTerm, status: statusFilter });
+  const [deleteGym, { isLoading: isDeleting }] = useDeleteGymMutation();
+  const gyms = data?.data?.gyms ?? [];
+  const pagination = data?.data?.pagination ?? {};
+  const [notice, setNotice] = useState(null);
+  const [errorNotice, setErrorNotice] = useState(null);
 
-  const filteredGyms = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return gyms.filter((gym) => {
-      if (statusFilter !== 'all' && gym.status !== statusFilter) return false;
-      if (!query) return true;
-      const haystacks = [gym.name, gym.city, gym.state, gym.owner?.name, gym.owner?.email].filter(Boolean).map((v) => v.toLowerCase());
-      return haystacks.some((v) => v.includes(query));
-    });
-  }, [gyms, searchTerm, statusFilter]);
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter]);
+
+  // Provide hardcoded or broader status options since the local strictly paginated gym list might miss options
+  const statusOptions = ['all', 'active', 'pending', 'inactive'];
+
+  const filteredGyms = gyms; // The backend now performs the filtering
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); };
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? 0;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), Math.max(totalItems, 1));
 
   const handleDelete = async (gym) => {
     if (!gym) return;
@@ -103,15 +104,15 @@ const AdminGymsPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th style={{ width: '25%' }}>Name</th>
                   <th>Owner</th>
-                  <th>Status</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Members</th>
                   <th>Trainers</th>
                   <th>Sponsorship</th>
                   <th>Impressions</th>
-                  <th>Created</th>
-                  <th>Action</th>
+                  <th style={{ width: '130px' }}>Created</th>
+                  <th style={{ width: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,6 +147,7 @@ const AdminGymsPage = () => {
                 ))}
               </tbody>
             </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
           </div>
         ) : (
           <EmptyState message={filtersActive ? 'No gyms match filters.' : 'No gyms to review right now.'} />

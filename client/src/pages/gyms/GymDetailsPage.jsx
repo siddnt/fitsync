@@ -135,7 +135,13 @@ const GymDetailsPage = () => {
     }
     setActionError(null);
     try {
-      await joinGym({ gymId, ...payload }).unwrap();
+      const response = await joinGym({ gymId, ...payload }).unwrap();
+      
+      if (response?.data?.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+      
       await Promise.all([
         refetch(),
         shouldFetchMembership && refetchMembership ? refetchMembership() : Promise.resolve(),

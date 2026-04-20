@@ -1,0 +1,114 @@
+.payment-success-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 4rem);
+  padding: 1.5rem;
+  background: var(--bg-neutral, #F9FAFB);
+}
+
+.payment-card {
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-neutral, #e5e7eb);
+  border-radius: 12px;
+  max-width: 450px;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+}
+
+.payment-spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 3px solid var(--border-neutral, #e5e7eb);
+  border-top-color: var(--primary, #2A9D8F);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.payment-card h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary, #111827);
+  margin-bottom: 0.75rem;
+}
+
+.success-title {
+  color: var(--primary, #2A9D8F) !important;
+}
+
+.payment-error h2 {
+  color: #ef4444 !important;
+}
+
+.payment-card p {
+  color: var(--text-secondary, #4B5563);
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
+.payment-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.payment-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  font-weight: 500;
+  border-radius: 8px;
+  background: var(--primary, #2A9D8F);
+  color: white;
+  text-decoration: none;
+  border: none;
+  transition: opacity 0.2s;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.payment-btn:hover {
+  opacity: 0.9;
+}
+
+.payment-btn--outline {
+  background: transparent;
+  border: 1px solid var(--border-neutral, #e5e7eb);
+  color: var(--text-primary, #111827);
+}
+
+.payment-btn--outline:hover {
+  background: var(--bg-neutral, #F9FAFB);
+  opacity: 1;
+}
+
+/* Dark mode overrides if implemented */
+@media (prefers-color-scheme: dark) {
+  .payment-success-page {
+    background: var(--bg-neutral, #111827);
+  }
+  .payment-card {
+    background: var(--bg-primary, #1F2937);
+    border-color: var(--border-neutral, #374151);
+  }
+  .payment-card h2 {
+    color: var(--text-primary, #F9FAFB);
+  }
+  .payment-card p {
+    color: var(--text-secondary, #9CA3AF);
+  }
+  .payment-btn--outline {
+    color: var(--text-primary, #F9FAFB);
+    border-color: var(--border-neutral, #4B5563);
+  }
+  .payment-btn--outline:hover {
+    background: var(--bg-neutral, #374151);
+  }
+}

@@ -24,7 +24,7 @@ export const managerApi = apiSlice.injectEndpoints({
 
     /* ── Sellers ── */
     getManagerSellers: builder.query({
-      query: () => '/manager/sellers',
+      query: ({ page = 1 } = {}) => `/manager/sellers?page=${page}&limit=10`,
       providesTags: ['Dashboard', 'User'],
     }),
     updateSellerStatus: builder.mutation({
@@ -45,7 +45,7 @@ export const managerApi = apiSlice.injectEndpoints({
 
     /* ── Gym Owners ── */
     getManagerGymOwners: builder.query({
-      query: () => '/manager/gym-owners',
+      query: ({ page = 1 } = {}) => `/manager/gym-owners?page=${page}&limit=10`,
       providesTags: ['Dashboard', 'User'],
     }),
     updateGymOwnerStatus: builder.mutation({

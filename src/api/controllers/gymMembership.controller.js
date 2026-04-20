@@ -7,6 +7,12 @@ import User from '../../models/user.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { invalidatePrefix } from '../../services/redis.service.js';
+import Stripe from 'stripe';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -32,9 +38,20 @@ const mapMembership = (membership) => {
         currency: membership.billing.currency,
         paymentGateway: membership.billing.paymentGateway,
         paymentReference: membership.billing.paymentReference,
+        receiptUrl: membership.billing.receiptUrl,
         status: membership.billing.status,
       }
       : null,
+    invoices: Array.isArray(membership.invoices)
+      ? membership.invoices.map((invoice) => ({
+        amount: invoice.amount,
+        currency: invoice.currency,
+        paidOn: invoice.paidOn,
+        paymentReference: invoice.paymentReference,
+        receiptUrl: invoice.receiptUrl,
+        status: invoice.status,
+      }))
+      : [],
     gym: membership.gym
       ? {
         id: membership.gym._id,
@@ -275,12 +292,6 @@ export const joinGym = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'This gym does not have a valid monthly price configured.');
   }
 
-  const paymentReference = req.body?.paymentReference;
-
-  if (!paymentReference) {
-    throw new ApiError(400, 'Payment reference is required to activate the membership.');
-  }
-
   const autoRenew = req.body?.autoRenew ?? true;
   const benefits = Array.isArray(req.body?.benefits) ? req.body.benefits : undefined;
   const notes = req.body?.notes;
@@ -296,13 +307,33 @@ export const joinGym = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid membership end date.');
   }
 
+  // Generate Stripe Checkout session
+  const stripeSession = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    mode: 'payment',
+    line_items: [{
+      price_data: {
+        currency: 'inr',
+        product_data: {
+          name: `Gym Membership: ${gym.name}`,
+          description: `1 Month Membership with Trainer ${assignment.trainer.name}`,
+        },
+        unit_amount: Math.round(monthlyFee * 100),
+      },
+      quantity: 1,
+    }],
+    success_url: `http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `http://localhost:5173/gyms/${gym._id}`,
+    metadata: { type: 'gym_membership', gymId: String(gym._id) }
+  });
+
   const membershipPayload = {
     trainee: user._id,
     gym: gym._id,
     plan: 'monthly',
     startDate,
     endDate,
-    status: 'active',
+    status: 'pending', // Pending until verified
     autoRenew,
     benefits,
     notes,
@@ -310,148 +341,190 @@ export const joinGym = asyncHandler(async (req, res) => {
   };
 
   const billingSource = req.body?.billing ?? {};
-  const billingDetails = {
+  
+  membershipPayload.billing = {
     amount: monthlyFee,
     currency: billingSource.currency ?? 'INR',
-    paymentGateway: billingSource.paymentGateway,
-    paymentReference,
-    status: 'paid',
+    paymentGateway: 'stripe',
+    paymentReference: stripeSession.id,
+    receiptUrl: null,
+    status: 'pending', // Pending until verified
   };
 
-  membershipPayload.billing = {
-    amount: billingDetails.amount,
-    currency: billingDetails.currency,
-    paymentGateway: billingDetails.paymentGateway,
-    paymentReference: billingDetails.paymentReference,
-    status: billingDetails.status,
-  };
+  membershipPayload.invoices = [
+    {
+      amount: monthlyFee,
+      currency: billingSource.currency ?? 'INR',
+      paidOn: startDate,
+      paymentReference: stripeSession.id,
+      receiptUrl: null,
+      status: 'pending',
+      metadata: new Map([
+        ['gymId', String(gym._id)],
+        ['trainerId', String(assignment.trainer._id)],
+      ]),
+    },
+  ];
 
   const membership = await GymMembership.create(membershipPayload);
 
+  return res
+    .status(201)
+    .json(new ApiResponse(201, { checkoutUrl: stripeSession.url }, 'Redirecting to secure checkout'));
+});
+
+/**
+ * Fulfills a gym membership post-payment. Called by payment.controller.js.
+ */
+export const fulfillGymMembership = async (membershipId, { sessionId, receiptUrl } = {}) => {
+  const membership = await GymMembership.findById(membershipId)
+    .populate('gym')
+    .populate('trainer')
+    .populate('trainee');
+    
+  if (!membership || membership.status !== 'pending') return null;
+
+  membership.status = 'active';
+
+  if (membership.billing) {
+    membership.billing.status = 'paid';
+    if (sessionId) {
+      membership.billing.paymentReference = sessionId;
+    }
+    if (receiptUrl) {
+      membership.billing.receiptUrl = receiptUrl;
+    }
+  }
+
+  if (!Array.isArray(membership.invoices)) {
+    membership.invoices = [];
+  }
+
+  let invoice = null;
+  if (sessionId) {
+    invoice = membership.invoices.find((entry) => entry?.paymentReference === sessionId) ?? null;
+  }
+
+  if (!invoice) {
+    invoice = membership.invoices.find((entry) => entry?.status === 'pending') ?? null;
+  }
+
+  if (!invoice) {
+    invoice = {
+      amount: membership.billing?.amount || 0,
+      currency: membership.billing?.currency || 'INR',
+      paidOn: new Date(),
+      paymentReference: sessionId ?? null,
+      receiptUrl: receiptUrl ?? null,
+      status: 'paid',
+      metadata: new Map([
+        ['gymId', String(membership.gym?._id || '')],
+        ['trainerId', String(membership.trainer?._id || '')],
+      ]),
+    };
+    membership.invoices.push(invoice);
+  } else {
+    invoice.status = 'paid';
+    invoice.paidOn = invoice.paidOn ?? new Date();
+    if (sessionId) {
+      invoice.paymentReference = sessionId;
+    }
+    if (receiptUrl) {
+      invoice.receiptUrl = receiptUrl;
+    }
+  }
+
+  await membership.save();
+
+  const monthlyFee = membership.billing?.amount || 0;
   const trainerShare = Math.round(monthlyFee * 0.5);
   const ownerShare = Math.max(Math.round(monthlyFee - trainerShare), 0);
 
   const updates = [
     Gym.updateOne(
-      { _id: gym._id },
-      {
-        $inc: { 'analytics.memberships': 1 },
-        $set: { lastUpdatedBy: user._id },
-      },
+      { _id: membership.gym._id },
+      { $inc: { 'analytics.memberships': 1 }, $set: { lastUpdatedBy: membership.trainee._id } },
     ),
   ];
 
-  if (user.role === 'trainee') {
+  if (membership.trainee.role === 'trainee') {
     updates.push(
       User.updateOne(
-        { _id: user._id },
-        {
-          $inc: { 'traineeMetrics.activeMemberships': 1 },
-          $set: { 'traineeMetrics.primaryGym': gym._id },
-        },
+        { _id: membership.trainee._id },
+        { $inc: { 'traineeMetrics.activeMemberships': 1 }, $set: { 'traineeMetrics.primaryGym': membership.gym._id } },
       ),
     );
   }
 
-  if (user.role === 'trainer') {
-    updates.push(User.updateOne({ _id: user._id }, { $addToSet: { 'trainerMetrics.gyms': gym._id } }));
-  }
-
   updates.push(
     User.updateOne(
-      { _id: assignment.trainer._id },
-      {
-        $addToSet: { 'trainerMetrics.gyms': gym._id },
-        $inc: { 'trainerMetrics.activeTrainees': 1 },
-      },
+      { _id: membership.trainer._id },
+      { $addToSet: { 'trainerMetrics.gyms': membership.gym._id }, $inc: { 'trainerMetrics.activeTrainees': 1 } },
     ),
   );
 
   updates.push(
     User.updateOne(
-      { _id: gym.owner },
-      {
-        $inc: {
-          'ownerMetrics.monthlyEarnings': ownerShare,
-        },
-      },
+      { _id: membership.gym.owner },
+      { $inc: { 'ownerMetrics.monthlyEarnings': ownerShare } },
     ),
   );
 
   await Promise.all(updates);
 
   const assignmentUpdate = await TrainerAssignment.findOneAndUpdate(
-    { trainer: assignment.trainer._id, gym: gym._id, 'trainees.trainee': user._id },
-    {
-      $set: {
-        status: 'active',
-        'trainees.$.status': 'active',
-        'trainees.$.assignedAt': new Date(),
-      },
-    },
+    { trainer: membership.trainer._id, gym: membership.gym._id, 'trainees.trainee': membership.trainee._id },
+    { $set: { status: 'active', 'trainees.$.status': 'active', 'trainees.$.assignedAt': new Date() } },
     { new: true },
   );
 
   if (!assignmentUpdate) {
     await TrainerAssignment.findOneAndUpdate(
-      { trainer: assignment.trainer._id, gym: gym._id },
+      { trainer: membership.trainer._id, gym: membership.gym._id },
       {
-        $setOnInsert: {
-          trainer: assignment.trainer._id,
-          gym: gym._id,
-          status: 'active',
-        },
-        $set: { status: 'active' },
-        $push: {
-          trainees: {
-            trainee: user._id,
-            status: 'active',
-            assignedAt: new Date(),
-          },
-        },
+        $setOnInsert: { trainer: membership.trainer._id, gym: membership.gym._id, status: 'active' },
+        $push: { trainees: { trainee: membership.trainee._id, status: 'active', assignedAt: new Date() } },
       },
       { upsert: true },
     );
   }
 
   const metadataBase = [
-    ['gymId', String(gym._id)],
-    ['memberId', String(user._id)],
+    ['gymId', String(membership.gym._id)],
+    ['memberId', String(membership.trainee._id)],
     ['membershipId', String(membership._id)],
-    ['paymentReference', paymentReference],
+    ['paymentReference', membership.billing?.paymentReference || 'stripe'],
     ['plan', 'monthly'],
   ];
 
   await Promise.all([
     Revenue.create({
       amount: trainerShare,
-      user: assignment.trainer._id,
+      user: membership.trainer._id,
       type: 'membership',
-      description: `Trainer share for ${gym.name} membership`,
-      metadata: new Map(
-        [...metadataBase, ['share', 'trainer'], ['trainerId', String(assignment.trainer._id)], ['amount', String(trainerShare)]],
-      ),
+      description: `Trainer share for ${membership.gym.name} membership`,
+      metadata: new Map([...metadataBase, ['share', 'trainer'], ['trainerId', String(membership.trainer._id)], ['amount', String(trainerShare)]]),
     }),
     Revenue.create({
       amount: ownerShare,
-      user: gym.owner,
+      user: membership.gym.owner,
       type: 'membership',
-      description: `Gym share for ${gym.name} membership`,
-      metadata: new Map(
-        [...metadataBase, ['share', 'gym'], ['trainerId', String(assignment.trainer._id)], ['amount', String(ownerShare)]],
-      ),
+      description: `Gym share for ${membership.gym.name} membership`,
+      metadata: new Map([...metadataBase, ['share', 'gym'], ['trainerId', String(membership.trainer._id)], ['amount', String(ownerShare)]]),
     }),
   ]);
 
-  const populated = await GymMembership.findById(membership._id)
-    .populate({ path: 'gym', select: 'name location pricing' })
-    .populate({ path: 'trainer', select: 'name profilePicture' })
-    .lean();
+  await Promise.all([
+    invalidatePrefix('cache:gymowner-overview'),
+    invalidatePrefix('cache:gymowner-analytics'),
+    invalidatePrefix('cache:gymowner-roster'),
+    invalidatePrefix('cache:trainee-overview'),
+    invalidatePrefix('cache:gym-detail:'),
+    invalidatePrefix('cache:gyms:'),
+  ]);
 
-  return res
-    .status(201)
-    .json(new ApiResponse(201, { membership: mapMembership(populated) }, 'Gym joined successfully.'));
-});
+  return membership;
+};
 
 export const leaveGym = asyncHandler(async (req, res) => {
   const { gymId, membershipId } = req.params;
@@ -503,6 +576,14 @@ export const leaveGym = asyncHandler(async (req, res) => {
 
   if (membership.billing && membership.billing.status === 'paid') {
     membership.billing.status = 'refunded';
+
+    if (Array.isArray(membership.invoices)) {
+      membership.invoices.forEach((invoice) => {
+        if (invoice?.status === 'paid') {
+          invoice.status = 'refunded';
+        }
+      });
+    }
   }
 
   await membership.save();

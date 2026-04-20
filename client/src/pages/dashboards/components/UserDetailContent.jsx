@@ -81,13 +81,13 @@ export const SellerView = ({ seller }) => {
             <table className="dashboard-table dashboard-table--compact">
               <thead>
                 <tr>
-                  <th>Order #</th>
-                  <th>Product</th>
-                  <th>Buyer</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                  <th>Date</th>
+                  <th style={{ width: '25%' }}>Order #</th>
+                  <th style={{ width: '25%' }}>Product</th>
+                  <th style={{ width: '25%' }}>Buyer</th>
+                  <th style={{ width: '100px' }}>Qty</th>
+                  <th style={{ width: '15%' }}>Price</th>
+                  <th style={{ width: '150px' }}>Status</th>
+                  <th style={{ width: '160px' }}>Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,7 +119,7 @@ export const SellerView = ({ seller }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Product</th><th>Reviewer</th><th>Rating</th><th>Title</th><th>Comment</th><th>Verified</th><th>Date</th></tr>
+                <tr><th style={{ width: '25%' }}>Product</th><th>Reviewer</th><th>Rating</th><th>Title</th><th>Comment</th><th>Verified</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {reviews.map((r) => (
@@ -145,7 +145,7 @@ export const SellerView = ({ seller }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Amount</th><th>Type</th><th>Date</th></tr>
+                <tr><th style={{ width: '15%' }}>Amount</th><th>Type</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {payouts.map((p) => (
@@ -229,7 +229,7 @@ export const GymOwnerView = ({ gymOwner }) => {
               <div className="ud-table-wrap">
                 <table className="dashboard-table dashboard-table--compact">
                   <thead>
-                    <tr><th>Trainee</th><th>Email</th><th>Phone</th><th>Plan</th><th>Status</th><th>Trainer</th><th>Period</th><th>Billing</th></tr>
+                    <tr><th>Trainee</th><th style={{ width: '25%' }}>Email</th><th>Phone</th><th>Plan</th><th style={{ width: '150px' }}>Status</th><th>Trainer</th><th>Period</th><th>Billing</th></tr>
                   </thead>
                   <tbody>
                     {gym.members.map((m) => (
@@ -275,7 +275,7 @@ export const GymOwnerView = ({ gymOwner }) => {
                       <div className="ud-table-wrap">
                         <table className="dashboard-table dashboard-table--compact">
                           <thead>
-                            <tr><th>Trainee</th><th>Email</th><th>Status</th><th>Goals</th><th>Assigned</th></tr>
+                            <tr><th>Trainee</th><th style={{ width: '25%' }}>Email</th><th style={{ width: '150px' }}>Status</th><th>Goals</th><th>Assigned</th></tr>
                           </thead>
                           <tbody>
                             {a.trainees.map((t, i) => (
@@ -303,7 +303,7 @@ export const GymOwnerView = ({ gymOwner }) => {
               <div className="ud-table-wrap">
                 <table className="dashboard-table dashboard-table--compact">
                   <thead>
-                    <tr><th>User</th><th>Rating</th><th>Comment</th><th>Date</th></tr>
+                    <tr><th style={{ width: '25%' }}>User</th><th>Rating</th><th>Comment</th><th style={{ width: '160px' }}>Date</th></tr>
                   </thead>
                   <tbody>
                     {gym.reviews.map((r) => (
@@ -333,7 +333,7 @@ export const GymOwnerView = ({ gymOwner }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Gym</th><th>Plan</th><th>Amount</th><th>Status</th><th>Auto-Renew</th><th>Period</th><th>Invoices</th></tr>
+                <tr><th style={{ width: '25%' }}>Gym</th><th>Plan</th><th style={{ width: '15%' }}>Amount</th><th style={{ width: '150px' }}>Status</th><th>Auto-Renew</th><th>Period</th><th>Invoices</th></tr>
               </thead>
               <tbody>
                 {subscriptions.map((s) => (
@@ -387,7 +387,7 @@ export const TrainerView = ({ trainer }) => {
               <div className="ud-table-wrap">
                 <table className="dashboard-table dashboard-table--compact">
                   <thead>
-                    <tr><th>Trainee</th><th>Email</th><th>Phone</th><th>Age</th><th>Gender</th><th>Status</th><th>Goals</th><th>Assigned</th></tr>
+                    <tr><th>Trainee</th><th style={{ width: '25%' }}>Email</th><th>Phone</th><th>Age</th><th>Gender</th><th style={{ width: '150px' }}>Status</th><th>Goals</th><th>Assigned</th></tr>
                   </thead>
                   <tbody>
                     {a.trainees.map((t, i) => (
@@ -420,7 +420,7 @@ export const TrainerView = ({ trainer }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Trainee</th><th>Update</th><th>Date</th></tr>
+                <tr><th>Trainee</th><th>Update</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {recentProgress.map((p) => (
@@ -501,7 +501,7 @@ export const TraineeView = ({ trainee }) => {
                   <div className="ud-table-wrap" style={{ marginTop: '0.5rem' }}>
                     <table className="dashboard-table dashboard-table--compact">
                       <thead>
-                        <tr><th>Product</th><th>Category</th><th>Qty</th><th>Price</th><th>Status</th></tr>
+                        <tr><th style={{ width: '25%' }}>Product</th><th>Category</th><th style={{ width: '100px' }}>Qty</th><th style={{ width: '15%' }}>Price</th><th style={{ width: '150px' }}>Status</th></tr>
                       </thead>
                       <tbody>
                         {o.items.map((item, i) => (
@@ -534,7 +534,7 @@ export const TraineeView = ({ trainee }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Gym</th><th>Rating</th><th>Comment</th><th>Date</th></tr>
+                <tr><th style={{ width: '25%' }}>Gym</th><th>Rating</th><th>Comment</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {gymReviews.map((r) => (
@@ -557,7 +557,7 @@ export const TraineeView = ({ trainee }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Product</th><th>Rating</th><th>Title</th><th>Comment</th><th>Verified</th><th>Date</th></tr>
+                <tr><th style={{ width: '25%' }}>Product</th><th>Rating</th><th>Title</th><th>Comment</th><th>Verified</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {productReviews.map((r) => (
@@ -587,7 +587,7 @@ export const TraineeView = ({ trainee }) => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Trainer</th><th>Update</th><th>Date</th></tr>
+                <tr><th>Trainer</th><th>Update</th><th style={{ width: '160px' }}>Date</th></tr>
               </thead>
               <tbody>
                 {progress.map((p) => (

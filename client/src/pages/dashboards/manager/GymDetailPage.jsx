@@ -183,7 +183,7 @@ const ManagerGymDetailPage = () => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Member</th><th>Trainer</th><th>Plan</th><th>Status</th><th>Start</th><th>End</th><th>Billing</th></tr>
+                <tr><th>Member</th><th>Trainer</th><th>Plan</th><th style={{ width: '150px' }}>Status</th><th>Start</th><th>End</th><th>Billing</th></tr>
               </thead>
               <tbody>
                 {allMembers.map((m) => (
@@ -209,7 +209,7 @@ const ManagerGymDetailPage = () => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Trainer</th><th>Status</th><th>Trainees</th><th>Approved</th><th>Created</th></tr>
+                <tr><th>Trainer</th><th style={{ width: '150px' }}>Status</th><th>Trainees</th><th>Approved</th><th style={{ width: '130px' }}>Created</th></tr>
               </thead>
               <tbody>
                 {gym.assignments.map((a) => (
@@ -233,7 +233,7 @@ const ManagerGymDetailPage = () => {
           <div className="ud-table-wrap">
             <table className="dashboard-table dashboard-table--compact">
               <thead>
-                <tr><th>Plan</th><th>Amount</th><th>Status</th><th>Period Start</th><th>Period End</th><th>Auto-Renew</th></tr>
+                <tr><th>Plan</th><th style={{ width: '100px' }}>Amount</th><th style={{ width: '150px' }}>Status</th><th>Period Start</th><th>Period End</th><th>Auto-Renew</th></tr>
               </thead>
               <tbody>
                 {gym.subscriptions.map((s) => (

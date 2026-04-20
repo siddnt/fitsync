@@ -125,7 +125,7 @@ const orderSchema = new mongoose.Schema(
         paymentMethod: {
             type: String,
             required: true,
-            default: "Cash on Delivery"
+            default: "Credit / Debit Card"
         },
         subtotal: {
             type: Number,
@@ -155,6 +155,15 @@ const orderSchema = new mongoose.Schema(
             type: String,
             required: false,
             unique: true
+        },
+        paymentStatus: {
+            type: String,
+            enum: ['pending', 'paid', 'failed'],
+            default: 'pending'
+        },
+        stripeSessionId: {
+            type: String,
+            default: null
         }
     },
     {

@@ -6,9 +6,10 @@ const invoiceSchema = new mongoose.Schema(
     currency: { type: String, default: 'INR' },
     paidOn: { type: Date, default: Date.now },
     paymentReference: { type: String },
+    receiptUrl: { type: String },
     status: {
       type: String,
-      enum: ['paid', 'refunded', 'failed'],
+      enum: ['pending', 'paid', 'refunded', 'failed'],
       default: 'paid',
     },
     metadata: { type: Map, of: String },
@@ -41,7 +42,7 @@ const gymListingSubscriptionSchema = new mongoose.Schema(
     periodEnd: { type: Date, required: true },
     status: {
       type: String,
-      enum: ['active', 'grace', 'expired', 'cancelled'],
+      enum: ['pending', 'active', 'grace', 'expired', 'cancelled'],
       default: 'active',
     },
     autoRenew: { type: Boolean, default: true },

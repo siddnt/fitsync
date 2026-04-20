@@ -97,13 +97,6 @@ const SponsorshipFormComponent = ({
         ))}
       </div>
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-987654"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">

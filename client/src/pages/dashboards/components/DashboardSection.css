@@ -12,7 +12,9 @@
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  flex-wrap: wrap;
+  /* Never wrap — title stays left, actions stay right */
+  flex-wrap: nowrap;
+  min-height: 2.5rem; /* stable height even when action is absent */
 }
 
 .dashboard-section header h2 {
@@ -20,14 +22,25 @@
   font-size: 1.15rem;
   font-weight: 600;
   margin: 0;
+  white-space: nowrap; /* title never wraps */
+  flex-shrink: 0;
 }
 
 .dashboard-section header > *:last-child {
   margin-left: auto;
 }
 
+/* Action slot — allow its children to scroll horizontally on narrow screens */
+.dashboard-section header > *:not(h2) {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .dashboard-section__body {
   color: var(--muted-text-color);
+  /* Tables inside sections scroll horizontally instead of overflowing the card */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dashboard-section {

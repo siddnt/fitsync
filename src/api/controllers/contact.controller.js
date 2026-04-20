@@ -24,12 +24,23 @@ export const submitContactForm = asyncHandler(async (req, res) => {
 export const getContactMessages = asyncHandler(async (req, res) => {
   const { status } = req.query;
   const filter = status ? { status } : {};
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = 10;
+  const skip = (page - 1) * limit;
 
-  const messages = await Contact.find(filter).sort({ createdAt: -1 });
+  const [total, messages] = await Promise.all([
+    Contact.countDocuments(filter),
+    Contact.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+  ]);
+
+  const totalPages = Math.ceil(total / limit) || 1;
 
   return res
     .status(200)
-    .json(new ApiResponse(200, messages, 'Messages fetched successfully'));
+    .json(new ApiResponse(200, {
+      messages,
+      pagination: { page, limit, total, totalPages },
+    }, 'Messages fetched successfully'));
 });
 
 export const updateMessageStatus = asyncHandler(async (req, res) => {

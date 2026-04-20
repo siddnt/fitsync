@@ -166,10 +166,10 @@ const AdminDashboard = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Order</th>
-                <th>Buyer</th>
-                <th>Status</th>
-                <th>Total</th>
+                <th style={{ width: '25%' }}>Order</th>
+                <th style={{ width: '25%' }}>Buyer</th>
+                <th style={{ width: '150px' }}>Status</th>
+                <th style={{ width: '15%' }}>Total</th>
               </tr>
             </thead>
             <tbody>

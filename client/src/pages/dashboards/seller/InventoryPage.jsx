@@ -19,6 +19,9 @@ import {
   setFilterStatus,
 } from '../../../features/seller/sellerSlice.js';
 import { reset } from 'redux-form';
+
+
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const filters = [
@@ -115,6 +118,7 @@ const mapInitialValues = (product) => {
 const InventoryPage = () => {
   const dispatch = useDispatch();
   const { editingProductId, isProductPanelOpen, filterStatus } = useSelector((state) => state.seller);
+  const [page, setPage] = useState(1);
 
   const {
     data: productsResponse,
@@ -122,12 +126,13 @@ const InventoryPage = () => {
     isError,
     error,
     refetch,
-  } = useGetSellerProductsQuery();
+  } = useGetSellerProductsQuery({ page });
   const [createProduct] = useCreateSellerProductMutation();
   const [updateProduct] = useUpdateSellerProductMutation();
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteSellerProductMutation();
 
   const rawProducts = productsResponse?.data?.products;
+  const pagination = productsResponse?.data?.pagination ?? {};
 
   const products = useMemo(
     () => (Array.isArray(rawProducts) ? rawProducts : []),
@@ -190,6 +195,12 @@ const InventoryPage = () => {
 
     return list;
   }, [products, filterStatus, searchText, categoryFilter, minPrice, maxPrice, minStock]);
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalFiltered = pagination.total ?? filteredProducts.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalFiltered);
+  const pagedProducts = filteredProducts;
 
   const approvalError = error?.status === 403 ? error : null;
   const approvalMessage = approvalError?.data?.message
@@ -510,67 +521,70 @@ const InventoryPage = () => {
         )}
 
         {filteredProducts.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Status</th>
-                <th>Stock</th>
-                <th>Price</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => {
-                const pricing = derivePricingDetails(product);
-                const categoryLabel = product.category ? formatStatus(product.category) : 'Uncategorised';
-                return (
-                  <tr key={product.id}>
-                    <td>
-                      <strong>{product.name}</strong>
-                      <div className="dashboard-table__meta">
-                        <span className="inventory-category">{categoryLabel}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
-                        {product.isPublished ? 'Published' : 'Draft'} · {formatStatus(product.status)}
-                      </span>
-                    </td>
-                    <td>{formatNumber(product.stock ?? 0)}</td>
-                    <td>
-                      <div className="inventory-price">
-                        {pricing.hasDiscount ? (
-                          <>
-                            <span className="inventory-price__mrp">{formatCurrency(pricing.mrp)}</span>
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '28%' }}>Product</th>
+                  <th style={{ width: '200px' }}>Status</th>
+                  <th style={{ width: '90px' }}>Stock</th>
+                  <th style={{ width: '130px' }}>Price</th>
+                  <th style={{ width: '150px' }}>Updated</th>
+                  <th style={{ width: '250px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedProducts.map((product) => {
+                  const pricing = derivePricingDetails(product);
+                  const categoryLabel = product.category ? formatStatus(product.category) : 'Uncategorised';
+                  return (
+                    <tr key={product.id}>
+                      <td>
+                        <strong>{product.name}</strong>
+                        <div className="dashboard-table__meta">
+                          <span className="inventory-category">{categoryLabel}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${product.isPublished ? 'status-pill--success' : 'status-pill--info'}`}>
+                          {product.isPublished ? 'Published' : 'Draft'} · {formatStatus(product.status)}
+                        </span>
+                      </td>
+                      <td>{formatNumber(product.stock ?? 0)}</td>
+                      <td>
+                        <div className="inventory-price">
+                          {pricing.hasDiscount ? (
+                            <>
+                              <span className="inventory-price__mrp">{formatCurrency(pricing.mrp)}</span>
+                              <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
+                              <span className="inventory-price__badge">-{pricing.discountPercentage}%</span>
+                            </>
+                          ) : (
                             <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
-                            <span className="inventory-price__badge">-{pricing.discountPercentage}%</span>
-                          </>
-                        ) : (
-                          <span className="inventory-price__final">{formatCurrency(pricing.price)}</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>{formatDate(product.updatedAt)}</td>
-                    <td>
-                      <div className="button-row">
-                        <button type="button" onClick={() => openEditPanel(product)}>
-                          Edit
-                        </button>
-                        <button type="button" onClick={() => handleTogglePublish(product)}>
-                          {product.isPublished ? 'Disable' : 'Enable'}
-                        </button>
-                        <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
-                          {isDeleting ? 'Removing…' : 'Delete'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          )}
+                        </div>
+                      </td>
+                      <td>{formatDate(product.updatedAt)}</td>
+                      <td>
+                        <div className="button-row" style={{ flexWrap: 'nowrap' }}>
+                          <button type="button" onClick={() => openEditPanel(product)}>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleTogglePublish(product)}>
+                            {product.isPublished ? 'Disable' : 'Enable'}
+                          </button>
+                          <button type="button" onClick={() => handleDelete(product)} disabled={isDeleting}>
+                            {isDeleting ? 'Removing…' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalFiltered} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
           <EmptyState message="No products match the current filter." />
         )}

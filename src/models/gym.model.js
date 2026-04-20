@@ -85,13 +85,51 @@ const analyticsSchema = new mongoose.Schema(
 
 const sponsorshipSchema = new mongoose.Schema(
     {
-        status: {
+        tier: {
             type: String,
-            enum: ["none", "active", "expired"],
+            trim: true,
             default: "none"
         },
+        status: {
+            type: String,
+            enum: ["none", "pending", "active", "expired", "cancelled"],
+            default: "none"
+        },
+        startDate: Date,
+        endDate: Date,
         expiresAt: Date,
-        package: String
+        package: String,
+        amount: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        monthlyBudget: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
+        invoices: {
+            type: [
+                new mongoose.Schema(
+                    {
+                        amount: { type: Number, required: true, min: 0 },
+                        currency: { type: String, default: "INR" },
+                        paidOn: { type: Date, default: Date.now },
+                        paymentReference: { type: String },
+                        receiptUrl: { type: String },
+                        status: {
+                            type: String,
+                            enum: ["pending", "paid", "refunded", "failed"],
+                            default: "pending"
+                        },
+                        metadata: { type: Map, of: String }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
+        }
     },
     { _id: false }
 );

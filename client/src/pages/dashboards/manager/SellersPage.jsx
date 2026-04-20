@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -9,19 +9,24 @@ import {
   useDeleteSellerByManagerMutation,
 } from '../../../services/managerApi.js';
 import { formatDate, formatStatus, formatNumber } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const SellersPage = () => {
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useGetManagerSellersQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetManagerSellersQuery({ page });
   const [updateStatus, { isLoading: isUpdating }] = useUpdateSellerStatusMutation();
   const [deleteSeller, { isLoading: isDeleting }] = useDeleteSellerByManagerMutation();
 
   const sellers = data?.data?.sellers ?? [];
+  const pagination = data?.data?.pagination ?? {};
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter]);
 
   const filteredSellers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -31,6 +36,11 @@ const SellersPage = () => {
       return [seller.name, seller.email].filter(Boolean).some((v) => v.toLowerCase().includes(query));
     });
   }, [sellers, searchTerm, statusFilter]);
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? filteredSellers.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
   const handleToggleStatus = async (seller) => {
     setNotice(null);
@@ -117,80 +127,83 @@ const SellersPage = () => {
         )}
 
         {filteredSellers.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Products</th>
-                <th>Joined</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSellers.map((seller) => (
-                <tr key={seller._id}>
-                  <td>
-                    <div
-                      className="dashboard-table__user dashboard-table__user--link"
-                      onClick={() => navigate(`/dashboard/manager/users/${seller._id}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${seller._id}`)}
-                    >
-                      {seller.profilePicture ? (
-                        <img src={seller.profilePicture} alt={seller.name} />
-                      ) : (
-                        <div className="dashboard-table__user-placeholder">
-                          {seller.name?.charAt(0) ?? '?'}
-                        </div>
-                      )}
-                      <div>
-                        <strong>{seller.name}</strong>
-                        {seller.profile?.headline && (
-                          <div><small>{seller.profile.headline}</small></div>
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '22%' }}>Name</th>
+                  <th style={{ width: '25%' }}>Email</th>
+                  <th style={{ width: '120px' }}>Status</th>
+                  <th>Products</th>
+                  <th style={{ width: '120px' }}>Joined</th>
+                  <th style={{ width: '250px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSellers.map((seller) => (
+                  <tr key={seller._id}>
+                    <td>
+                      <div
+                        className="dashboard-table__user dashboard-table__user--link"
+                        onClick={() => navigate(`/dashboard/manager/users/${seller._id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${seller._id}`)}
+                      >
+                        {seller.profilePicture ? (
+                          <img src={seller.profilePicture} alt={seller.name} />
+                        ) : (
+                          <div className="dashboard-table__user-placeholder">
+                            {seller.name?.charAt(0) ?? '?'}
+                          </div>
                         )}
+                        <div>
+                          <strong>{seller.name}</strong>
+                          {seller.profile?.headline && (
+                            <div><small>{seller.profile.headline}</small></div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>{seller.email}</td>
-                  <td>
-                    <span className={`status-pill ${seller.status === 'active' ? 'status-pill--success' : seller.status === 'pending' ? 'status-pill--warning' : 'status-pill--danger'}`}>
-                      {formatStatus(seller.status)}
-                    </span>
-                  </td>
-                  <td>
-                    {formatNumber(seller.products?.total ?? 0)} total
-                    <div><small>{formatNumber(seller.products?.published ?? 0)} published</small></div>
-                  </td>
-                  <td>{formatDate(seller.createdAt)}</td>
-                  <td>
-                    <div className="button-row">
-                      {seller.status !== 'pending' && (
+                    </td>
+                    <td>{seller.email}</td>
+                    <td>
+                      <span className={`status-pill ${seller.status === 'active' ? 'status-pill--success' : seller.status === 'pending' ? 'status-pill--warning' : 'status-pill--danger'}`}>
+                        {formatStatus(seller.status)}
+                      </span>
+                    </td>
+                    <td>
+                      {formatNumber(seller.products?.total ?? 0)} total
+                      <div><small>{formatNumber(seller.products?.published ?? 0)} published</small></div>
+                    </td>
+                    <td>{formatDate(seller.createdAt)}</td>
+                    <td>
+                      <div className="button-row" style={{ flexWrap: 'nowrap' }}>
+                        {seller.status !== 'pending' && (
+                          <button
+                            type="button"
+                            className={`manager-btn ${seller.status === 'active' ? 'manager-btn--deactivate' : 'manager-btn--approve'}`}
+                            onClick={() => handleToggleStatus(seller)}
+                            disabled={isUpdating}
+                          >
+                            {seller.status === 'active' ? 'Deactivate' : 'Activate'}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className={`manager-btn ${seller.status === 'active' ? 'manager-btn--deactivate' : 'manager-btn--approve'}`}
-                          onClick={() => handleToggleStatus(seller)}
-                          disabled={isUpdating}
+                          className="manager-btn manager-btn--reject"
+                          onClick={() => handleDelete(seller)}
+                          disabled={isDeleting}
                         >
-                          {seller.status === 'active' ? 'Deactivate' : 'Activate'}
+                          Delete
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="manager-btn manager-btn--reject"
-                        onClick={() => handleDelete(seller)}
-                        disabled={isDeleting}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
           <EmptyState message="No sellers match your filters." />
         )}

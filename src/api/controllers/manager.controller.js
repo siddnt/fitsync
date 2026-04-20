@@ -9,6 +9,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import toObjectId from '../../utils/toObjectId.js';
 import { normaliseOrderItemStatus, summariseOrderStatus } from '../../utils/orderStatus.js';
+import { getPaginationParams, paginationMeta } from '../../utils/paginate.js';
 import {
   cancelMembershipsForUser,
   cleanOrdersForUser,
@@ -110,13 +111,19 @@ export const rejectUser = asyncHandler(async (req, res) => {
 /* ──────── SELLERS MANAGEMENT ──────── */
 export const getSellers = asyncHandler(async (req, res) => {
   ensureManager(req);
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const sellers = await User.find({ role: 'seller' })
-    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
-    .sort({ createdAt: -1 })
-    .lean();
+  const [total, sellers] = await Promise.all([
+    User.countDocuments({ role: 'seller' }),
+    User.find({ role: 'seller' })
+      .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
-  // Enrich with product counts
+  // Enrich with product counts (only for current page)
   const sellerIds = sellers.map((s) => s._id);
   const productCounts = await Product.aggregate([
     { $match: { seller: { $in: sellerIds } } },
@@ -135,7 +142,7 @@ export const getSellers = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { sellers: enrichedSellers }, 'Sellers fetched.'));
+    .json(new ApiResponse(200, { sellers: enrichedSellers, pagination: paginationMeta(total, page, limit) }, 'Sellers fetched.'));
 });
 
 export const updateSellerStatus = asyncHandler(async (req, res) => {
@@ -192,13 +199,19 @@ export const deleteSeller = asyncHandler(async (req, res) => {
 /* ──────── GYM-OWNERS MANAGEMENT ──────── */
 export const getGymOwners = asyncHandler(async (req, res) => {
   ensureManager(req);
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const owners = await User.find({ role: 'gym-owner' })
-    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
-    .sort({ createdAt: -1 })
-    .lean();
+  const [total, owners] = await Promise.all([
+    User.countDocuments({ role: 'gym-owner' }),
+    User.find({ role: 'gym-owner' })
+      .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
-  // Enrich with gym counts
+  // Enrich with gym counts (only for current page)
   const ownerIds = owners.map((o) => o._id);
   const gymCounts = await Gym.aggregate([
     { $match: { owner: { $in: ownerIds } } },
@@ -217,7 +230,7 @@ export const getGymOwners = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { gymOwners: enrichedOwners }, 'Gym owners fetched.'));
+    .json(new ApiResponse(200, { gymOwners: enrichedOwners, pagination: paginationMeta(total, page, limit) }, 'Gym owners fetched.'));
 });
 
 export const updateGymOwnerStatus = asyncHandler(async (req, res) => {

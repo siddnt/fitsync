@@ -6,7 +6,8 @@ import GrowthLineChart from '../components/GrowthLineChart.jsx';
 import RevenueSummaryChart from '../components/RevenueSummaryChart.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetGymOwnerAnalyticsQuery } from '../../../services/dashboardApi.js';
-import { formatCurrency, formatNumber } from '../../../utils/format.js';
+import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const TIMEFRAME_OPTIONS = [
@@ -44,8 +45,15 @@ const toCumulativeTrend = (trend, valueAccessor, valueKey) => {
 
 const GymOwnerAnalyticsPage = () => {
   const [timeframe, setTimeframe] = useState('monthly');
+  const [invoicePage, setInvoicePage] = useState(1);
   const { data, isLoading, isError, refetch } = useGetGymOwnerAnalyticsQuery();
   const analytics = data?.data;
+  const membershipInvoices = analytics?.membershipInvoices ?? [];
+  const invoiceTotalPages = Math.ceil(membershipInvoices.length / 10) || 1;
+  const invoiceTotal = membershipInvoices.length;
+  const invoiceStart = (invoicePage - 1) * 10 + 1;
+  const invoiceEnd = Math.min(invoicePage * 10, invoiceTotal);
+  const pagedMembershipInvoices = membershipInvoices.slice((invoicePage - 1) * 10, invoicePage * 10);
 
   const revenueTrend = useMemo(() => {
     const trendSource = analytics?.revenueTrend;
@@ -258,7 +266,7 @@ const GymOwnerAnalyticsPage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Gym</th>
+                <th style={{ width: '25%' }}>Gym</th>
                 <th>Impressions</th>
                 <th>Memberships</th>
                 <th>Trainers</th>
@@ -307,6 +315,51 @@ const GymOwnerAnalyticsPage = () => {
           />
         ) : (
           <EmptyState message="No listing or sponsorship spend recorded yet." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Membership invoice history" className="dashboard-section--span-12">
+        {membershipInvoices.length ? (
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '140px' }}>Date</th>
+                  <th style={{ width: '25%' }}>Gym</th>
+                  <th style={{ width: '120px' }}>Amount</th>
+                  <th style={{ width: '120px' }}>Status</th>
+                  <th style={{ width: '130px' }}>Receipt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedMembershipInvoices.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td>{formatDate(invoice.paidOn)}</td>
+                    <td>{invoice.gym}</td>
+                    <td>{formatCurrency({ amount: invoice.amount, currency: invoice.currency })}</td>
+                    <td>{formatStatus(invoice.status)}</td>
+                    <td>
+                      {invoice.receiptUrl ? (
+                        <a href={invoice.receiptUrl} target="_blank" rel="noopener noreferrer">Download</a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar
+              page={invoicePage}
+              totalPages={invoiceTotalPages}
+              totalItems={invoiceTotal}
+              startIndex={invoiceStart}
+              endIndex={invoiceEnd}
+              onPage={setInvoicePage}
+            />
+          </div>
+        ) : (
+          <EmptyState message="Membership invoices will appear after successful Stripe membership payments." />
         )}
       </DashboardSection>
     </div>

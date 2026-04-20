@@ -47,8 +47,8 @@ import ManagerMarketplacePage from '../pages/dashboards/manager/MarketplacePage.
 import ManagerProductsPage from '../pages/dashboards/manager/ProductsPage.jsx';
 import ManagerGymDetailPage from '../pages/dashboards/manager/GymDetailPage.jsx';
 import ManagerProductBuyersPage from '../pages/dashboards/manager/ProductBuyersPage.jsx';
-import ManagerMessagesPage from '../pages/dashboards/manager/MessagesPage.jsx';
 import ManagerUserDetailPage from '../pages/dashboards/manager/UserDetailPage.jsx';
+import PaymentSuccess from '../pages/payment/PaymentSuccess.jsx';
 import AppLayout from '../layouts/AppLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import DashboardLanding from '../pages/dashboards/DashboardLanding.jsx';
@@ -74,6 +74,7 @@ const AppRouter = () => (
         <Route path="marketplace/products/:productId" element={<MarketplaceProductPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="checkout" element={<CheckoutPage />} />
+        <Route path="payment/success" element={<PaymentSuccess />} />
 
         <Route path="profile" element={<ProfilePage />} />
         <Route path="auth/*" element={<AuthRoutes />} />
@@ -114,7 +115,6 @@ const AppRouter = () => (
           <Route path="products" element={<ManagerProductsPage />} />
           <Route path="products/:productId" element={<ManagerProductBuyersPage />} />
           <Route path="marketplace" element={<ManagerMarketplacePage />} />
-          <Route path="messages" element={<ManagerMessagesPage />} />
           <Route path="users/:userId" element={<ManagerUserDetailPage />} />
         </Route>
         <Route path="admin">

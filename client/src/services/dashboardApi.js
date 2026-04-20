@@ -1,5 +1,7 @@
 import { apiSlice } from './apiSlice.js';
 
+const qs = (page) => `?page=${page}&limit=10`;
+
 export const dashboardApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getTraineeOverview: builder.query({
@@ -71,11 +73,16 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: ['Dashboard', 'Analytics'],
     }),
     getAdminUsers: builder.query({
-      query: () => '/dashboards/admin/users',
+      query: ({ page = 1 } = {}) => `/dashboards/admin/users${qs(page)}`,
       providesTags: ['Dashboard', 'User'],
     }),
     getAdminGyms: builder.query({
-      query: () => '/dashboards/admin/gyms',
+      query: ({ page = 1, search = '', status = 'all' } = {}) => {
+        let params = qs(page);
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        if (status !== 'all') params += `&status=${encodeURIComponent(status)}`;
+        return `/dashboards/admin/gyms${params}`;
+      },
       providesTags: ['Dashboard', 'Gym'],
     }),
     getAdminGymDetail: builder.query({
@@ -87,7 +94,7 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: ['Dashboard', 'Analytics'],
     }),
     getAdminMarketplace: builder.query({
-      query: () => '/dashboards/admin/marketplace',
+      query: ({ page = 1 } = {}) => `/dashboards/admin/marketplace${qs(page)}`,
       providesTags: ['Dashboard', 'Marketplace'],
     }),
     getAdminInsights: builder.query({
@@ -95,7 +102,7 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: ['Dashboard', 'Analytics', 'Notification'],
     }),
     getAdminMemberships: builder.query({
-      query: () => '/dashboards/admin/memberships',
+      query: ({ page = 1 } = {}) => `/dashboards/admin/memberships${qs(page)}`,
       providesTags: ['Dashboard', 'Gym'],
     }),
     getAdminUserDetail: builder.query({
@@ -103,7 +110,12 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: (_result, _error, userId) => [{ type: 'User', id: userId }],
     }),
     getAdminProducts: builder.query({
-      query: () => '/dashboards/admin/products',
+      query: ({ page = 1, search = '', status = 'all' } = {}) => {
+        let params = qs(page);
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        if (status !== 'all') params += `&status=${encodeURIComponent(status)}`;
+        return `/dashboards/admin/products${params}`;
+      },
       providesTags: ['Dashboard', 'Marketplace'],
     }),
     getAdminProductBuyers: builder.query({

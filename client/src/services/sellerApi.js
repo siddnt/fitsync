@@ -3,7 +3,7 @@ import { apiSlice } from './apiSlice.js';
 export const sellerApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     getSellerProducts: builder.query({
-      query: () => '/marketplace/seller/products',
+      query: ({ page = 1 } = {}) => `/marketplace/seller/products?page=${page}&limit=10`,
       providesTags: (result) =>
         result?.data?.products
           ? [
@@ -57,7 +57,7 @@ export const sellerApi = apiSlice.injectEndpoints({
       ],
     }),
     getSellerOrders: builder.query({
-      query: () => '/marketplace/seller/orders',
+      query: ({ page = 1 } = {}) => `/marketplace/seller/orders?page=${page}&limit=10`,
       providesTags: [{ type: 'Marketplace', id: 'SELLER_ORDERS' }],
     }),
     updateSellerOrderStatus: builder.mutation({

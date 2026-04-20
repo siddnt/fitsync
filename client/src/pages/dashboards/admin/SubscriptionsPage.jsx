@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminSubscriptionsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const TYPE_OPTIONS = [
@@ -13,13 +14,17 @@ const TYPE_OPTIONS = [
 ];
 
 const AdminSubscriptionsPage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery({ page });
   const listingSubs = data?.data?.listingSubscriptions ?? [];
   const sponsorships = data?.data?.sponsorships ?? [];
+  const pagination = data?.data?.pagination ?? {};
 
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter, typeFilter]);
 
   /* Derive visible rows based on type filter */
   const currentItems = useMemo(() => {
@@ -51,6 +56,12 @@ const AdminSubscriptionsPage = () => {
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); };
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? filtered.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
+  const pagedItems = filtered; // server already sliced
 
   const listingSummary = useMemo(() => ({
     total: listingSubs.length,
@@ -127,17 +138,17 @@ const AdminSubscriptionsPage = () => {
               <thead>
                 <tr>
                   <th>Type</th>
-                  <th>Gym</th>
+                  <th style={{ width: '25%' }}>Gym</th>
                   <th>Owner</th>
                   <th>Plan / Package</th>
-                  <th>Amount</th>
-                  <th>Status</th>
+                  <th style={{ width: '100px' }}>Amount</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Period / Expiry</th>
                   <th>Details</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
+                {pagedItems.map((item) => (
                   <tr key={`${item._type}-${item.id}`}>
                     <td>
                       <span className={`status-pill status-pill--${item._type === 'listing' ? 'info' : 'sponsor'}`}>
@@ -173,6 +184,7 @@ const AdminSubscriptionsPage = () => {
                 ))}
               </tbody>
             </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
           </div>
         ) : (
           <EmptyState message={filtersActive ? 'No items match the current filters.' : 'No subscriptions or sponsorships yet.'} />

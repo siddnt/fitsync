@@ -6,11 +6,29 @@ const billingSchema = new mongoose.Schema(
     currency: { type: String, default: 'INR' },
     paymentGateway: { type: String },
     paymentReference: { type: String },
+    receiptUrl: { type: String },
     status: {
       type: String,
       enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'paid',
     },
+  },
+  { _id: false },
+);
+
+const membershipInvoiceSchema = new mongoose.Schema(
+  {
+    amount: { type: Number, required: true, min: 0 },
+    currency: { type: String, default: 'INR' },
+    paidOn: { type: Date, default: Date.now },
+    paymentReference: { type: String },
+    receiptUrl: { type: String },
+    status: {
+      type: String,
+      enum: ['pending', 'paid', 'refunded', 'failed'],
+      default: 'paid',
+    },
+    metadata: { type: Map, of: String },
   },
   { _id: false },
 );
@@ -55,6 +73,10 @@ const gymMembershipSchema = new mongoose.Schema(
     },
     autoRenew: { type: Boolean, default: true },
     billing: billingSchema,
+    invoices: {
+      type: [membershipInvoiceSchema],
+      default: [],
+    },
     benefits: {
       type: [String],
       default: [],

@@ -111,12 +111,12 @@ const ApprovalsPage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
+                <th style={{ width: '25%' }}>Name</th>
+                <th style={{ width: '25%' }}>Email</th>
+                <th style={{ width: '150px' }}>Role</th>
                 <th>Location</th>
-                <th>Applied</th>
-                <th>Actions</th>
+                <th style={{ width: '150px' }}>Applied</th>
+                <th style={{ width: '120px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

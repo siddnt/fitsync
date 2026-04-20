@@ -125,13 +125,6 @@ const ListingSubscriptionFormComponent = ({
         type="checkbox"
       />
 
-      <Field
-        name="paymentReference"
-        component={FormField}
-        label="Payment reference"
-        placeholder="Txn-123456"
-      />
-
       {error ? <div className="form-error">{error}</div> : null}
       {submitSucceeded && lastReceipt ? (
         <div className="form-success">

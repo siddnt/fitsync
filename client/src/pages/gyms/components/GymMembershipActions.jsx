@@ -25,7 +25,6 @@ const GymMembershipActions = ({
   currency,
 }) => {
   const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
   const [autoRenew, setAutoRenew] = useState(true);
   const [localError, setLocalError] = useState(null);
 
@@ -74,7 +73,7 @@ const GymMembershipActions = ({
 
   useEffect(() => {
     setLocalError(null);
-  }, [selectedTrainer, paymentReference, isTrainerAccount]);
+  }, [selectedTrainer, isTrainerAccount]);
 
   if (!isAuthenticated) {
     return (
@@ -124,18 +123,11 @@ const GymMembershipActions = ({
       return;
     }
 
-    if (!paymentReference.trim()) {
-      setLocalError('Enter the payment reference received after payment.');
-      return;
-    }
-
     try {
       await onJoin?.({
         trainerId: selectedTrainer,
-        paymentReference: paymentReference.trim(),
         autoRenew,
       });
-      setPaymentReference('');
     } catch (joinError) {
       setLocalError(joinError?.message ?? 'Unable to join the gym. Please try again.');
     }
@@ -288,18 +280,6 @@ const GymMembershipActions = ({
                   No trainers are currently available for this gym. Please check back soon.
                 </p>
               ) : null}
-
-              <label className="gym-membership-actions__label" htmlFor="gym-membership-payment">
-                Payment reference
-                <input
-                  id="gym-membership-payment"
-                  type="text"
-                  value={paymentReference}
-                  placeholder="Txn-123456"
-                  onChange={(event) => setPaymentReference(event.target.value)}
-                  disabled={isJoining}
-                />
-              </label>
 
               <label className="gym-membership-actions__toggle" htmlFor="gym-membership-autorenew">
                 <input

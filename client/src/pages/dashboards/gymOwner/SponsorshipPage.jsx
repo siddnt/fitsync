@@ -14,8 +14,27 @@ import {
 } from '../../../services/ownerApi.js';
 import SponsorshipForm from '../../../features/monetisation/SponsorshipForm.jsx';
 import { setLastReceipt, selectGym, selectSponsorshipTier } from '../../../features/monetisation/monetisationSlice.js';
-import { formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
+import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
+
+const mapSponsorshipInvoices = (sponsorships = []) =>
+  sponsorships
+    .flatMap((item) =>
+      (item.sponsorship?.invoices ?? []).map((invoice) => ({
+        id: `${item.id}-${invoice.paymentReference ?? invoice.paidOn ?? 'invoice'}-${invoice.amount ?? 0}`,
+        gym: item.name ?? '—',
+        tier: item.sponsorship?.tier ?? '—',
+        paidOn: invoice.paidOn,
+        amount: {
+          amount: invoice.amount,
+          currency: invoice.currency ?? 'INR',
+        },
+        status: invoice.status,
+        receiptUrl: invoice.receiptUrl ?? null,
+      })),
+    )
+    .sort((a, b) => new Date(b.paidOn) - new Date(a.paidOn));
 
 const GymOwnerSponsorshipPage = () => {
   const dispatch = useDispatch();
@@ -46,8 +65,10 @@ const GymOwnerSponsorshipPage = () => {
   const sponsorships = sponsorshipResponse?.data?.sponsorships ?? [];
   const gymOptions = gymsResponse?.data?.gyms ?? [];
   const packages = monetisationResponse?.data?.sponsorshipPackages ?? [];
+  const sponsorshipInvoices = mapSponsorshipInvoices(sponsorships);
 
   const [sponsorshipGymFilter, setSponsorshipGymFilter] = useState('all');
+  const [invoicePage, setInvoicePage] = useState(1);
 
   const sponsorshipGymOptions = useMemo(() => {
     const visibleGyms = gymOptions.map((gym) => ({ value: gym.id, label: gym.name ?? 'Unnamed gym' }));
@@ -60,6 +81,12 @@ const GymOwnerSponsorshipPage = () => {
     }
     return sponsorships.filter((item) => item.id === sponsorshipGymFilter);
   }, [sponsorships, sponsorshipGymFilter]);
+
+  const invoiceTotalPages = Math.ceil(sponsorshipInvoices.length / 10) || 1;
+  const invoiceTotal = sponsorshipInvoices.length;
+  const invoiceStart = (invoicePage - 1) * 10 + 1;
+  const invoiceEnd = Math.min(invoicePage * 10, invoiceTotal);
+  const pagedInvoices = sponsorshipInvoices.slice((invoicePage - 1) * 10, invoicePage * 10);
 
   const isLoading = isSponsorshipLoading || isGymsLoading || isPackagesLoading;
   const isError = isSponsorshipError || isGymsError || isPackagesError;
@@ -74,17 +101,16 @@ const GymOwnerSponsorshipPage = () => {
       const payload = {
         gymId: values.gymId,
         tier: values.tier,
-        paymentReference: values.paymentReference?.trim() || undefined,
       };
 
       const response = await purchaseSponsorship(payload).unwrap();
 
-      const paymentReference =
-        response?.data?.sponsorship?.paymentReference ||
-        payload.paymentReference ||
-        `${payload.tier}-${payload.gymId}`;
+      if (response?.data?.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
 
-      dispatch(setLastReceipt(paymentReference));
+      dispatch(setLastReceipt(`${payload.tier}-${payload.gymId}`));
       dispatch(selectSponsorshipTier(null));
       dispatch(selectGym(null));
 
@@ -226,6 +252,55 @@ const GymOwnerSponsorshipPage = () => {
           </ul>
         ) : (
           <EmptyState message="We will recommend opportunities once your gyms gather traffic." />
+        )}
+      </DashboardSection>
+
+      <DashboardSection title="Billing history" className="dashboard-section--span-12">
+        {sponsorshipInvoices.length ? (
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '140px' }}>Date</th>
+                  <th style={{ width: '25%' }}>Gym</th>
+                  <th style={{ width: '150px' }}>Package</th>
+                  <th style={{ width: '120px' }}>Amount</th>
+                  <th style={{ width: '120px' }}>Status</th>
+                  <th style={{ width: '130px' }}>Receipt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedInvoices.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td>{formatDate(invoice.paidOn)}</td>
+                    <td>{invoice.gym}</td>
+                    <td>{formatStatus(invoice.tier)}</td>
+                    <td>{formatCurrency(invoice.amount)}</td>
+                    <td>{formatStatus(invoice.status)}</td>
+                    <td>
+                      {invoice.receiptUrl ? (
+                        <a href={invoice.receiptUrl} target="_blank" rel="noopener noreferrer">
+                          Download
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar
+              page={invoicePage}
+              totalPages={invoiceTotalPages}
+              totalItems={invoiceTotal}
+              startIndex={invoiceStart}
+              endIndex={invoiceEnd}
+              onPage={setInvoicePage}
+            />
+          </div>
+        ) : (
+          <EmptyState message="Sponsorship invoices will appear after your first successful payment." />
         )}
       </DashboardSection>
     </div>

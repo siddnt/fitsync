@@ -135,17 +135,17 @@ const ManagerProductsPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Product</th>
+                  <th style={{ width: '25%' }}>Product</th>
                   <th>Seller</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>MRP</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Rating</th>
-                  <th>Reviews</th>
-                  <th>Created</th>
-                  <th>Action</th>
+                  <th style={{ width: '130px' }}>Category</th>
+                  <th style={{ width: '100px' }}>Price</th>
+                  <th style={{ width: '100px' }}>MRP</th>
+                  <th style={{ width: '90px' }}>Stock</th>
+                  <th style={{ width: '150px' }}>Status</th>
+                  <th style={{ width: '100px' }}>Rating</th>
+                  <th style={{ width: '100px' }}>Reviews</th>
+                  <th style={{ width: '130px' }}>Created</th>
+                  <th style={{ width: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>

@@ -5,10 +5,15 @@ import ProductReview from '../../models/productReview.model.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { getPaginationParams, paginationMeta } from '../../utils/paginate.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import toObjectId from '../../utils/toObjectId.js';
 import { MODERN_ITEM_STATUSES, normaliseOrderItemStatus } from '../../utils/orderStatus.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
+import Stripe from 'stripe';
+import dotenv from 'dotenv';
+dotenv.config();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
 
 const SELLER_PAYOUT_RATE = 0.85;
 
@@ -470,7 +475,8 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
   ensureMarketplaceBuyerEligible(req.user);
 
   const userId = req.user?._id;
-  const { items, shippingAddress, paymentMethod = 'Cash on Delivery' } = req.body ?? {};
+  const { items, shippingAddress } = req.body ?? {};
+  const paymentMethod = 'Credit / Debit Card';
 
   if (!userId) {
     throw new ApiError(401, 'You must be signed in to place an order.');
@@ -550,7 +556,26 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
 
   const orderNumber = await generateOrderNumber();
 
-  const order = await Order.create({
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    mode: 'payment',
+    line_items: productIds.map((id) => {
+      const item = orderItems.find((i) => i.product.toString() === id.toString());
+      return {
+        price_data: {
+          currency: 'inr',
+          product_data: { name: item.name },
+          unit_amount: Math.round(item.price * 100),
+        },
+        quantity: item.quantity,
+      };
+    }),
+    success_url: `http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `http://localhost:5173/marketplace/cart`,
+    metadata: { type: 'marketplace' },
+  });
+
+  await Order.create({
     user: userId,
     orderItems,
     shippingAddress,
@@ -560,36 +585,45 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
     shippingCost,
     total,
     orderNumber,
+    paymentStatus: 'pending',
+    stripeSessionId: session.id,
   });
 
-  await Promise.all(orderItems.map(async (item) => {
-    const product = productMap.get(String(item.product));
-    if (!product) {
-      return;
-    }
+  return res.status(201).json(new ApiResponse(201, { checkoutUrl: session.url }, 'Redirecting to checkout'));
+});
 
+/**
+ * Fulfills a marketplace order post-payment. Called by payment.controller.js or internally for CoD.
+ */
+export const fulfillMarketplaceOrder = async (orderId) => {
+  const order = await Order.findById(orderId);
+  if (!order || (order.paymentStatus === 'paid' && order.status !== 'processing')) return null;
+
+  order.paymentStatus = 'paid';
+  await order.save();
+
+  // Extract products and stock map
+  const productIds = order.orderItems.map((i) => i.product);
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productMap = new Map(products.map((p) => [String(p._id), p]));
+
+  await Promise.all(order.orderItems.map(async (item) => {
+    const product = productMap.get(String(item.product));
+    if (!product) return;
     const updatedStock = Math.max(0, (product.stock || 0) - item.quantity);
     product.stock = updatedStock;
-    if (updatedStock === 0) {
-      product.status = 'out-of-stock';
-    }
+    if (updatedStock === 0) product.status = 'out-of-stock';
     await product.save();
   }));
 
   const populated = await Order.findById(order._id)
-    .populate({
-      path: 'orderItems.product',
-      select: 'name image',
-    })
+    .populate({ path: 'orderItems.product', select: 'name image' })
     .lean();
 
-  // Invalidate marketplace caches
   await invalidatePrefix('cache:marketplace');
 
-  return res
-    .status(201)
-    .json(new ApiResponse(201, { order: mapBuyerOrder(populated) }, 'Order placed successfully'));
-});
+  return populated;
+};
 
 export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
   ensureMarketplaceBuyerEligible(req.user);
@@ -673,14 +707,20 @@ export const createMarketplaceProductReview = asyncHandler(async (req, res) => {
 
 export const listSellerProducts = asyncHandler(async (req, res) => {
   ensureSellerActive(req.user);
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const products = await Product.find({ seller: req.user._id })
-    .sort({ updatedAt: -1 })
-    .lean();
+  const [total, products] = await Promise.all([
+    Product.countDocuments({ seller: req.user._id }),
+    Product.find({ seller: req.user._id })
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { products: products.map(mapProduct) }, 'Products fetched successfully'));
+    .json(new ApiResponse(200, { products: products.map(mapProduct), pagination: paginationMeta(total, page, limit) }, 'Products fetched successfully'));
 });
 
 export const createSellerProduct = asyncHandler(async (req, res) => {
@@ -1031,22 +1071,30 @@ const recordSellerPayoutIfEligible = (orderDoc, sellerId) => {
 
 export const listSellerOrders = asyncHandler(async (req, res) => {
   const sellerId = req.user._id;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const orders = await Order.find({
+  const filter = {
     $or: [
       { seller: sellerId },
       { 'orderItems.seller': sellerId },
     ],
-  })
-    .sort({ createdAt: -1 })
-    .populate({ path: 'user', select: 'name email' })
-    .lean();
+  };
+
+  const [total, orders] = await Promise.all([
+    Order.countDocuments(filter),
+    Order.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'user', select: 'name email' })
+      .lean(),
+  ]);
 
   const payload = orders.map((order) => mapOrder(order, sellerId));
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { orders: payload, statusOptions: Array.from(SELLER_STATUS_FLAGS) }, 'Orders fetched successfully'));
+    .json(new ApiResponse(200, { orders: payload, statusOptions: Array.from(SELLER_STATUS_FLAGS), pagination: paginationMeta(total, page, limit) }, 'Orders fetched successfully'));
 });
 
 export const updateSellerOrderStatus = asyncHandler(async (req, res) => {

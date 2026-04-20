@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -9,19 +9,24 @@ import {
   useDeleteGymOwnerByManagerMutation,
 } from '../../../services/managerApi.js';
 import { formatDate, formatStatus, formatNumber } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const GymOwnersPage = () => {
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useGetManagerGymOwnersQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetManagerGymOwnersQuery({ page });
   const [updateStatus, { isLoading: isUpdating }] = useUpdateGymOwnerStatusMutation();
   const [deleteOwner, { isLoading: isDeleting }] = useDeleteGymOwnerByManagerMutation();
 
   const owners = data?.data?.gymOwners ?? [];
+  const pagination = data?.data?.pagination ?? {};
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter]);
 
   const filteredOwners = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -31,6 +36,11 @@ const GymOwnersPage = () => {
       return [owner.name, owner.email].filter(Boolean).some((v) => v.toLowerCase().includes(query));
     });
   }, [owners, searchTerm, statusFilter]);
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? filteredOwners.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
   const handleToggleStatus = async (owner) => {
     setNotice(null);
@@ -121,85 +131,89 @@ const GymOwnersPage = () => {
         )}
 
         {filteredOwners.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Gyms</th>
-                <th>Members</th>
-                <th>Joined</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOwners.map((owner) => (
-                <tr key={owner._id}>
-                  <td>
-                    <div
-                      className="dashboard-table__user dashboard-table__user--link"
-                      onClick={() => navigate(`/dashboard/manager/users/${owner._id}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${owner._id}`)}
-                    >
-                      {owner.profilePicture ? (
-                        <img src={owner.profilePicture} alt={owner.name} />
-                      ) : (
-                        <div className="dashboard-table__user-placeholder">
-                          {owner.name?.charAt(0) ?? '?'}
-                        </div>
-                      )}
-                      <div>
-                        <strong>{owner.name}</strong>
-                        {owner.profile?.headline && (
-                          <div><small>{owner.profile.headline}</small></div>
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '20%' }}>Name</th>
+                  <th style={{ width: '22%' }}>Email</th>
+                  <th style={{ width: '120px' }}>Status</th>
+                  <th>Gyms</th>
+                  <th style={{ width: '100px' }}>Members</th>
+                  <th style={{ width: '120px' }}>Joined</th>
+                  <th style={{ width: '250px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOwners.map((owner) => (
+                  <tr key={owner._id}>
+                    <td>
+                      <div
+                        className="dashboard-table__user dashboard-table__user--link"
+                        onClick={() => navigate(`/dashboard/manager/users/${owner._id}`)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && navigate(`/dashboard/manager/users/${owner._id}`)}
+                      >
+                        {owner.profilePicture ? (
+                          <img src={owner.profilePicture} alt={owner.name} />
+                        ) : (
+                          <div className="dashboard-table__user-placeholder">
+                            {owner.name?.charAt(0) ?? '?'}
+                          </div>
                         )}
+                        <div>
+                          <strong>{owner.name}</strong>
+                          {owner.profile?.headline && (
+                            <div><small>{owner.profile.headline}</small></div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>{owner.email}</td>
-                  <td>
-                    <span className={`status-pill ${owner.status === 'active' ? 'status-pill--success' : owner.status === 'pending' ? 'status-pill--warning' : 'status-pill--danger'}`}>
-                      {formatStatus(owner.status)}
-                    </span>
-                  </td>
-                  <td>
-                    {formatNumber(owner.gyms?.total ?? 0)} total
-                    <div><small>{formatNumber(owner.gyms?.published ?? 0)} published</small></div>
-                  </td>
-                  <td>{formatNumber(owner.totalMembers ?? 0)}</td>
-                  <td>{formatDate(owner.createdAt)}</td>
-                  <td>
-                    <div className="button-row">
-                      {owner.status !== 'pending' && (
+                    </td>
+                    <td>{owner.email}</td>
+                    <td>
+                      <span className={`status-pill ${owner.status === 'active' ? 'status-pill--success' : owner.status === 'pending' ? 'status-pill--warning' : 'status-pill--danger'}`}>
+                        {formatStatus(owner.status)}
+                      </span>
+                    </td>
+                    <td>
+                      {formatNumber(owner.gyms?.total ?? 0)} total
+                      <div><small>{formatNumber(owner.gyms?.published ?? 0)} published</small></div>
+                    </td>
+                    <td>{formatNumber(owner.totalMembers ?? 0)}</td>
+                    <td>{formatDate(owner.createdAt)}</td>
+                    <td>
+                      <div className="button-row" style={{ flexWrap: 'nowrap' }}>
+                        {owner.status !== 'pending' && (
+                          <button
+                            type="button"
+                            className={`manager-btn ${owner.status === 'active' ? 'manager-btn--deactivate' : 'manager-btn--approve'}`}
+                            onClick={() => handleToggleStatus(owner)}
+                            disabled={isUpdating}
+                          >
+                            {owner.status === 'active' ? 'Deactivate' : 'Activate'}
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className={`manager-btn ${owner.status === 'active' ? 'manager-btn--deactivate' : 'manager-btn--approve'}`}
-                          onClick={() => handleToggleStatus(owner)}
-                          disabled={isUpdating}
+                          className="manager-btn manager-btn--reject"
+                          onClick={() => handleDelete(owner)}
+                          disabled={isDeleting}
                         >
-                          {owner.status === 'active' ? 'Deactivate' : 'Activate'}
+                          Delete
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="manager-btn manager-btn--reject"
-                        onClick={() => handleDelete(owner)}
-                        disabled={isDeleting}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
           <EmptyState message="No gym owners match your filters." />
         )}
+
       </DashboardSection>
     </div>
   );
