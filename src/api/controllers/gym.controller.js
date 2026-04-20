@@ -75,17 +75,13 @@ const buildFilters = ({ search, city, amenities }) => {
   const filter = { status: 'active', isPublished: true };
 
   if (search) {
-    // Use MongoDB $text search for full-word matches (uses the text index)
-    // Fall back to $regex for partial / short queries
-    if (search.trim().length >= 3) {
-      filter.$text = { $search: search };
-    } else {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $regex: search, $options: 'i' } },
-      ];
-    }
+    // Fall back to $regex when Solr is not ready
+    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
+    filter.$or = [
+      { name: { $regex: escapedSearch, $options: 'i' } },
+      { description: { $regex: escapedSearch, $options: 'i' } },
+      { tags: { $regex: escapedSearch, $options: 'i' } },
+    ];
   }
 
   if (city) {

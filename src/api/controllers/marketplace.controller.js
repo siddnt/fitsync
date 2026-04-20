@@ -363,16 +363,12 @@ export const listMarketplaceCatalogue = asyncHandler(async (req, res) => {
 
   const searchTerm = typeof search === 'string' ? search.trim() : '';
   if (searchTerm && !isSolrReady()) {
-    // Use Mongo text/regex search when Solr is unavailable.
-    if (searchTerm.length >= 3) {
-      filters.$text = { $search: searchTerm };
-    } else {
-      const escaped = escapeRegex(searchTerm);
-      filters.$or = [
-        { name: { $regex: escaped, $options: 'i' } },
-        { description: { $regex: escaped, $options: 'i' } },
-      ];
-    }
+    // Use Mongo regex search when Solr is unavailable.
+    const escaped = escapeRegex(searchTerm);
+    filters.$or = [
+      { name: { $regex: escaped, $options: 'i' } },
+      { description: { $regex: escaped, $options: 'i' } },
+    ];
   }
 
   const resolvedPageSize = Math.min(Math.max(Number(pageSize) || 24, 6), 60);
