@@ -16,8 +16,8 @@ const TYPE_OPTIONS = [
 const AdminSubscriptionsPage = () => {
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery({ page });
-  const listingSubs = data?.data?.listingSubscriptions ?? [];
-  const sponsorships = data?.data?.sponsorships ?? [];
+  
+  const currentItems = data?.data?.combinedSubscriptions ?? [];
   const pagination = data?.data?.pagination ?? {};
 
   const [typeFilter, setTypeFilter] = useState('all');
@@ -26,24 +26,20 @@ const AdminSubscriptionsPage = () => {
 
   useEffect(() => { setPage(1); }, [searchTerm, statusFilter, typeFilter]);
 
-  /* Derive visible rows based on type filter */
-  const currentItems = useMemo(() => {
-    if (typeFilter === 'listing') return listingSubs.map((i) => ({ ...i, _type: 'listing' }));
-    if (typeFilter === 'sponsorship') return sponsorships.map((i) => ({ ...i, _type: 'sponsorship' }));
-    return [
-      ...listingSubs.map((i) => ({ ...i, _type: 'listing' })),
-      ...sponsorships.map((i) => ({ ...i, _type: 'sponsorship' })),
-    ];
-  }, [typeFilter, listingSubs, sponsorships]);
+  const typeFilteredItems = useMemo(() => {
+    if (typeFilter === 'listing') return currentItems.filter(i => i._type === 'listing');
+    if (typeFilter === 'sponsorship') return currentItems.filter(i => i._type === 'sponsorship');
+    return currentItems;
+  }, [typeFilter, currentItems]);
 
   const statusOptions = useMemo(() => {
-    const values = new Set(currentItems.map((i) => i.status).filter(Boolean));
+    const values = new Set(typeFilteredItems.map((i) => i.status).filter(Boolean));
     return ['all', ...values];
-  }, [currentItems]);
+  }, [typeFilteredItems]);
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    return currentItems.filter((i) => {
+    return typeFilteredItems.filter((i) => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false;
       if (!query) return true;
       const haystacks = [
@@ -52,28 +48,36 @@ const AdminSubscriptionsPage = () => {
       ].filter(Boolean).map((v) => v.toLowerCase());
       return haystacks.some((v) => v.includes(query));
     });
-  }, [currentItems, searchTerm, statusFilter]);
+  }, [typeFilteredItems, searchTerm, statusFilter]);
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); };
 
+  const limit = pagination.limit ?? 10;
+  const totalItems = pagination.total ?? 0;
   const totalPages = pagination.totalPages ?? 1;
-  const totalItems = pagination.total ?? filtered.length;
-  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
-  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
-  const pagedItems = filtered; // server already sliced
+  const startIndex = (page - 1) * limit + 1;
+  const endIndex = Math.min(page * limit, totalItems);
+  
+  const pagedItems = filtered; // The backend already combined and paginated to the limit!
 
-  const listingSummary = useMemo(() => ({
-    total: listingSubs.length,
-    active: listingSubs.filter((s) => s.status === 'active').length,
-    totalRevenue: listingSubs.reduce((s, sub) => s + (sub.amount ?? 0), 0),
-  }), [listingSubs]);
+  const listingSummary = useMemo(() => {
+    const all = currentItems.filter(i => i._type === 'listing');
+    return {
+      total: all.length,
+      active: all.filter((s) => s.status === 'active').length,
+      totalRevenue: all.reduce((s, sub) => s + (sub.amount ?? 0), 0),
+    };
+  }, [currentItems]);
 
-  const sponsorshipSummary = useMemo(() => ({
-    total: sponsorships.length,
-    active: sponsorships.filter((s) => s.status === 'active').length,
-    expired: sponsorships.filter((s) => s.status === 'expired').length,
-  }), [sponsorships]);
+  const sponsorshipSummary = useMemo(() => {
+    const all = currentItems.filter(i => i._type === 'sponsorship');
+    return {
+      total: all.length,
+      active: all.filter((s) => s.status === 'active').length,
+      expired: all.filter((s) => s.status === 'expired').length,
+    };
+  }, [currentItems]);
 
   if (isLoading) {
     return (
