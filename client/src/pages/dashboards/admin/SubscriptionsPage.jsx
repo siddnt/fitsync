@@ -15,54 +15,39 @@ const TYPE_OPTIONS = [
 
 const AdminSubscriptionsPage = () => {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery();
-  const listingSubs = data?.data?.listingSubscriptions ?? [];
-  const sponsorships = data?.data?.sponsorships ?? [];
-  const pagination = data?.data?.pagination ?? {};
-
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const { data, isLoading, isError, refetch } = useGetAdminSubscriptionsQuery({ page, search: searchTerm, type: typeFilter, status: statusFilter });
+  const listingSubs = data?.data?.listingSubscriptions ?? [];
+  const sponsorships = data?.data?.sponsorships ?? [];
+  const pagination = data?.data?.pagination ?? {};
+
   useEffect(() => { setPage(1); }, [searchTerm, statusFilter, typeFilter]);
 
-  /* Derive visible rows based on type filter */
+  /* Derive visible rows based on type filter - Server now filters the collections */
   const currentItems = useMemo(() => {
-    if (typeFilter === 'listing') return listingSubs.map((i) => ({ ...i, _type: 'listing' }));
-    if (typeFilter === 'sponsorship') return sponsorships.map((i) => ({ ...i, _type: 'sponsorship' }));
     return [
       ...listingSubs.map((i) => ({ ...i, _type: 'listing' })),
       ...sponsorships.map((i) => ({ ...i, _type: 'sponsorship' })),
     ];
-  }, [typeFilter, listingSubs, sponsorships]);
+  }, [listingSubs, sponsorships]);
 
-  const statusOptions = useMemo(() => {
-    const values = new Set(currentItems.map((i) => i.status).filter(Boolean));
-    return ['all', ...values];
-  }, [currentItems]);
+  const statusOptions = ['all', 'active', 'pending', 'expired'];
 
-  const filtered = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return currentItems.filter((i) => {
-      if (statusFilter !== 'all' && i.status !== statusFilter) return false;
-      if (!query) return true;
-      const haystacks = [
-        i.owner?.name, i.owner?.email, i.gym?.name,
-        i.planCode, i.package,
-      ].filter(Boolean).map((v) => v.toLowerCase());
-      return haystacks.some((v) => v.includes(query));
-    });
-  }, [currentItems, searchTerm, statusFilter]);
+  const filtered = currentItems; // Backend now performs filtering
 
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setTypeFilter('all'); };
 
-  const limit = 10;
-  const totalPages = Math.ceil(filtered.length / limit) || 1;
-  const totalItems = filtered.length;
-  const startIndex = (page - 1) * limit + 1;
-  const endIndex = Math.min(page * limit, totalItems);
-  const pagedItems = filtered.slice((page - 1) * limit, page * limit);
+  // Calculate total across both datasets using the server provided pagination objects
+  const totalItems = (pagination.listingSubscriptions?.total ?? 0) + (pagination.sponsorships?.total ?? 0);
+  const maxPages = Math.max(pagination.listingSubscriptions?.totalPages ?? 1, pagination.sponsorships?.totalPages ?? 1);
+  const totalPages = maxPages;
+  const startIndex = (page - 1) * 10 + 1;
+  const endIndex = Math.min(page * 10, totalItems);
+  const pagedItems = filtered; // Server already sliced
 
   const listingSummary = useMemo(() => ({
     total: listingSubs.length,

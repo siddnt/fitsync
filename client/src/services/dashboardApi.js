@@ -73,7 +73,13 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: ['Dashboard', 'Analytics'],
     }),
     getAdminUsers: builder.query({
-      query: ({ page = 1 } = {}) => `/dashboards/admin/users${qs(page)}`,
+      query: ({ page = 1, search = '', role = 'all', status = 'all' } = {}) => {
+        let params = qs(page);
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        if (role !== 'all') params += `&role=${encodeURIComponent(role)}`;
+        if (status !== 'all') params += `&status=${encodeURIComponent(status)}`;
+        return `/dashboards/admin/users${params}`;
+      },
       providesTags: ['Dashboard', 'User'],
     }),
     getAdminGyms: builder.query({
@@ -127,7 +133,13 @@ export const dashboardApi = apiSlice.injectEndpoints({
       providesTags: ['Dashboard'],
     }),
     getAdminSubscriptions: builder.query({
-      query: () => '/dashboards/admin/subscriptions',
+      query: ({ page = 1, search = '', type = 'all', status = 'all' } = {}) => {
+        let params = qs(page);
+        if (search) params += `&search=${encodeURIComponent(search)}`;
+        if (type !== 'all') params += `&type=${encodeURIComponent(type)}`;
+        if (status !== 'all') params += `&status=${encodeURIComponent(status)}`;
+        return `/dashboards/admin/subscriptions${params}`;
+      },
       providesTags: ['Dashboard', 'Subscription'],
     }),
 

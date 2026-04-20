@@ -14,7 +14,11 @@ import '../Dashboard.css';
 const AdminUsersPage = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, refetch } = useGetAdminUsersQuery({ page });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const { data, isLoading, isError, refetch } = useGetAdminUsersQuery({ page, search: searchTerm, role: roleFilter, status: statusFilter });
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
   const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
@@ -22,36 +26,16 @@ const AdminUsersPage = () => {
   const pagination = data?.data?.pagination ?? {};
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [searchTerm, roleFilter, statusFilter]);
 
-  const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
-    const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
-    const merged = [...new Set([...knownRoles, ...dynamicRoles])];
-    return ['all', ...merged];
-  }, [recent]);
+  // Keep all roles as hardcoded list since pagination limits dynamic extraction
+  const roleOptions = ['all', 'trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
+  
+  const statusOptions = ['all', 'active', 'pending', 'inactive'];
 
-  const statusOptions = useMemo(() => {
-    const values = Array.from(new Set(recent.map((user) => user.status).filter(Boolean)));
-    return ['all', ...values];
-  }, [recent]);
-
-  // Client-side filter on the already-fetched page (10 rows max — instant)
-  const filteredUsers = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return recent.filter((user) => {
-      if (roleFilter !== 'all' && user.role !== roleFilter) return false;
-      if (statusFilter !== 'all' && user.status !== statusFilter) return false;
-      if (!query) return true;
-      const haystacks = [user.name, user.email].filter(Boolean).map((value) => value.toLowerCase());
-      return haystacks.some((value) => value.includes(query));
-    });
-  }, [recent, roleFilter, statusFilter, searchTerm]);
+  const filteredUsers = recent; // Backend now performs the filtering
 
   const filtersActive = useMemo(
     () => Boolean(searchTerm.trim() || roleFilter !== 'all' || statusFilter !== 'all'),

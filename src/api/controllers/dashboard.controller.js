@@ -1699,13 +1699,22 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
 
 export const getAdminUsers = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
+  const { search = '', role = 'all', status = 'all' } = req.query;
+
+  const query = {};
+  if (role !== 'all') query.role = role;
+  if (status !== 'all') query.status = status;
+  if (search) {
+    const regex = new RegExp(search, 'i');
+    query.$or = [{ name: regex }, { email: regex }];
+  }
 
   const [pending, total, recent, adminToggles, membershipCounts, orderCounts, gymCounts] = await Promise.all([
     User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner', 'manager'] } })
       .select('name email role createdAt profile.location profile.headline')
       .lean(),
-    User.countDocuments(),
-    User.find()
+    User.countDocuments(query),
+    User.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -2808,24 +2817,66 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
 
 export const getAdminSubscriptions = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPaginationParams(req.query);
+  const { search = '', type = 'all', status = 'all' } = req.query;
+
+  // Build query for Listing Subscriptions
+  const listingQuery = {};
+  if (status !== 'all') {
+    listingQuery.status = status;
+  }
+  
+  // Build query for Sponsorships (Gym collection)
+  const sponsorQuery = { 'sponsorship.status': { $in: ['active', 'expired'] } };
+  if (status !== 'all') {
+    sponsorQuery['sponsorship.status'] = status;
+  }
+
+  // Cross-collection text search requires filtering after population or looking up IDs.
+  // Since we don't have a simple way to text-search populated fields across both collections efficiently,
+  // we will look up matching Gym and User IDs first if there's a search term.
+  if (search) {
+    const regex = new RegExp(search, 'i');
+    
+    const [matchingGyms, matchingUsers] = await Promise.all([
+      Gym.find({ name: regex }).select('_id').lean(),
+      User.find({ $or: [{ name: regex }, { email: regex }] }).select('_id').lean()
+    ]);
+    
+    const gymIds = matchingGyms.map(g => g._id);
+    const userIds = matchingUsers.map(u => u._id);
+
+    listingQuery.$or = [
+      { planCode: regex },
+      { gym: { $in: gymIds } },
+      { owner: { $in: userIds } }
+    ];
+
+    sponsorQuery.$or = [
+      { name: regex },
+      { owner: { $in: userIds } }
+    ];
+  }
+
+  const fetchListings = type === 'all' || type === 'listing';
+  const fetchSponsorships = type === 'all' || type === 'sponsorship';
 
   const [listingTotal, sponsorTotal, listingSubs, sponsoredGyms] = await Promise.all([
-    GymListingSubscription.countDocuments(),
-    Gym.countDocuments({ 'sponsorship.status': { $in: ['active', 'expired'] } }),
-    GymListingSubscription.find()
+    fetchListings ? GymListingSubscription.countDocuments(listingQuery) : 0,
+    fetchSponsorships ? Gym.countDocuments(sponsorQuery) : 0,
+    fetchListings ? GymListingSubscription.find(listingQuery)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate({ path: 'gym', select: 'name location.city' })
       .populate({ path: 'owner', select: 'name email' })
-      .lean(),
-    Gym.find({ 'sponsorship.status': { $in: ['active', 'expired'] } })
+      .lean() : [],
+    fetchSponsorships ? Gym.find(sponsorQuery)
       .select('name location.city owner sponsorship createdAt')
       .populate({ path: 'owner', select: 'name email' })
       .sort({ 'sponsorship.expiresAt': -1 })
       .skip(skip)
       .limit(limit)
-      .lean(),
+      .lean() : [],
   ]);
 
   const listingData = listingSubs.map((s) => ({
