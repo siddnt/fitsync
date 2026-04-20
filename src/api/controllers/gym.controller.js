@@ -248,7 +248,7 @@ export const listGyms = asyncHandler(async (req, res) => {
     const fallbackResult = await Promise.all([
       Gym.find(filters)
         .populate({ path: 'owner', select: 'name firstName lastName role' })
-        .sort({ 'sponsorship.status': -1, 'analytics.impressions': -1 })
+        .sort({ 'sponsorship.status': 1, 'analytics.impressions': -1 })
         .skip((resolvedPage - 1) * resolvedLimit)
         .limit(resolvedLimit),
       Gym.countDocuments(filters),
