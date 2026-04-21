@@ -20,6 +20,8 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import toObjectId from '../../utils/toObjectId.js';
 
+import { invalidatePrefix } from '../../services/redis.service.js';
+
 export const deleteUserAccount = asyncHandler(async (req, res) => {
   if (!req.user || req.user.role !== 'admin') {
     throw new ApiError(403, 'Only administrators can delete accounts.');
@@ -68,6 +70,9 @@ export const deleteUserAccount = asyncHandler(async (req, res) => {
   await Promise.all(cleanupTasks);
   await User.findByIdAndDelete(targetUserId);
 
+  await invalidatePrefix('cache:admin-users');
+  await invalidatePrefix('cache:admin-overview');
+
   return res
     .status(200)
     .json(new ApiResponse(200, { userId: targetUserId }, 'User account deleted successfully.'));
@@ -98,6 +103,9 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
   user.status = status;
   await user.save({ validateBeforeSave: false });
 
+  await invalidatePrefix('cache:admin-users');
+  await invalidatePrefix('cache:admin-overview');
+
   return res
     .status(200)
     .json(new ApiResponse(200, { userId: user._id, status: user.status }, 'User status updated successfully.'));
@@ -117,6 +125,10 @@ export const deleteGymListing = asyncHandler(async (req, res) => {
 
   await cascadeDeleteGym(gymId);
 
+  await invalidatePrefix('cache:admin-gyms');
+  await invalidatePrefix('cache:gyms:');
+  await invalidatePrefix(`cache:gym-detail:${gymId}`);
+
   return res
     .status(200)
     .json(new ApiResponse(200, { gymId }, 'Gym listing removed successfully.'));
@@ -135,6 +147,9 @@ export const deleteProduct = asyncHandler(async (req, res) => {
   }
 
   await cascadeDeleteProduct(productId);
+
+  await invalidatePrefix('cache:admin-products');
+  await invalidatePrefix('cache:marketplace');
 
   return res
     .status(200)
