@@ -9,6 +9,7 @@ import {
   formatDateTime,
   formatStatus,
 } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const groupByStatus = (orders = []) =>
@@ -31,8 +32,10 @@ const calculateTotals = (orders = []) =>
   );
 
 const TraineeOrdersPage = () => {
-  const { data, isLoading, isError, refetch } = useGetTraineeOrdersQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetTraineeOrdersQuery({ page });
   const orders = data?.data?.orders ?? [];
+  const pagination = data?.data?.pagination ?? {};
   const totals = calculateTotals(orders);
   const byStatus = groupByStatus(orders);
   const [reviewTarget, setReviewTarget] = useState(null);
@@ -40,6 +43,11 @@ const TraineeOrdersPage = () => {
   const [reviewError, setReviewError] = useState(null);
   const [reviewSuccess, setReviewSuccess] = useState(null);
   const [submitReview, { isLoading: isSubmitting }] = useSubmitProductReviewMutation();
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? orders.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
   const openReviewModal = (orderId, item) => {
     setReviewTarget({
@@ -85,7 +93,7 @@ const TraineeOrdersPage = () => {
 
   if (isLoading) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--stacked">
         {['Recent purchases', 'Spending summary'].map((title) => (
           <DashboardSection key={title} title={title}>
             <SkeletonPanel lines={6} />
@@ -97,7 +105,7 @@ const TraineeOrdersPage = () => {
 
   if (isError) {
     return (
-      <div className="dashboard-grid">
+      <div className="dashboard-grid dashboard-grid--stacked">
         <DashboardSection
           title="Orders unavailable"
           action={(
@@ -113,79 +121,76 @@ const TraineeOrdersPage = () => {
   }
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid dashboard-grid--stacked">
       <DashboardSection title="Recent purchases">
         {reviewSuccess ? (
           <p className="dashboard-message dashboard-message--success">{reviewSuccess}</p>
         ) : null}
         {orders.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th>Placed</th>
-                <th>Items</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <Fragment key={order.id}>
-                  <tr>
-                    <td>{order.orderNumber ?? '—'}</td>
-                    <td>{formatCurrency(order.total)}</td>
-                    <td>{formatStatus(order.status)}</td>
-                    <td>{formatDateTime(order.createdAt)}</td>
-                    <td>{order.itemsCount ?? order.items?.length ?? '—'}</td>
-                  </tr>
+          <div>
+            {orders.map((order) => (
+              <div key={order.id} className="order-block">
+                <div className="order-block__header">
+                  <div className="order-block__header-item">
+                    <small>Order Placed</small>
+                    <strong>{formatDateTime(order.createdAt)}</strong>
+                  </div>
+                  <div className="order-block__header-item">
+                    <small>Total</small>
+                    <strong>{formatCurrency(order.total)}</strong>
+                  </div>
+                  <div className="order-block__header-item" style={{ flex: 1 }}>
+                    <small>Order #</small>
+                    <strong>{order.orderNumber ?? '—'}</strong>
+                  </div>
+                </div>
+                <div className="order-block__content">
                   {(order.items?.length ?? 0) > 0 ? (
-                    <tr className="order-items-row">
-                      <td colSpan={5}>
-                        <div className="order-items-list">
-                          {order.items.map((item) => (
-                            <div key={item.id} className="order-item-card">
-                              <div className="order-item-card__primary">
-                                {item.image ? (
-                                  <img src={item.image} alt={item.name} />
-                                ) : (
-                                  <div className="order-item-card__placeholder">
-                                    {(item.name ?? '?').slice(0, 1)}
-                                  </div>
-                                )}
-                                <div>
-                                  <strong>{item.name}</strong>
-                                  <small>Qty {item.quantity ?? 0}</small>
-                                </div>
+                    <div className="order-items-list">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="order-item-card">
+                          <div className="order-item-card__primary">
+                            {item.image ? (
+                              <img src={item.image} alt={item.name} />
+                            ) : (
+                              <div className="order-item-card__placeholder">
+                                {(item.name ?? '?').slice(0, 1)}
                               </div>
-                              <span className={`order-item-card__status order-item-card__status--${item.status}`}>
-                                {formatStatus(item.status)}
-                              </span>
-                              <div className="order-item-card__actions">
-                                {item.canReview ? (
-                                  <button
-                                    type="button"
-                                    className="order-item-card__action"
-                                    onClick={() => openReviewModal(order.id, item)}
-                                  >
-                                    Review product
-                                  </button>
-                                ) : item.reviewed ? (
-                                  <span className="pill pill--muted">Reviewed</span>
-                                ) : (
-                                  <span className="pill pill--muted">Pending delivery</span>
-                                )}
-                              </div>
+                            )}
+                            <div>
+                              <strong>{item.name}</strong>
+                              <small className="text-muted">Qty {item.quantity ?? 0}</small>
                             </div>
-                          ))}
+                          </div>
+                          <span className={`order-item-card__status order-item-card__status--${item.status}`}>
+                            {formatStatus(item.status)}
+                          </span>
+                          <div className="order-item-card__actions">
+                            {item.canReview ? (
+                              <button
+                                type="button"
+                                className="order-item-card__action"
+                                onClick={() => openReviewModal(order.id, item)}
+                              >
+                                Review product
+                              </button>
+                            ) : item.reviewed ? (
+                              <span className="pill pill--muted">Reviewed</span>
+                            ) : (
+                              <span className="pill pill--muted">Pending delivery</span>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted">No items in this order.</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
           <EmptyState message="You have not placed any marketplace orders yet." />
         )}

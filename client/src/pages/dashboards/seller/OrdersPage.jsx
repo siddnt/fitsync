@@ -8,16 +8,18 @@ import {
 } from '../../../services/sellerApi.js';
 import { formatCurrency, formatDate, formatNumber, formatStatus } from '../../../utils/format.js';
 import { SELLER_ORDER_STATUSES } from '../../../constants/orderStatuses.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const OrdersPage = () => {
+  const [page, setPage] = useState(1);
   const {
     data: ordersResponse,
     isLoading,
     isError,
     error,
     refetch,
-  } = useGetSellerOrdersQuery();
+  } = useGetSellerOrdersQuery({ page });
 
   const [updateOrderStatus, { isLoading: isUpdating }] = useUpdateSellerOrderStatusMutation();
   const [notice, setNotice] = useState(null);
@@ -27,6 +29,7 @@ const OrdersPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const orders = ordersResponse?.data?.orders ?? [];
+  const pagination = ordersResponse?.data?.pagination ?? {};
   const statusOptions = useMemo(() => {
     const allowed = new Set(ordersResponse?.data?.statusOptions ?? SELLER_ORDER_STATUSES.map((option) => option.value));
     return SELLER_ORDER_STATUSES.filter((option) => allowed.has(option.value));
@@ -86,6 +89,13 @@ const OrdersPage = () => {
   }), [filteredOrders]);
 
   const isFiltering = statusFilter !== 'all' || Boolean(searchQuery.trim());
+
+  useEffect(() => { setPage(1); }, [statusFilter, searchQuery]);
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? filteredOrders.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
   useEffect(() => {
     if (statusFilter === 'all') {
@@ -239,74 +249,77 @@ const OrdersPage = () => {
         )}
 
         {filteredOrders.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Items</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <strong>{order.orderNumber ?? order.id}</strong>
-                    <div>
-                      <small>{order.buyer?.name ?? order.buyer?.email ?? '—'}</small>
-                    </div>
-                  </td>
-                  <td>{formatDate(order.createdAt)}</td>
-                  <td>
-                    <span className={`status-pill ${order.status === 'delivered' ? 'status-pill--success' : 'status-pill--info'}`}>
-                      {formatStatus(order.status)}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="order-items-list">
-                      {(order.items || []).map((item) => {
-                        const draft = resolveDraftStatus(order.id, item.itemId ?? item.id, item.status);
-                        const selectId = `${order.id}-${item.itemId ?? item.id}`;
-                        return (
-                          <div key={selectId} className="order-item-row">
-                            <div className="order-item-row__details">
-                              <strong>{item.name}</strong>
-                              <span>× {item.quantity}</span>
-                              <span className="order-item-row__status">Current: {formatStatus(item.status)}</span>
-                            </div>
-                            <div className="order-item-row__actions">
-                              <select
-                                id={selectId}
-                                value={draft}
-                                onChange={(event) => handleDraftChange(order.id, item.itemId ?? item.id, event.target.value)}
-                                disabled={isUpdating}
-                              >
-                                {statusOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStatus(order.id, item.itemId ?? item.id, item.status)}
-                                disabled={isUpdating || draft === item.status}
-                              >
-                                {isUpdating ? 'Saving…' : 'Update'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </td>
-                  <td>{formatCurrency(order.total)}</td>
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '200px' }}>Order</th>
+                  <th style={{ width: '140px' }}>Date</th>
+                  <th style={{ width: '140px' }}>Status</th>
+                  <th style={{ width: '380px' }}>Items</th>
+                  <th style={{ width: '120px' }}>Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredOrders.map((order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <strong>{order.orderNumber ?? order.id}</strong>
+                      <div>
+                        <small>{order.buyer?.name ?? order.buyer?.email ?? '—'}</small>
+                      </div>
+                    </td>
+                    <td>{formatDate(order.createdAt)}</td>
+                    <td>
+                      <span className={`status-pill ${order.status === 'delivered' ? 'status-pill--success' : 'status-pill--info'}`}>
+                        {formatStatus(order.status)}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="order-items-list">
+                        {(order.items || []).map((item) => {
+                          const draft = resolveDraftStatus(order.id, item.itemId ?? item.id, item.status);
+                          const selectId = `${order.id}-${item.itemId ?? item.id}`;
+                          return (
+                            <div key={selectId} className="order-item-row">
+                              <div className="order-item-row__details">
+                                <strong>{item.name}</strong>
+                                <span>× {item.quantity}</span>
+                                <span className="order-item-row__status">Current: {formatStatus(item.status)}</span>
+                              </div>
+                              <div className="order-item-row__actions" style={{ flexWrap: 'nowrap' }}>
+                                <select
+                                  id={selectId}
+                                  value={draft}
+                                  onChange={(event) => handleDraftChange(order.id, item.itemId ?? item.id, event.target.value)}
+                                  disabled={isUpdating}
+                                >
+                                  {statusOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStatus(order.id, item.itemId ?? item.id, item.status)}
+                                  disabled={isUpdating || draft === item.status}
+                                >
+                                  {isUpdating ? 'Saving…' : 'Update'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td style={{ width: '15%' }}>{formatCurrency(order.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
           <EmptyState
             message={

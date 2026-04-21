@@ -2,7 +2,6 @@ import mongoose from 'mongoose';
 import Gym from '../../models/gym.model.js';
 import Gallery from '../../models/gallery.model.js';
 import GymListingSubscription from '../../models/gymListingSubscription.model.js';
-import Revenue from '../../models/revenue.model.js';
 import Review from '../../models/review.model.js';
 import GymMembership from '../../models/gymMembership.model.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -11,6 +10,13 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
+import { indexGymDocument, isSolrReady, searchGymIds } from '../../services/solr.service.js';
+import Stripe from 'stripe';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
 
 const normalizeLocationInput = (location) => {
   if (!location) {
@@ -47,21 +53,35 @@ const normalizeLocationInput = (location) => {
   return sanitized;
 };
 
+const toArrayQueryValues = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry ?? '').split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
 const buildFilters = ({ search, city, amenities }) => {
   const filter = { status: 'active', isPublished: true };
 
   if (search) {
-    // Use MongoDB $text search for full-word matches (uses the text index)
-    // Fall back to $regex for partial / short queries
-    if (search.trim().length >= 3) {
-      filter.$text = { $search: search };
-    } else {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $regex: search, $options: 'i' } },
-      ];
-    }
+    // Fall back to $regex when Solr is not ready
+    const escapedSearch = search.trim().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
+    filter.$or = [
+      { name: { $regex: escapedSearch, $options: 'i' } },
+      { description: { $regex: escapedSearch, $options: 'i' } },
+      { tags: { $regex: escapedSearch, $options: 'i' } },
+    ];
   }
 
   if (city) {
@@ -189,25 +209,61 @@ const mapGym = (gym) => ({
 
 
 export const listGyms = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const filters = buildFilters(req.query);
+  const resolvedPage = Math.max(Number(req.query?.page) || 1, 1);
+  const resolvedLimit = Math.max(Number(req.query?.limit) || 20, 1);
+  const searchTerm = typeof req.query?.search === 'string' ? req.query.search.trim() : '';
 
-  const [gyms, total] = await Promise.all([
-    Gym.find(filters)
-      .populate({ path: 'owner', select: 'name firstName lastName role' })
-      .sort({ 'sponsorship.status': -1, 'analytics.impressions': -1 })
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit)),
-    Gym.countDocuments(filters),
-  ]);
+  let gyms = [];
+  let total = 0;
+  let usedSolr = false;
+
+  if (searchTerm && isSolrReady()) {
+    const solrResult = await searchGymIds(searchTerm, {
+      page: resolvedPage,
+      limit: resolvedLimit,
+      city: req.query?.city,
+      amenities: toArrayQueryValues(req.query?.amenities),
+    });
+
+    if (solrResult) {
+      usedSolr = true;
+      total = solrResult.total;
+
+      if (solrResult.ids.length) {
+        const fetchedGyms = await Gym.find({ _id: { $in: solrResult.ids } })
+          .populate({ path: 'owner', select: 'name firstName lastName role' })
+          .lean();
+
+        const byId = new Map(fetchedGyms.map((gym) => [String(gym._id), gym]));
+        gyms = solrResult.ids
+          .map((id) => byId.get(String(id)))
+          .filter(Boolean);
+      }
+    }
+  }
+
+  if (!usedSolr) {
+    const filters = buildFilters(req.query);
+
+    const fallbackResult = await Promise.all([
+      Gym.find(filters)
+        .populate({ path: 'owner', select: 'name firstName lastName role' })
+        .sort({ 'sponsorship.status': 1, 'analytics.impressions': -1 })
+        .skip((resolvedPage - 1) * resolvedLimit)
+        .limit(resolvedLimit),
+      Gym.countDocuments(filters),
+    ]);
+
+    [gyms, total] = fallbackResult;
+  }
 
   const payload = {
     gyms: gyms.map(mapGym),
     pagination: {
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / Number(limit) || 1),
+      page: resolvedPage,
+      limit: resolvedLimit,
+      totalPages: Math.ceil(total / resolvedLimit || 1),
     },
   };
 
@@ -350,16 +406,11 @@ export const createGym = asyncHandler(async (req, res) => {
   }
 
   const planCode = subscription?.planCode ?? req.body?.planCode;
-  const paymentReference = subscription?.paymentReference ?? req.body?.paymentReference;
   const autoRenew = subscription?.autoRenew ?? req.body?.autoRenew ?? false;
   const plan = resolveListingPlan(planCode);
 
   if (!plan) {
     throw new ApiError(400, 'Select a valid listing plan to register your gym.');
-  }
-
-  if (!paymentReference) {
-    throw new ApiError(400, 'Payment reference is required to activate the listing.');
   }
 
   const sanitizedLocation = normalizeLocationInput(location) ?? {};
@@ -380,14 +431,14 @@ export const createGym = asyncHandler(async (req, res) => {
     schedule,
     gallery,
     sponsorship,
-    status: 'active',
-    isPublished: true,
-    approvedAt: now,
+    status: 'suspended',
+    isPublished: false,
+    approvalStatus: 'pending',
     lastUpdatedBy: req.user._id,
   });
 
   try {
-    await GymListingSubscription.create({
+    const subscriptionRecord = await GymListingSubscription.create({
       gym: gym._id,
       owner: req.user._id,
       planCode: plan.planCode,
@@ -395,35 +446,78 @@ export const createGym = asyncHandler(async (req, res) => {
       currency: plan.currency,
       periodStart: now,
       periodEnd,
-      status: 'active',
+      status: 'pending',
       autoRenew: Boolean(autoRenew),
       invoices: [
         {
           amount: plan.amount,
           currency: plan.currency,
           paidOn: now,
-          paymentReference,
-          status: 'paid',
+          paymentReference: null,
+          receiptUrl: null,
+          status: 'pending',
         },
       ],
       metadata: new Map([
         ['planLabel', plan.label],
         ['durationMonths', String(plan.durationMonths)],
+        ['source', 'gym-create'],
       ]),
       createdBy: req.user._id,
     });
 
-    await Revenue.create({
-      amount: plan.amount,
-      user: req.user._id,
-      type: 'listing',
-      description: `${plan.label} activation for ${name}`,
-      metadata: new Map([
-        ['gymId', String(gym._id)],
-        ['planCode', plan.planCode],
-        ['paymentReference', paymentReference],
-      ]),
+    const stripeSession = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'inr',
+            product_data: {
+              name: `Gym Listing Activation: ${name}`,
+              description: plan.label,
+            },
+            unit_amount: Math.round(plan.amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: 'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'http://localhost:5173/dashboard/gym-owner/gyms',
+      metadata: {
+        type: 'listing_subscription',
+        planCode: plan.planCode,
+        gymId: String(gym._id),
+        subscriptionId: String(subscriptionRecord._id),
+        source: 'gym-create',
+        ownerId: String(req.user._id),
+      },
     });
+
+    subscriptionRecord.invoices = [
+      {
+        amount: plan.amount,
+        currency: plan.currency,
+        paidOn: now,
+        paymentReference: stripeSession.id,
+        receiptUrl: null,
+        status: 'pending',
+      },
+    ];
+    await subscriptionRecord.save();
+    await indexGymDocument(gym);
+
+    return res.status(201).json(
+      new ApiResponse(
+        201,
+        {
+          checkoutUrl: stripeSession.url,
+          gymId: gym._id,
+          subscriptionId: subscriptionRecord._id,
+        },
+        'Redirecting to secure checkout',
+      ),
+    );
   } catch (error) {
     await Promise.all([
       Gym.findByIdAndDelete(gym._id),
@@ -431,15 +525,6 @@ export const createGym = asyncHandler(async (req, res) => {
     ]);
     throw error;
   }
-
-  const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
-
-  // Invalidate gym list cache
-  await invalidatePrefix('cache:gyms:');
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, { gym: mapGym(populated) }, 'Gym created successfully'));
 });
 
 export const updateGym = asyncHandler(async (req, res) => {
@@ -494,6 +579,7 @@ export const updateGym = asyncHandler(async (req, res) => {
   gym.lastUpdatedBy = req.user._id;
 
   await gym.save();
+  await indexGymDocument(gym);
 
   const populated = await gym.populate({ path: 'owner', select: 'name firstName lastName role' });
 

@@ -205,7 +205,7 @@ const AdminGymDetailPage = () => {
                   <th>Member</th>
                   <th>Trainer</th>
                   <th>Plan</th>
-                  <th>Status</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Start</th>
                   <th>End</th>
                   <th>Billing</th>
@@ -244,10 +244,10 @@ const AdminGymDetailPage = () => {
               <thead>
                 <tr>
                   <th>Trainer</th>
-                  <th>Status</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Trainees</th>
                   <th>Approved</th>
-                  <th>Created</th>
+                  <th style={{ width: '130px' }}>Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,8 +281,8 @@ const AdminGymDetailPage = () => {
               <thead>
                 <tr>
                   <th>Plan</th>
-                  <th>Amount</th>
-                  <th>Status</th>
+                  <th style={{ width: '100px' }}>Amount</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Period Start</th>
                   <th>Period End</th>
                   <th>Auto-Renew</th>

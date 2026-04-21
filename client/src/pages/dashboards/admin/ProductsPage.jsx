@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -6,42 +6,34 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminProductsQuery } from '../../../services/dashboardApi.js';
 import { useDeleteProductMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const AdminProductsPage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminProductsQuery();
-  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
-  const products = data?.data?.products ?? [];
-
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const [errorNotice, setErrorNotice] = useState(null);
 
-  const categoryOptions = useMemo(() => {
-    const values = new Set(products.map((p) => p.category).filter(Boolean));
-    return ['all', ...values];
-  }, [products]);
+  const { data, isLoading, isError, refetch } = useGetAdminProductsQuery({ page, search: searchTerm, status: statusFilter });
+  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
+  const products = data?.data?.products ?? [];
+  const pagination = data?.data?.pagination ?? {};
 
-  const statusOptions = useMemo(() => {
-    const values = new Set(products.map((p) => p.status).filter(Boolean));
-    return ['all', ...values];
-  }, [products]);
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter]);
 
-  const filtered = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return products.filter((p) => {
-      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (!query) return true;
-      const haystacks = [p.name, p.seller?.name, p.seller?.email, p.category].filter(Boolean).map((v) => v.toLowerCase());
-      return haystacks.some((v) => v.includes(query));
-    });
-  }, [products, searchTerm, categoryFilter, statusFilter]);
+  const statusOptions = ['all', 'available', 'out-of-stock'];
 
-  const filtersActive = searchTerm.trim() || categoryFilter !== 'all' || statusFilter !== 'all';
-  const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setStatusFilter('all'); };
+  const filtered = products;
+
+  const filtersActive = searchTerm.trim() || statusFilter !== 'all';
+  const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); };
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? 0;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), Math.max(totalItems, 1));
 
   const handleDelete = async (product) => {
     setNotice(null);
@@ -111,9 +103,6 @@ const AdminProductsPage = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               aria-label="Search products"
             />
-            <select className="inventory-toolbar__input inventory-toolbar__input--select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Filter by category">
-              {categoryOptions.map((o) => <option key={o} value={o}>{o === 'all' ? 'All categories' : formatStatus(o)}</option>)}
-            </select>
             <select className="inventory-toolbar__input inventory-toolbar__input--select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
               {statusOptions.map((o) => <option key={o} value={o}>{o === 'all' ? 'All statuses' : formatStatus(o)}</option>)}
             </select>
@@ -133,17 +122,17 @@ const AdminProductsPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Product</th>
+                  <th style={{ width: '25%' }}>Product</th>
                   <th>Seller</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>MRP</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Rating</th>
-                  <th>Reviews</th>
-                  <th>Created</th>
-                  <th>Action</th>
+                  <th style={{ width: '130px' }}>Category</th>
+                  <th style={{ width: '100px' }}>Price</th>
+                  <th style={{ width: '100px' }}>MRP</th>
+                  <th style={{ width: '90px' }}>Stock</th>
+                  <th style={{ width: '150px' }}>Status</th>
+                  <th style={{ width: '100px' }}>Rating</th>
+                  <th style={{ width: '100px' }}>Reviews</th>
+                  <th style={{ width: '130px' }}>Created</th>
+                  <th style={{ width: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,6 +176,7 @@ const AdminProductsPage = () => {
                 ))}
               </tbody>
             </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
           </div>
         ) : (
           <EmptyState message={filtersActive ? 'No products match filters.' : 'No products yet.'} />

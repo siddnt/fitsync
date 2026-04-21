@@ -134,13 +134,6 @@ const GymCreateFormComponent = ({
             </option>
           ))}
         </Field>
-
-        <Field
-          name="paymentReference"
-          component={FormField}
-          label="Payment reference"
-          placeholder="Txn-123456"
-        />
       </div>
 
       <Field
@@ -221,10 +214,6 @@ const validate = (values) => {
 
   if (!values.planCode) {
     errors.planCode = 'Choose a listing plan';
-  }
-
-  if (!values.paymentReference?.trim()) {
-    errors.paymentReference = 'Enter the payment reference used for this activation';
   }
 
   return errors;

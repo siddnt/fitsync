@@ -35,7 +35,6 @@ const dashboardLinksByRole = {
     { to: '/dashboard/manager/gyms', label: 'Gyms' },
     { to: '/dashboard/manager/products', label: 'Products' },
     { to: '/dashboard/manager/marketplace', label: 'Marketplace' },
-    { to: '/dashboard/manager/messages', label: 'Messages' },
   ],
   admin: [
     { to: '/dashboard/admin', label: 'Overview' },

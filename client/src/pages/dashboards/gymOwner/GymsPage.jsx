@@ -287,17 +287,20 @@ const GymOwnerGymsPage = () => {
     try {
       const payload = transformGymPayload(values);
       const planCode = values.planCode;
-      const paymentReference = values.paymentReference;
       const autoRenew = Boolean(values.autoRenew);
 
       const response = await createGym({
         ...payload,
         subscription: {
           planCode,
-          paymentReference,
           autoRenew,
         },
       }).unwrap();
+
+      if (response?.data?.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
 
       const createdGym = response?.data?.gym;
 
@@ -435,11 +438,11 @@ const GymOwnerGymsPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Status</th>
-                  <th>Members</th>
-                  <th>Updated</th>
-                  <th>Actions</th>
+                  <th style={{ width: '22%' }}>Name</th>
+                  <th style={{ width: '130px' }}>Status</th>
+                  <th style={{ width: '190px' }}>Members</th>
+                  <th style={{ width: '120px' }}>Updated</th>
+                  <th style={{ width: '260px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -457,7 +460,7 @@ const GymOwnerGymsPage = () => {
                       </td>
                       <td>{formatDate(gym.updatedAt)}</td>
                       <td>
-                        <div className="button-row">
+                        <div className="button-row" style={{ flexWrap: 'nowrap' }}>
                           <button type="button" onClick={() => handleEditGym(gym.id)}>
                             Edit
                           </button>
@@ -513,9 +516,9 @@ const GymOwnerGymsPage = () => {
               <thead>
                 <tr>
                   <th>Trainer</th>
-                  <th>Gym</th>
+                  <th style={{ width: '25%' }}>Gym</th>
                   <th>Requested</th>
-                  <th>Actions</th>
+                  <th style={{ width: '120px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>

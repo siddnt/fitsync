@@ -19,6 +19,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import toObjectId from '../../utils/toObjectId.js';
 import { normaliseOrderItemStatus, summariseOrderStatus } from '../../utils/orderStatus.js';
+import { getPaginationParams, paginationMeta } from '../../utils/paginate.js';
 
 const daysBetween = (from, to) => {
   const start = from instanceof Date ? from : new Date(from);
@@ -90,6 +91,25 @@ const buildSponsorshipExpenseEntries = (gyms = []) => {
   gyms.forEach((gym) => {
     const sponsorship = gym?.sponsorship;
     if (!sponsorship) {
+      return;
+    }
+
+    const invoices = Array.isArray(sponsorship.invoices) ? sponsorship.invoices : [];
+
+    if (invoices.length) {
+      invoices.forEach((invoice) => {
+        const when = toDate(invoice?.paidOn) || toDate(gym?.createdAt);
+        if (!when) {
+          return;
+        }
+
+        const paidAmount = Number(invoice?.amount) || 0;
+        if (paidAmount <= 0) {
+          return;
+        }
+
+        entries.push({ amount: paidAmount, date: when, source: 'sponsorship' });
+      });
       return;
     }
 
@@ -584,11 +604,17 @@ export const getTraineeDiet = asyncHandler(async (req, res) => {
 
 export const getTraineeOrders = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const orders = await Order.find({ user: userId })
-    .sort({ createdAt: -1 })
-    .limit(20)
-    .populate({ path: 'orderItems.product', select: 'name image' })
-    .lean();
+  const { page, limit, skip } = getPaginationParams(req.query);
+
+  const [total, orders] = await Promise.all([
+    Order.countDocuments({ user: userId }),
+    Order.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'orderItems.product', select: 'name image' })
+      .lean(),
+  ]);
 
   const productIds = orders.flatMap((order) => (order.orderItems || [])
     .map((item) => (item.product?._id ?? item.product))
@@ -634,7 +660,7 @@ export const getTraineeOrders = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { orders: detailedOrders }, 'Orders fetched successfully'));
+    .json(new ApiResponse(200, { orders: detailedOrders, pagination: paginationMeta(total, page, limit) }, 'Orders fetched successfully'));
 });
 
 export const submitTrainerFeedback = asyncHandler(async (req, res) => {
@@ -1082,11 +1108,17 @@ export const getGymOwnerRoster = asyncHandler(async (req, res) => {
 
 export const getGymOwnerSubscriptions = asyncHandler(async (req, res) => {
   const ownerId = req.user?._id;
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const subscriptions = await GymListingSubscription.find({ owner: ownerId })
-    .sort({ periodEnd: 1 })
-    .populate({ path: 'gym', select: 'name location status' })
-    .lean();
+  const [total, subscriptions] = await Promise.all([
+    GymListingSubscription.countDocuments({ owner: ownerId }),
+    GymListingSubscription.find({ owner: ownerId })
+      .sort({ periodEnd: 1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'gym', select: 'name location status' })
+      .lean(),
+  ]);
 
   const data = subscriptions.map((subscription) => ({
     id: subscription._id,
@@ -1109,7 +1141,7 @@ export const getGymOwnerSubscriptions = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { subscriptions: data }, 'Subscriptions fetched successfully'));
+    .json(new ApiResponse(200, { subscriptions: data, pagination: paginationMeta(total, page, limit) }, 'Subscriptions fetched successfully'));
 });
 
 export const getGymOwnerSponsorship = asyncHandler(async (req, res) => {
@@ -1153,7 +1185,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
   const earliestWeekly = weeklyTimeline[0]?.start ?? referenceDate;
   const earliestDate = earliestMonthly < earliestWeekly ? earliestMonthly : earliestWeekly;
 
-  const [membershipDocs, revenueEvents, subscriptions] = await Promise.all([
+  const [membershipDocs, revenueEvents, subscriptions, membershipInvoiceDocs] = await Promise.all([
     GymMembership.find({
       gym: { $in: gymIds },
       status: { $in: ['active', 'paused'] },
@@ -1175,7 +1207,61 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
     })
       .select('amount periodStart periodEnd createdAt invoices')
       .lean(),
+    GymMembership.find({
+      gym: { $in: gymIds },
+      plan: { $nin: TRAINER_PLAN_CODES },
+      $or: [
+        { invoices: { $exists: true, $ne: [] } },
+        { 'billing.paymentReference': { $exists: true, $ne: null } },
+      ],
+    })
+      .select('gym invoices billing createdAt')
+      .lean(),
   ]);
+
+  const gymNameById = gyms.reduce((acc, gym) => {
+    acc[String(gym._id)] = gym.name ?? '—';
+    return acc;
+  }, {});
+
+  const membershipInvoices = membershipInvoiceDocs
+    .flatMap((membership) => {
+      const gymId = membership.gym ? String(membership.gym) : null;
+      const gymName = gymId ? gymNameById[gymId] ?? '—' : '—';
+      const invoices = Array.isArray(membership.invoices) ? membership.invoices : [];
+
+      if (invoices.length) {
+        return invoices.map((invoice, index) => ({
+          id: `${membership._id}-${invoice.paymentReference ?? invoice.paidOn ?? index}`,
+          gym: gymName,
+          paidOn: invoice.paidOn ?? membership.createdAt,
+          amount: Number(invoice.amount) || 0,
+          currency: invoice.currency ?? membership.billing?.currency ?? 'INR',
+          status: invoice.status ?? 'paid',
+          paymentReference: invoice.paymentReference ?? null,
+          receiptUrl: invoice.receiptUrl ?? null,
+        }));
+      }
+
+      if (membership.billing?.paymentReference) {
+        return [
+          {
+            id: `${membership._id}-${membership.billing.paymentReference}`,
+            gym: gymName,
+            paidOn: membership.createdAt,
+            amount: Number(membership.billing.amount) || 0,
+            currency: membership.billing.currency ?? 'INR',
+            status: membership.billing.status ?? 'paid',
+            paymentReference: membership.billing.paymentReference,
+            receiptUrl: membership.billing.receiptUrl ?? null,
+          },
+        ];
+      }
+
+      return [];
+    })
+    .filter((invoice) => invoice.amount > 0)
+    .sort((a, b) => new Date(b.paidOn) - new Date(a.paidOn));
 
   const fallbackRevenueEntries = [];
 
@@ -1336,6 +1422,7 @@ export const getGymOwnerAnalytics = asyncHandler(async (req, res) => {
       memberships: gym.analytics?.memberships ?? 0,
       trainers: gym.analytics?.trainers ?? 0,
     })),
+    membershipInvoices,
   };
 
   return res
@@ -1458,6 +1545,8 @@ export const getTrainerOverview = asyncHandler(async (req, res) => {
 
 export const getTrainerTrainees = asyncHandler(async (req, res) => {
   const trainerId = req.user?._id;
+  const { page, limit, skip } = getPaginationParams(req.query);
+
   const [memberships, assignmentDocs] = await Promise.all([
     GymMembership.find({ trainer: trainerId, status: { $in: ['active', 'paused'] } })
       .populate({ path: 'gym', select: 'name location' })
@@ -1512,11 +1601,20 @@ export const getTrainerTrainees = asyncHandler(async (req, res) => {
     });
   });
 
-  const data = Array.from(grouped.values());
+  // Group first (in-memory), then paginate the flat trainee list
+  const allTrainees = Array.from(grouped.values()).flatMap((group) =>
+    group.trainees.map((t) => ({ ...t, gym: group.gym, assignmentStatus: group.status }))
+  );
+  const total = allTrainees.length;
+  const pageTrainees = allTrainees.slice(skip, skip + limit);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { assignments: data }, 'Trainer trainees fetched successfully'));
+    .json(new ApiResponse(
+      200,
+      { trainees: pageTrainees, assignments: Array.from(grouped.values()), pagination: paginationMeta(total, page, limit) },
+      'Trainer trainees fetched successfully',
+    ));
 });
 
 export const getTrainerUpdates = asyncHandler(async (req, res) => {
@@ -1599,19 +1697,29 @@ export const getAdminOverview = asyncHandler(async (_req, res) => {
   );
 });
 
-export const getAdminUsers = asyncHandler(async (_req, res) => {
-  const pendingQuery = User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner', 'manager'] } })
-    .select('name email role createdAt profile.location profile.headline')
-    .lean();
+export const getAdminUsers = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search = '', role = 'all', status = 'all' } = req.query;
 
-  const recentQuery = User.find()
-    .sort({ createdAt: -1 })
-    .select('name email role status createdAt profilePicture contactNumber')
-    .lean();
+  const query = {};
+  if (role !== 'all') query.role = role;
+  if (status !== 'all') query.status = status;
+  if (search) {
+    const regex = new RegExp(search, 'i');
+    query.$or = [{ name: regex }, { email: regex }];
+  }
 
-  const [pending, recent, adminToggles, membershipCounts, orderCounts, gymCounts] = await Promise.all([
-    pendingQuery,
-    recentQuery,
+  const [pending, total, recent, adminToggles, membershipCounts, orderCounts, gymCounts] = await Promise.all([
+    User.find({ status: 'pending', role: { $in: ['seller', 'gym-owner', 'manager'] } })
+      .select('name email role createdAt profile.location profile.headline')
+      .lean(),
+    User.countDocuments(query),
+    User.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('name email role status createdAt profilePicture contactNumber')
+      .lean(),
     loadAdminToggles(),
     GymMembership.aggregate([
       { $group: { _id: '$trainee', count: { $sum: 1 } } },
@@ -1636,25 +1744,46 @@ export const getAdminUsers = asyncHandler(async (_req, res) => {
   }));
 
   return res.status(200).json(
-    new ApiResponse(200, { pending, recent: enriched, adminToggles }, 'Admin user backlog fetched successfully'),
+    new ApiResponse(200, { pending, recent: enriched, adminToggles, pagination: paginationMeta(total, page, limit) }, 'Admin user backlog fetched successfully'),
   );
 });
 
-export const getAdminGyms = asyncHandler(async (_req, res) => {
-  const gymsQuery = Gym.find()
-    .sort({ createdAt: -1 })
-    .populate({ path: 'owner', select: 'name email' })
-    .lean();
+export const getAdminGyms = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search, status } = req.query;
 
-  const [gyms, adminToggles, memberCounts, trainerCounts] = await Promise.all([
-    gymsQuery,
+  const query = {};
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { city: { $regex: search, $options: 'i' } },
+      { state: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const [total, gyms, adminToggles] = await Promise.all([
+    Gym.countDocuments(query),
+    Gym.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'owner', select: 'name email' })
+      .lean(),
     loadAdminToggles(),
+  ]);
+
+  const gymIds = gyms.map((g) => g._id);
+
+  const [memberCounts, trainerCounts] = await Promise.all([
     GymMembership.aggregate([
-      { $match: { status: 'active' } },
+      { $match: { status: 'active', gym: { $in: gymIds } } },
       { $group: { _id: '$gym', count: { $sum: 1 } } },
     ]),
     TrainerAssignment.aggregate([
-      { $match: { status: 'active' } },
+      { $match: { status: 'active', gym: { $in: gymIds } } },
       { $group: { _id: '$gym', count: { $sum: 1 } } },
     ]),
   ]);
@@ -1679,7 +1808,7 @@ export const getAdminGyms = asyncHandler(async (_req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { gyms: data, adminToggles }, 'Admin gym list fetched successfully'));
+    .json(new ApiResponse(200, { gyms: data, adminToggles, pagination: paginationMeta(total, page, limit) }, 'Admin gym list fetched successfully'));
 });
 
 /* ── Admin: Gym Detail ── */
@@ -1842,7 +1971,7 @@ export const getAdminRevenue = asyncHandler(async (_req, res) => {
 
     order.orderItems.forEach((item) => {
       const status = normaliseOrderItemStatus(item.status);
-      if (status !== 'delivered') {
+      if (status === 'cancelled' || status === 'refunded') {
         return;
       }
 
@@ -1894,17 +2023,19 @@ export const getAdminRevenue = asyncHandler(async (_req, res) => {
     .json(new ApiResponse(200, { trend, marketplaceDistribution, adminToggles }, 'Admin revenue trend fetched successfully'));
 });
 
-export const getAdminMarketplace = asyncHandler(async (_req, res) => {
-  const ordersQuery = Order.find()
-    .sort({ createdAt: -1 })
-    .populate({ path: 'user', select: 'name email' })
-    .populate({ path: 'seller', select: 'name email' })
-    .populate({ path: 'orderItems.seller', select: 'name email' })
-    .populate({ path: 'orderItems.product', select: 'category' })
-    .lean();
-
-  const [orders, adminToggles] = await Promise.all([
-    ordersQuery,
+export const getAdminMarketplace = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const [total, orders, adminToggles] = await Promise.all([
+    Order.countDocuments(),
+    Order.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'user', select: 'name email' })
+      .populate({ path: 'seller', select: 'name email' })
+      .populate({ path: 'orderItems.seller', select: 'name email' })
+      .populate({ path: 'orderItems.product', select: 'category' })
+      .lean(),
     loadAdminToggles(),
   ]);
 
@@ -1936,7 +2067,7 @@ export const getAdminMarketplace = asyncHandler(async (_req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { orders: data, adminToggles }, 'Admin marketplace activity fetched successfully'));
+    .json(new ApiResponse(200, { orders: data, adminToggles, pagination: paginationMeta(total, page, limit) }, 'Admin marketplace activity fetched successfully'));
 });
 
 export const getAdminInsights = asyncHandler(async (_req, res) => {
@@ -2467,13 +2598,20 @@ export const getAdminUserDetail = asyncHandler(async (req, res) => {
 
 /* ── Admin: Memberships ── */
 
-export const getAdminMemberships = asyncHandler(async (_req, res) => {
-  const memberships = await GymMembership.find()
-    .sort({ createdAt: -1 })
-    .populate({ path: 'trainee', select: 'name email profilePicture role' })
-    .populate({ path: 'gym', select: 'name location.city' })
-    .populate({ path: 'trainer', select: 'name email' })
-    .lean();
+export const getAdminMemberships = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+
+  const [total, memberships] = await Promise.all([
+    GymMembership.countDocuments(),
+    GymMembership.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'trainee', select: 'name email profilePicture role' })
+      .populate({ path: 'gym', select: 'name location.city' })
+      .populate({ path: 'trainer', select: 'name email' })
+      .lean(),
+  ]);
 
   const data = memberships.map((m) => ({
     id: m._id,
@@ -2491,20 +2629,40 @@ export const getAdminMemberships = asyncHandler(async (_req, res) => {
     createdAt: m.createdAt,
   }));
 
-  return res.status(200).json(new ApiResponse(200, { memberships: data }, 'Admin memberships fetched successfully'));
+  return res.status(200).json(new ApiResponse(200, { memberships: data, pagination: paginationMeta(total, page, limit) }, 'Admin memberships fetched successfully'));
 });
 
 /* ── Admin: Products ── */
 
-export const getAdminProducts = asyncHandler(async (_req, res) => {
-  const [products, reviewStats] = await Promise.all([
-    Product.find()
+export const getAdminProducts = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search, status } = req.query;
+
+  const query = {};
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { category: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const [total, products] = await Promise.all([
+    Product.countDocuments(query),
+    Product.find(query)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: 'seller', select: 'name email profilePicture' })
       .lean(),
-    ProductReview.aggregate([
-      { $group: { _id: '$product', avgRating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } },
-    ]),
+  ]);
+
+  const productIds = products.map((p) => p._id);
+  const reviewStats = await ProductReview.aggregate([
+    { $match: { product: { $in: productIds } } },
+    { $group: { _id: '$product', avgRating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } },
   ]);
 
   const reviewMap = reviewStats.reduce((acc, r) => {
@@ -2528,7 +2686,7 @@ export const getAdminProducts = asyncHandler(async (_req, res) => {
     createdAt: p.createdAt,
   }));
 
-  return res.status(200).json(new ApiResponse(200, { products: data }, 'Admin products fetched successfully'));
+  return res.status(200).json(new ApiResponse(200, { products: data, pagination: paginationMeta(total, page, limit) }, 'Admin products fetched successfully'));
 });
 
 /* ── Admin: Product Buyers ── */
@@ -2603,15 +2761,23 @@ export const getAdminProductBuyers = asyncHandler(async (req, res) => {
 
 /* ── Admin: Reviews (gym + product) ── */
 
-export const getAdminReviews = asyncHandler(async (_req, res) => {
-  const [gymReviews, productReviews] = await Promise.all([
+export const getAdminReviews = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+
+  const [gymTotal, productTotal, gymReviews, productReviews] = await Promise.all([
+    Review.countDocuments(),
+    ProductReview.countDocuments(),
     Review.find()
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: 'user', select: 'name email profilePicture' })
       .populate({ path: 'gym', select: 'name location.city' })
       .lean(),
     ProductReview.find()
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: 'user', select: 'name email profilePicture' })
       .populate({ path: 'product', select: 'name image category' })
       .lean(),
@@ -2637,23 +2803,80 @@ export const getAdminReviews = asyncHandler(async (_req, res) => {
     createdAt: r.createdAt,
   }));
 
-  return res.status(200).json(new ApiResponse(200, { gymReviews: gymData, productReviews: productData }, 'Admin reviews fetched successfully'));
+  return res.status(200).json(new ApiResponse(200, {
+    gymReviews: gymData,
+    productReviews: productData,
+    pagination: {
+      gymReviews: paginationMeta(gymTotal, page, limit),
+      productReviews: paginationMeta(productTotal, page, limit),
+    },
+  }, 'Admin reviews fetched successfully'));
 });
 
 /* ── Admin: Subscriptions (listing + payment sessions) ── */
 
-export const getAdminSubscriptions = asyncHandler(async (_req, res) => {
-  const [listingSubs, sponsoredGyms] = await Promise.all([
-    GymListingSubscription.find()
+export const getAdminSubscriptions = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPaginationParams(req.query);
+  const { search = '', type = 'all', status = 'all' } = req.query;
+
+  // Build query for Listing Subscriptions
+  const listingQuery = {};
+  if (status !== 'all') {
+    listingQuery.status = status;
+  }
+  
+  // Build query for Sponsorships (Gym collection)
+  const sponsorQuery = { 'sponsorship.status': { $in: ['active', 'expired'] } };
+  if (status !== 'all') {
+    sponsorQuery['sponsorship.status'] = status;
+  }
+
+  // Cross-collection text search requires filtering after population or looking up IDs.
+  // Since we don't have a simple way to text-search populated fields across both collections efficiently,
+  // we will look up matching Gym and User IDs first if there's a search term.
+  if (search) {
+    const regex = new RegExp(search, 'i');
+    
+    const [matchingGyms, matchingUsers] = await Promise.all([
+      Gym.find({ name: regex }).select('_id').lean(),
+      User.find({ $or: [{ name: regex }, { email: regex }] }).select('_id').lean()
+    ]);
+    
+    const gymIds = matchingGyms.map(g => g._id);
+    const userIds = matchingUsers.map(u => u._id);
+
+    listingQuery.$or = [
+      { planCode: regex },
+      { gym: { $in: gymIds } },
+      { owner: { $in: userIds } }
+    ];
+
+    sponsorQuery.$or = [
+      { name: regex },
+      { owner: { $in: userIds } }
+    ];
+  }
+
+  const fetchListings = type === 'all' || type === 'listing';
+  const fetchSponsorships = type === 'all' || type === 'sponsorship';
+
+  const [listingTotal, sponsorTotal, listingSubs, sponsoredGyms] = await Promise.all([
+    fetchListings ? GymListingSubscription.countDocuments(listingQuery) : 0,
+    fetchSponsorships ? Gym.countDocuments(sponsorQuery) : 0,
+    fetchListings ? GymListingSubscription.find(listingQuery)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate({ path: 'gym', select: 'name location.city' })
       .populate({ path: 'owner', select: 'name email' })
-      .lean(),
-    Gym.find({ 'sponsorship.status': { $in: ['active', 'expired'] } })
+      .lean() : [],
+    fetchSponsorships ? Gym.find(sponsorQuery)
       .select('name location.city owner sponsorship createdAt')
       .populate({ path: 'owner', select: 'name email' })
       .sort({ 'sponsorship.expiresAt': -1 })
-      .lean(),
+      .skip(skip)
+      .limit(limit)
+      .lean() : [],
   ]);
 
   const listingData = listingSubs.map((s) => ({
@@ -2675,13 +2898,20 @@ export const getAdminSubscriptions = asyncHandler(async (_req, res) => {
     id: g._id,
     gym: { id: g._id, name: g.name, city: g.location?.city },
     owner: g.owner ? { id: g.owner._id, name: g.owner.name, email: g.owner.email } : null,
-    package: g.sponsorship?.package ?? 'N/A',
+    package: g.sponsorship?.package ?? g.sponsorship?.tier ?? 'N/A',
     status: g.sponsorship?.status ?? 'none',
-    expiresAt: g.sponsorship?.expiresAt,
+    expiresAt: g.sponsorship?.expiresAt ?? g.sponsorship?.endDate,
     createdAt: g.createdAt,
   }));
 
-  return res.status(200).json(new ApiResponse(200, { listingSubscriptions: listingData, sponsorships: sponsorshipData }, 'Admin subscriptions fetched successfully'));
+  return res.status(200).json(new ApiResponse(200, {
+    listingSubscriptions: listingData,
+    sponsorships: sponsorshipData,
+    pagination: {
+      listingSubscriptions: paginationMeta(listingTotal, page, limit),
+      sponsorships: paginationMeta(sponsorTotal, page, limit),
+    },
+  }, 'Admin subscriptions fetched successfully'));
 });
 
 /* ═══════════════════════════════════════════════
@@ -2741,11 +2971,17 @@ export const getManagerOverview = asyncHandler(async (req, res) => {
 
 export const getManagerSellers = asyncHandler(async (req, res) => {
   ensureManagerDashboard(req);
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const sellers = await User.find({ role: 'seller' })
-    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
-    .sort({ createdAt: -1 })
-    .lean();
+  const [total, sellers] = await Promise.all([
+    User.countDocuments({ role: 'seller' }),
+    User.find({ role: 'seller' })
+      .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
   const sellerIds = sellers.map((s) => s._id);
 
@@ -2784,16 +3020,22 @@ export const getManagerSellers = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { sellers: enriched }, 'Manager sellers fetched.'));
+    .json(new ApiResponse(200, { sellers: enriched, pagination: paginationMeta(total, page, limit) }, 'Manager sellers fetched.'));
 });
 
 export const getManagerGymOwners = asyncHandler(async (req, res) => {
   ensureManagerDashboard(req);
+  const { page, limit, skip } = getPaginationParams(req.query);
 
-  const owners = await User.find({ role: 'gym-owner' })
-    .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
-    .sort({ createdAt: -1 })
-    .lean();
+  const [total, owners] = await Promise.all([
+    User.countDocuments({ role: 'gym-owner' }),
+    User.find({ role: 'gym-owner' })
+      .select('name email status createdAt profilePicture profile.headline profile.location contactNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
 
   const ownerIds = owners.map((o) => o._id);
 
@@ -2845,6 +3087,6 @@ export const getManagerGymOwners = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { gymOwners: enriched }, 'Manager gym owners fetched.'));
+    .json(new ApiResponse(200, { gymOwners: enriched, pagination: paginationMeta(total, page, limit) }, 'Manager gym owners fetched.'));
 });
 

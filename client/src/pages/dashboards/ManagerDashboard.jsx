@@ -85,10 +85,6 @@ const ManagerDashboard = () => {
             <small>Orders (30 days)</small>
             <strong>{formatNumber(stats?.recentOrders ?? 0)}</strong>
           </div>
-          <div className="stat-card">
-            <small>Open Messages</small>
-            <strong>{formatNumber(stats?.openMessages ?? 0)}</strong>
-          </div>
         </div>
       </DashboardSection>
 
@@ -100,10 +96,10 @@ const ManagerDashboard = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Applied</th>
+                <th style={{ width: '25%' }}>Name</th>
+                <th style={{ width: '25%' }}>Email</th>
+                <th style={{ width: '150px' }}>Role</th>
+                <th style={{ width: '150px' }}>Applied</th>
               </tr>
             </thead>
             <tbody>

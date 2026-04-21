@@ -8,6 +8,12 @@ import Revenue from '../models/revenue.model.js';
 import Product from '../models/product.model.js';
 import Cart from '../models/cart.model.js';
 import ProductReview from '../models/productReview.model.js';
+import {
+  indexGymDocument,
+  indexProductDocument,
+  removeGymDocument,
+  removeProductDocument,
+} from './solr.service.js';
 
 /**
  * Cancel all active/paused memberships for a user.
@@ -51,6 +57,9 @@ export const deactivateGymsForOwner = async (ownerId) => {
     GymMembership.updateMany({ gym: { $in: gymIds } }, { $set: { status: 'cancelled' } }),
   ]);
 
+  const updatedGyms = await Gym.find({ _id: { $in: gymIds } }).lean();
+  await Promise.all(updatedGyms.map((gym) => indexGymDocument(gym)));
+
   return gymIds;
 };
 
@@ -62,6 +71,9 @@ export const deactivateSellerProducts = async (sellerId) => {
     { seller: sellerId, isPublished: true },
     { $set: { isPublished: false } },
   );
+
+  const updatedProducts = await Product.find({ seller: sellerId }).lean();
+  await Promise.all(updatedProducts.map((product) => indexProductDocument(product)));
 };
 
 /**
@@ -77,6 +89,7 @@ export const cascadeDeleteGym = async (gymId) => {
     Revenue.deleteMany({ 'metadata.gym': gymId.toString() }),
   ]);
   await Gym.findByIdAndDelete(gymId);
+  await removeGymDocument(gymId);
 };
 
 /**
@@ -92,4 +105,5 @@ export const cascadeDeleteProduct = async (productId) => {
     ProductReview.deleteMany({ product: productId }),
   ]);
   await Product.findByIdAndDelete(productId);
+  await removeProductDocument(productId);
 };

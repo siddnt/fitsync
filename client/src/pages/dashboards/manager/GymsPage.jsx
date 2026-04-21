@@ -121,14 +121,14 @@ const GymsPage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th style={{ width: '25%' }}>Name</th>
                 <th>Owner</th>
-                <th>Status</th>
+                <th style={{ width: '150px' }}>Status</th>
                 <th>Members</th>
                 <th>Sponsorship</th>
                 <th>Impressions</th>
-                <th>Created</th>
-                <th>Action</th>
+                <th style={{ width: '130px' }}>Created</th>
+                <th style={{ width: '120px' }}>Action</th>
               </tr>
             </thead>
             <tbody>

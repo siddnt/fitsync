@@ -219,10 +219,6 @@ const schemas = {
             enum: ["listing-1m", "listing-3m", "listing-6m", "listing-12m"],
             example: "listing-1m",
           },
-          paymentReference: {
-            type: "string",
-            example: "qa-listing-260329-001",
-          },
           autoRenew: { type: "boolean", example: true },
         },
       },
@@ -231,7 +227,6 @@ const schemas = {
         enum: ["listing-1m", "listing-3m", "listing-6m", "listing-12m"],
         example: "listing-1m",
       },
-      paymentReference: { type: "string", example: "qa-listing-260329-001" },
       autoRenew: { type: "boolean", example: true },
     },
   },
@@ -240,7 +235,6 @@ const schemas = {
     properties: {
       joinAsTrainer: { type: "boolean", example: false },
       trainerId: objectIdSchema,
-      paymentReference: { type: "string", example: "pay_membership_001" },
       autoRenew: { type: "boolean", example: true },
       benefits: { type: "array", items: { type: "string" } },
       notes: { type: "string", example: "Evening batch preferred." },
@@ -307,7 +301,7 @@ const schemas = {
   },
   ListingSubscriptionInput: {
     type: "object",
-    required: ["gymId", "planCode", "paymentReference"],
+    required: ["gymId", "planCode"],
     properties: {
       gymId: objectIdSchema,
       planCode: {
@@ -316,12 +310,11 @@ const schemas = {
         example: "listing-3m",
       },
       autoRenew: { type: "boolean", example: true },
-      paymentReference: { type: "string", example: "sub_260329_growth_001" },
     },
   },
   SponsorshipPurchaseInput: {
     type: "object",
-    required: ["gymId", "tier", "paymentReference"],
+    required: ["gymId", "tier"],
     properties: {
       gymId: objectIdSchema,
       tier: {
@@ -329,7 +322,6 @@ const schemas = {
         enum: ["silver", "gold", "platinum"],
         example: "gold",
       },
-      paymentReference: { type: "string", example: "sponsor_260329_gold_001" },
     },
   },
 };
@@ -353,7 +345,7 @@ Object.assign(schemas, {
         },
       },
       shippingAddress: schemaRef("ShippingAddressData"),
-      paymentMethod: { type: "string", example: "Cash on Delivery" },
+      paymentMethod: { type: "string", example: "Credit / Debit Card" },
     },
   },
   ProductReviewInput: {
@@ -494,6 +486,16 @@ Object.assign(schemas, {
         type: "string",
         enum: ["new", "read", "responded"],
         example: "responded",
+      },
+    },
+  },
+  PaymentVerifySessionInput: {
+    type: "object",
+    required: ["sessionId"],
+    properties: {
+      sessionId: {
+        type: "string",
+        example: "cs_test_a1B2c3D4e5F6g7H8i9J0",
       },
     },
   },
@@ -1091,7 +1093,7 @@ Object.assign(schemas, {
       shippingCost: { type: "number", example: 0 },
       total: { type: "number", example: 3998 },
       status: { type: "string", example: "processing" },
-      paymentMethod: { type: "string", example: "Cash on Delivery" },
+      paymentMethod: { type: "string", example: "Credit / Debit Card" },
       createdAt: { type: "string", format: "date-time", nullable: true },
       items: { type: "array", items: schemaRef("BuyerOrderItemData") },
       shippingAddress: schemaRef("ShippingAddressData"),
@@ -1245,6 +1247,28 @@ Object.assign(schemas, {
   ContactMessagesResponseData: {
     type: "array",
     items: schemaRef("ContactMessageData"),
+  },
+  PaymentVerifySessionResponseData: {
+    type: "object",
+    properties: {
+      sessionId: {
+        type: "string",
+        example: "cs_test_a1B2c3D4e5F6g7H8i9J0",
+      },
+      status: {
+        type: "string",
+        example: "paid",
+      },
+      metadata: {
+        type: "object",
+        additionalProperties: true,
+      },
+      receiptUrl: {
+        type: "string",
+        nullable: true,
+        example: "https://pay.stripe.com/receipts/...",
+      },
+    },
   },
 });
 
@@ -1919,6 +1943,26 @@ endpointDefs.push(
     ),
   },
   {
+    method: "post",
+    path: "/api/payments/verify-session",
+    tag: "Payments",
+    summary: "Verify Stripe checkout session",
+    description:
+      "Validates a Stripe checkout session and triggers payment fulfillment when paid.",
+    security: accessSecurity,
+    bodySchema: "PaymentVerifySessionInput",
+    responses: secureResponses(
+      {
+        200: R.ok(
+          "Session verified successfully.",
+          schemaRef("PaymentVerifySessionResponseData"),
+          "Session verified successfully",
+        ),
+      },
+      { 400: R.bad, 404: R.notFound },
+    ),
+  },
+  {
     method: "get",
     path: "/api/system/health",
     tag: "System",
@@ -2455,6 +2499,7 @@ export const createOpenApiSpec = (baseUrl = "http://localhost:4000") => ({
     { name: "Marketplace" },
     { name: "Users" },
     { name: "Contact" },
+    { name: "Payments" },
     { name: "System" },
   ],
   components: {

@@ -11,9 +11,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
+      - SOLR_URL=${SOLR_URL:-http://solr:8983/solr/fitsync}
     depends_on:
       redis:
         condition: service_healthy
+      solr:
+        condition: service_started
     restart: unless-stopped
     networks:
       - fitsync
@@ -34,8 +37,22 @@ services:
     networks:
       - fitsync
 
+  solr:
+    image: solr:9
+    container_name: fitsync-solr
+    command: >
+      sh -c "solr-precreate fitsync && solr-foreground"
+    ports:
+      - '8983:8983'
+    volumes:
+      - solr-data:/var/solr
+    restart: unless-stopped
+    networks:
+      - fitsync
+
 volumes:
   redis-data:
+  solr-data:
 
 networks:
   fitsync:

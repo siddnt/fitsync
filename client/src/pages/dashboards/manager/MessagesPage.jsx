@@ -72,11 +72,11 @@ const MessagesPage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Sender</th>
-                <th>Email</th>
+                <th style={{ width: '25%' }}>Sender</th>
+                <th style={{ width: '25%' }}>Email</th>
                 <th>Message</th>
-                <th>Date</th>
-                <th>Status</th>
+                <th style={{ width: '130px' }}>Date</th>
+                <th style={{ width: '150px' }}>Status</th>
               </tr>
             </thead>
             <tbody>

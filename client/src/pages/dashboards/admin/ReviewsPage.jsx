@@ -1,23 +1,30 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminReviewsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const TABS = ['gym', 'product'];
 
 const AdminReviewsPage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminReviewsQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetAdminReviewsQuery({ page });
   const gymReviews = data?.data?.gymReviews ?? [];
   const productReviews = data?.data?.productReviews ?? [];
+  const gymPagination = data?.data?.pagination?.gymReviews ?? {};
+  const productPagination = data?.data?.pagination?.productReviews ?? {};
 
   const [activeTab, setActiveTab] = useState('gym');
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('all');
 
+  useEffect(() => { setPage(1); }, [searchTerm, ratingFilter, activeTab]);
+
   const currentReviews = activeTab === 'gym' ? gymReviews : productReviews;
+  const currentPagination = activeTab === 'gym' ? gymPagination : productPagination;
 
   const filtered = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -35,6 +42,11 @@ const AdminReviewsPage = () => {
 
   const filtersActive = searchTerm.trim() || ratingFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setRatingFilter('all'); };
+
+  const totalPages = currentPagination.totalPages ?? 1;
+  const totalItems = currentPagination.total ?? filtered.length;
+  const startIndex = (page - 1) * (currentPagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (currentPagination.limit ?? 10), totalItems);
 
   const gymSummary = useMemo(() => ({
     total: gymReviews.length,
@@ -117,13 +129,13 @@ const AdminReviewsPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Reviewer</th>
-                  <th>{activeTab === 'gym' ? 'Gym' : 'Product'}</th>
-                  <th>Rating</th>
-                  {activeTab === 'product' && <th>Title</th>}
+                  <th style={{ width: '20%' }}>Reviewer</th>
+                  <th style={{ width: '20%' }}>{activeTab === 'gym' ? 'Gym' : 'Product'}</th>
+                  <th style={{ width: '130px' }}>Rating</th>
+                  {activeTab === 'product' && <th style={{ width: '15%' }}>Title</th>}
                   <th>Comment</th>
-                  {activeTab === 'product' && <th>Verified</th>}
-                  <th>Date</th>
+                  {activeTab === 'product' && <th style={{ width: '100px' }}>Verified</th>}
+                  <th style={{ width: '120px' }}>Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -165,6 +177,7 @@ const AdminReviewsPage = () => {
                 ))}
               </tbody>
             </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
           </div>
         ) : (
           <EmptyState message={filtersActive ? 'No reviews match filters.' : 'No reviews yet.'} />

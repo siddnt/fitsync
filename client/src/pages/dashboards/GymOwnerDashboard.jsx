@@ -126,7 +126,7 @@ const GymOwnerDashboard = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Gym</th>
+                <th style={{ width: '25%' }}>Gym</th>
                 <th>Plan</th>
                 <th>Expires</th>
               </tr>
@@ -151,8 +151,8 @@ const GymOwnerDashboard = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Gym</th>
-                <th>Status</th>
+                <th style={{ width: '25%' }}>Gym</th>
+                <th style={{ width: '150px' }}>Status</th>
                 <th>Billing</th>
                 <th>Renewal</th>
               </tr>
@@ -179,7 +179,7 @@ const GymOwnerDashboard = () => {
             <thead>
               <tr>
                 <th>Member</th>
-                <th>Gym</th>
+                <th style={{ width: '25%' }}>Gym</th>
                 <th>Plan</th>
                 <th>Joined</th>
               </tr>

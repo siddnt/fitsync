@@ -1,18 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminMarketplaceQuery } from '../../../services/dashboardApi.js';
 import { formatCurrency, formatDateTime, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const AdminMarketplacePage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetAdminMarketplaceQuery({ page });
   const rawOrders = data?.data?.orders;
+  const pagination = data?.data?.pagination ?? {};
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter, categoryFilter]);
 
   const orders = useMemo(
     () => (Array.isArray(rawOrders) ? rawOrders : []),
@@ -247,13 +252,13 @@ const AdminMarketplacePage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Order ID</th>
-                <th>Buyer</th>
+                <th style={{ width: '25%' }}>Order ID</th>
+                <th style={{ width: '25%' }}>Buyer</th>
                 <th>Seller</th>
-                <th>Items</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Total</th>
+                <th style={{ width: '100px' }}>Items</th>
+                <th style={{ width: '130px' }}>Category</th>
+                <th style={{ width: '150px' }}>Status</th>
+                <th style={{ width: '15%' }}>Total</th>
               </tr>
             </thead>
             <tbody>
@@ -293,6 +298,14 @@ const AdminMarketplacePage = () => {
         ) : (
           <EmptyState message={filtersActive ? 'No orders match the current filters.' : 'No orders yet.'} />
         )}
+        <PaginationBar
+          page={page}
+          totalPages={pagination.totalPages ?? 1}
+          totalItems={pagination.total ?? filteredOrders.length}
+          startIndex={(page - 1) * (pagination.limit ?? 10) + 1}
+          endIndex={Math.min(page * (pagination.limit ?? 10), pagination.total ?? filteredOrders.length)}
+          onPage={setPage}
+        />
       </DashboardSection>
 
       <DashboardSection title="Top Selling Products" className="dashboard-section--span-12">
@@ -300,7 +313,7 @@ const AdminMarketplacePage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Product Name</th>
+                <th style={{ width: '25%' }}>Product Name</th>
                 <th>Units Sold</th>
               </tr>
             </thead>

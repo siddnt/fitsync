@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -6,52 +6,36 @@ import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminUsersQuery } from '../../../services/dashboardApi.js';
 import { useDeleteUserMutation, useUpdateUserStatusMutation } from '../../../services/adminApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 
 
 const AdminUsersPage = () => {
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useGetAdminUsersQuery();
-  const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
-  const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
-  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
-  const recent = data?.data?.recent ?? [];
-  const [notice, setNotice] = useState(null);
-  const [errorNotice, setErrorNotice] = useState(null);
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const roleOptions = useMemo(() => {
-    const knownRoles = ['trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
-    const dynamicRoles = Array.from(new Set(recent.map((user) => user.role).filter(Boolean)));
-    const merged = [...new Set([...knownRoles, ...dynamicRoles])];
-    return ['all', ...merged];
-  }, [recent]);
+  const { data, isLoading, isError, refetch } = useGetAdminUsersQuery({ page, search: searchTerm, role: roleFilter, status: statusFilter });
+  const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
+  const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
+  const pending = (data?.data?.pending ?? []).filter((user) => user.role === 'manager');
+  const recent = data?.data?.recent ?? [];
+  const pagination = data?.data?.pagination ?? {};
+  const [notice, setNotice] = useState(null);
+  const [errorNotice, setErrorNotice] = useState(null);
 
-  const statusOptions = useMemo(() => {
-    const values = Array.from(new Set(recent.map((user) => user.status).filter(Boolean)));
-    return ['all', ...values];
-  }, [recent]);
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [searchTerm, roleFilter, statusFilter]);
 
-  const filteredUsers = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
+  // Keep all roles as hardcoded list since pagination limits dynamic extraction
+  const roleOptions = ['all', 'trainee', 'trainer', 'gym-owner', 'seller', 'manager', 'admin'];
+  
+  const statusOptions = ['all', 'active', 'pending', 'inactive'];
 
-    return recent.filter((user) => {
-      if (roleFilter !== 'all' && user.role !== roleFilter) {
-        return false;
-      }
-      if (statusFilter !== 'all' && user.status !== statusFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
-      const haystacks = [user.name, user.email].filter(Boolean).map((value) => value.toLowerCase());
-      return haystacks.some((value) => value.includes(query));
-    });
-  }, [recent, roleFilter, statusFilter, searchTerm]);
+  const filteredUsers = recent; // Backend now performs the filtering
 
   const filtersActive = useMemo(
     () => Boolean(searchTerm.trim() || roleFilter !== 'all' || statusFilter !== 'all'),
@@ -63,6 +47,11 @@ const AdminUsersPage = () => {
     setRoleFilter('all');
     setStatusFilter('all');
   };
+
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? filteredUsers.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
   const handleDelete = async (user) => {
     if (!user) {
@@ -152,11 +141,11 @@ const AdminUsersPage = () => {
           <table className="dashboard-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th>Action</th>
+                <th style={{ width: '25%' }}>Name</th>
+                <th style={{ width: '25%' }}>Email</th>
+                <th style={{ width: '150px' }}>Role</th>
+                <th style={{ width: '130px' }}>Joined</th>
+                <th style={{ width: '120px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -242,52 +231,55 @@ const AdminUsersPage = () => {
         )}
       >
         {filteredUsers.length ? (
-          <table className="dashboard-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Memberships</th>
-                <th>Orders</th>
-                <th>Gyms Owned</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user._id}
-                  className="dashboard-table__row--clickable"
-                  onClick={() => navigate(`/dashboard/admin/users/${user._id}`)}
-                  title="Click to view details"
-                >
-                  <td>
-                    <div className="dashboard-table__user">
-                      {user.profilePicture ? (
-                        <img src={user.profilePicture} alt={user.name} />
-                      ) : (
-                        <div className="dashboard-table__user-placeholder">
-                          {user.name?.charAt(0) ?? '?'}
-                        </div>
-                      )}
-                      <span>{user.name}</span>
-                    </div>
-                  </td>
-                  <td>{user.email}</td>
-                  <td>{formatStatus(user.role)}</td>
-                  <td>{formatStatus(user.status)}</td>
-                  <td>{user.memberships ?? 0}</td>
-                  <td>{user.orders ?? 0}</td>
-                  <td>{user.gymsOwned ?? 0}</td>
-                  <td>{formatDate(user.createdAt)}</td>
+          <div className="admin-table-wrapper">
+            <table className="dashboard-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '25%' }}>Name</th>
+                  <th style={{ width: '25%' }}>Email</th>
+                  <th style={{ width: '150px' }}>Role</th>
+                  <th style={{ width: '150px' }}>Status</th>
+                  <th>Memberships</th>
+                  <th style={{ width: '25%' }}>Orders</th>
+                  <th style={{ width: '25%' }}>Gyms Owned</th>
+                  <th style={{ width: '130px' }}>Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr
+                    key={user._id}
+                    className="dashboard-table__row--clickable"
+                    onClick={() => navigate(`/dashboard/admin/users/${user._id}`)}
+                    title="Click to view details"
+                  >
+                    <td>
+                      <div className="dashboard-table__user">
+                        {user.profilePicture ? (
+                          <img src={user.profilePicture} alt={user.name} />
+                        ) : (
+                          <div className="dashboard-table__user-placeholder">
+                            {user.name?.charAt(0) ?? '?'}
+                          </div>
+                        )}
+                        <span>{user.name}</span>
+                      </div>
+                    </td>
+                    <td>{user.email}</td>
+                    <td>{formatStatus(user.role)}</td>
+                    <td>{formatStatus(user.status)}</td>
+                    <td>{user.memberships ?? 0}</td>
+                    <td>{user.orders ?? 0}</td>
+                    <td>{user.gymsOwned ?? 0}</td>
+                    <td>{formatDate(user.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
+          </div>
         ) : (
-          <EmptyState message="No users match the current filters." />
+          <EmptyState message={filtersActive ? 'No users match your filters.' : 'No users to display.'} />
         )}
       </DashboardSection>
     </div>

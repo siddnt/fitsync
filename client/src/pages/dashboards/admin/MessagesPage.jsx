@@ -3,12 +3,16 @@ import {
     useGetContactMessagesQuery,
     useUpdateMessageStatusMutation,
 } from '../../../services/contactApi';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import './MessagesPage.css';
 
 const MessagesPage = () => {
     const [statusFilter, setStatusFilter] = useState('');
+    const [page, setPage] = useState(1);
+
     const { data, isLoading, isError } = useGetContactMessagesQuery({
         status: statusFilter || undefined,
+        page,
     });
     const [updateMessageStatus] = useUpdateMessageStatusMutation();
 
@@ -20,7 +24,14 @@ const MessagesPage = () => {
         }
     };
 
-    const messages = data?.data || [];
+    // New shape: data.data = { messages, pagination }
+    const messages = data?.data?.messages ?? [];
+    const pagination = data?.data?.pagination ?? {};
+
+    const totalPages = pagination.totalPages ?? 1;
+    const totalItems = pagination.total ?? messages.length;
+    const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+    const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
 
     if (isLoading) return <div className="loading">Loading messages...</div>;
     if (isError) return <div className="error">Failed to load messages.</div>;
@@ -34,7 +45,7 @@ const MessagesPage = () => {
                     <select
                         id="status-filter"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                     >
                         <option value="">All</option>
                         <option value="new">New</option>
@@ -77,6 +88,15 @@ const MessagesPage = () => {
                     ))
                 )}
             </div>
+
+            <PaginationBar
+                page={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onPage={setPage}
+            />
         </div>
     );
 };

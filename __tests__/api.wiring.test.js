@@ -138,9 +138,10 @@ describe("API wiring smoke tests", () => {
       });
 
     expect(gymRes.status).toBe(201);
-    expect(gymRes.body?.data?.gym?.name).toBe("QA Fitness Center");
+    expect(gymRes.body?.data?.checkoutUrl).toBeDefined();
+    expect(gymRes.body?.data?.subscriptionId).toBeDefined();
 
-    const gymId = gymRes.body?.data?.gym?.id;
+    const gymId = gymRes.body?.data?.gymId;
     if (gymId) {
       await Promise.all([
         GymListingSubscription.deleteMany({ gym: gymId }),

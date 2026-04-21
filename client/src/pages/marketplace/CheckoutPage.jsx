@@ -19,7 +19,6 @@ const initialAddressState = (user) => ({
   city: '',
   state: '',
   zipCode: '',
-  paymentMethod: 'Cash on Delivery',
 });
 
 const CheckoutPage = () => {
@@ -122,10 +121,15 @@ const CheckoutPage = () => {
           state: formState.state.trim(),
           zipCode: formState.zipCode.trim(),
         },
-        paymentMethod: formState.paymentMethod,
       };
 
       const response = await createOrder(payload).unwrap();
+      
+      if (response?.data?.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+      
       setOrder(response?.data?.order ?? null);
       dispatch(cartActions.clearCart());
     } catch (apiError) {
@@ -293,18 +297,7 @@ const CheckoutPage = () => {
               />
             </label>
           </div>
-          <label>
-            Payment method
-            <select
-              name="paymentMethod"
-              value={formState.paymentMethod}
-              onChange={handleChange}
-            >
-              <option value="Cash on Delivery">Cash on Delivery</option>
-              <option value="UPI">UPI</option>
-              <option value="Credit / Debit Card">Credit / Debit Card</option>
-            </select>
-          </label>
+          <p className="checkout-form__hint">You will be redirected to secure Stripe checkout to complete payment.</p>
           <button type="submit" disabled={isLoading || !user}>
             {isLoading ? 'Placing order...' : 'Place order'}
           </button>

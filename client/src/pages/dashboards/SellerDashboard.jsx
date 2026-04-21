@@ -216,15 +216,15 @@ const SellerDashboard = () => {
         className="seller-overview__orders"
       >
         {inProgressOrders.length ? (
-          <div className="seller-overview__table-wrapper">
+          <div className="seller-overview__table-wrapper admin-table-wrapper">
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Order</th>
-                  <th>Buyer</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th>Status</th>
+                  <th style={{ width: '25%' }}>Order</th>
+                  <th style={{ width: '20%' }}>Buyer</th>
+                  <th style={{ width: '25%' }}>Items</th>
+                  <th style={{ width: '15%' }}>Total</th>
+                  <th style={{ width: '15%' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -279,14 +279,14 @@ const SellerDashboard = () => {
         className="seller-overview__low-stock"
       >
         {lowStockProducts.length ? (
-          <div className="seller-overview__table-wrapper">
+          <div className="seller-overview__table-wrapper admin-table-wrapper">
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Product</th>
-                  <th>Status</th>
-                  <th>Stock</th>
-                  <th>Updated</th>
+                  <th style={{ width: '40%' }}>Product</th>
+                  <th style={{ width: '20%' }}>Status</th>
+                  <th style={{ width: '20%' }}>Stock</th>
+                  <th style={{ width: '20%' }}>Updated</th>
                 </tr>
               </thead>
               <tbody>

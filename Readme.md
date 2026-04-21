@@ -3,8 +3,9 @@
 Full-stack gym and marketplace platform with an Express/MongoDB API and a Vite + React client.
 
 ## What you get
-- Member, trainer, seller, and owner consoles for memberships, listings, inventory, orders, and analytics.
-- Stripe-ready payments, image uploads, and JWT-based auth with refresh tokens.
+- 6 distinct role-based dashboards: User, Trainee, Trainer, Gym-Owner, Seller, and Admin.
+- Consoles for memberships, gym listings, inventory, orders, analytics, and platform administration.
+- Stripe-ready payments, Cloudinary image uploads, and JWT-based auth with refresh tokens.
 - React + Redux Toolkit front-end with Vite dev server and API proxying.
 
 ## Project layout
@@ -40,6 +41,7 @@ REFRESH_TOKEN_SECRET=dev-refresh-secret
 STRIPE_PUBLISHABLE_KEY=pk_test_dummy
 STRIPE_SECRET_KEY=sk_test_dummy
 STRIPE_WEBHOOK_SECRET=whsec_dummy
+SOLR_URL=http://localhost:8983/solr/fitsync
 CLOUDINARY_URL= # or CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET
 ```
 - Client: copy `.env.example` inside `client/` to `.env` and adjust as needed (default proxies `/api` to `http://localhost:4000`).
@@ -83,6 +85,10 @@ node src/scripts/createAdminUser.js
 - `npm run dev` — API dev server with nodemon
 - `npm start` — API production start
 - `npm test` — backend tests (Jest)
+- `npm run test:report` — backend tests with coverage report (Jest)
+- `npm run benchmark` — role-aware Redis benchmark across cache-enabled endpoints
+- `npm run reindex:solr` — rebuild Solr search index from MongoDB
+- `npm run seed:analytics` — seed admin analytics data
 - `npm run client:dev` — client dev server
 - `npm run client:build` — client production build
 - `npm run client:preview` — preview built client locally
@@ -95,7 +101,8 @@ npm run client:build
 2) Serve API with `npm start` and host the built client (`client/dist`) behind your chosen web server or CDN.
 
 ## Quick tour
-- API: Express routes under `src/api`, Mongo connection in `src/db`, auth/session handling in `src/middlewares` and `src/models`.
+- API: Express routes under `src/api`, Mongo connection in `src/db`, auth/session handling in `src/middlewares` and `src/models`. API documentation via Swagger is available at `src/docs/openapi.js`.
 - Client: pages and dashboards in `client/src/pages`, API calls via RTK Query services in `client/src/services`, global state in `client/src/features` and `client/src/app/store.js`.
+- Docs: Additional project documentation (such as LaTeX reports, evaluation criteria, and migration plans) can be found in the `docs/` folder.
 
 

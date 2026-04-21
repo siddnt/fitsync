@@ -12,7 +12,7 @@ export const contactApi = apiSlice.injectEndpoints({
         getContactMessages: builder.query({
             query: (params) => ({
                 url: '/contact',
-                params,
+                params: { ...params, limit: 10 },
             }),
             providesTags: ['Contact'],
         }),

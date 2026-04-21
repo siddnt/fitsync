@@ -84,7 +84,7 @@ const TrainerDashboard = () => {
             <thead>
               <tr>
                 <th>Trainee</th>
-                <th>Gym</th>
+                <th style={{ width: '25%' }}>Gym</th>
                 <th>Assigned</th>
                 <th>Goals</th>
               </tr>

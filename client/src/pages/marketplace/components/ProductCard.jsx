@@ -16,7 +16,7 @@ const ProductCard = ({ product, onAddToCart, onBuyNow, onViewDetails }) => {
       {badge ? <span className="product-card__badge">{badge}</span> : null}
       <button type="button" className="product-card__image" onClick={() => onViewDetails(product)}>
         {product?.image ? (
-          <img src={product.image} alt={product?.name} loading="lazy" />
+          <img src={product.image} alt={product?.name} loading="lazy" style={!inStock ? { filter: 'grayscale(100%)' } : {}} onError={(e) => { e.target.style.display = 'none'; }} />
         ) : (
           <span className="product-card__placeholder">{product?.name?.slice(0, 1) ?? '?'}</span>
         )}

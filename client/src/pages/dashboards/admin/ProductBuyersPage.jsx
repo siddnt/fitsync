@@ -146,14 +146,14 @@ const AdminProductBuyersPage = () => {
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>Buyer</th>
-                  <th>Order #</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Item Status</th>
+                  <th style={{ width: '25%' }}>Buyer</th>
+                  <th style={{ width: '25%' }}>Order #</th>
+                  <th style={{ width: '100px' }}>Qty</th>
+                  <th style={{ width: '100px' }}>Price</th>
+                  <th style={{ width: '150px' }}>Item Status</th>
                   <th>City</th>
-                  <th>Order Total</th>
-                  <th>Date</th>
+                  <th style={{ width: '15%' }}>Order Total</th>
+                  <th style={{ width: '130px' }}>Date</th>
                 </tr>
               </thead>
               <tbody>

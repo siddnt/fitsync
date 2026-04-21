@@ -1,18 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DashboardSection from '../components/DashboardSection.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SkeletonPanel from '../../../ui/SkeletonPanel.jsx';
 import { useGetAdminMembershipsQuery } from '../../../services/dashboardApi.js';
 import { formatDate, formatStatus } from '../../../utils/format.js';
+import PaginationBar from '../../../ui/PaginationBar.jsx';
 import '../Dashboard.css';
 
 const AdminMembershipsPage = () => {
-  const { data, isLoading, isError, refetch } = useGetAdminMembershipsQuery();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useGetAdminMembershipsQuery({ page });
   const memberships = data?.data?.memberships ?? [];
+  const pagination = data?.data?.pagination ?? {};
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [planFilter, setPlanFilter] = useState('all');
+
+  useEffect(() => { setPage(1); }, [searchTerm, statusFilter, planFilter]);
 
   const statusOptions = useMemo(() => {
     const values = new Set(memberships.map((m) => m.status).filter(Boolean));
@@ -42,12 +47,17 @@ const AdminMembershipsPage = () => {
   const filtersActive = searchTerm.trim() || statusFilter !== 'all' || planFilter !== 'all';
   const resetFilters = () => { setSearchTerm(''); setStatusFilter('all'); setPlanFilter('all'); };
 
+  const totalPages = pagination.totalPages ?? 1;
+  const totalItems = pagination.total ?? memberships.length;
+  const startIndex = (page - 1) * (pagination.limit ?? 10) + 1;
+  const endIndex = Math.min(page * (pagination.limit ?? 10), totalItems);
+
   const summary = useMemo(() => ({
-    total: memberships.length,
+    total: totalItems,
     active: memberships.filter((m) => m.status === 'active').length,
     expired: memberships.filter((m) => m.status === 'expired').length,
     cancelled: memberships.filter((m) => m.status === 'cancelled').length,
-  }), [memberships]);
+  }), [memberships, totalItems]);
 
   if (isLoading) {
     return (
@@ -107,10 +117,10 @@ const AdminMembershipsPage = () => {
               <thead>
                 <tr>
                   <th>Trainee</th>
-                  <th>Gym</th>
+                  <th style={{ width: '25%' }}>Gym</th>
                   <th>Trainer</th>
                   <th>Plan</th>
-                  <th>Status</th>
+                  <th style={{ width: '150px' }}>Status</th>
                   <th>Start</th>
                   <th>End</th>
                   <th>Billing</th>
@@ -150,6 +160,7 @@ const AdminMembershipsPage = () => {
                 ))}
               </tbody>
             </table>
+            <PaginationBar page={page} totalPages={totalPages} totalItems={totalItems} startIndex={startIndex} endIndex={endIndex} onPage={setPage} />
           </div>
         ) : (
           <EmptyState message={filtersActive ? 'No memberships match filters.' : 'No memberships yet.'} />
