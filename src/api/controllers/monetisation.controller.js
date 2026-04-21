@@ -13,11 +13,7 @@ import {
 } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
 import { indexGymDocument } from '../../services/solr.service.js';
-import Stripe from 'stripe';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+import { createStripeCheckoutSession } from '../../services/stripe.service.js';
 
 const assertGymAccess = async (user, gymId) => {
   const gym = await Gym.findById(gymId).select('owner sponsorship analytics name location lastUpdatedBy');
@@ -66,7 +62,7 @@ export const checkoutListingSubscription = asyncHandler(async (req, res) => {
   const periodEnd = new Date(now);
   periodEnd.setMonth(periodEnd.getMonth() + plan.durationMonths);
   
-  const stripeSession = await stripe.checkout.sessions.create({
+  const stripeSession = await createStripeCheckoutSession({
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: [{
@@ -230,7 +226,7 @@ export const purchaseSponsorship = asyncHandler(async (req, res) => {
   const endDate = new Date(now);
   endDate.setMonth(endDate.getMonth() + packageDetails.durationMonths);
 
-  const stripeSession = await stripe.checkout.sessions.create({
+  const stripeSession = await createStripeCheckoutSession({
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: [{

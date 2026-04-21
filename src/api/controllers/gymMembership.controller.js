@@ -8,11 +8,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
-import Stripe from 'stripe';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+import { createStripeCheckoutSession } from '../../services/stripe.service.js';
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -308,7 +304,7 @@ export const joinGym = asyncHandler(async (req, res) => {
   }
 
   // Generate Stripe Checkout session
-  const stripeSession = await stripe.checkout.sessions.create({
+  const stripeSession = await createStripeCheckoutSession({
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: [{

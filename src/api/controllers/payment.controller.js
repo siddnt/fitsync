@@ -1,4 +1,3 @@
-import Stripe from 'stripe';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -8,10 +7,7 @@ import GymListingSubscription from '../../models/gymListingSubscription.model.js
 import { fulfillMarketplaceOrder } from './marketplace.controller.js';
 import { fulfillGymMembership } from './gymMembership.controller.js';
 import { fulfillListingSubscription, fulfillSponsorship } from './monetisation.controller.js';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+import { retrieveStripeCheckoutSession } from '../../services/stripe.service.js';
 
 /**
  * Validates a Stripe session and returns fulfillment status and receipt URL.
@@ -23,7 +19,7 @@ export const verifySession = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Session ID is required');
   }
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId, {
+  const session = await retrieveStripeCheckoutSession(sessionId, {
     expand: ['payment_intent', 'payment_intent.latest_charge'],
   });
 

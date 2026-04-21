@@ -11,12 +11,7 @@ import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
 import { indexGymDocument, isSolrReady, searchGymIds } from '../../services/solr.service.js';
-import Stripe from 'stripe';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+import { createStripeCheckoutSession } from '../../services/stripe.service.js';
 
 const normalizeLocationInput = (location) => {
   if (!location) {
@@ -466,7 +461,7 @@ export const createGym = asyncHandler(async (req, res) => {
       createdBy: req.user._id,
     });
 
-    const stripeSession = await stripe.checkout.sessions.create({
+    const stripeSession = await createStripeCheckoutSession({
       payment_method_types: ['card'],
       mode: 'payment',
       line_items: [

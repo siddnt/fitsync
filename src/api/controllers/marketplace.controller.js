@@ -16,10 +16,7 @@ import {
   removeProductDocument,
   searchProductIds,
 } from '../../services/solr.service.js';
-import Stripe from 'stripe';
-import dotenv from 'dotenv';
-dotenv.config();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+import { createStripeCheckoutSession } from '../../services/stripe.service.js';
 
 const SELLER_PAYOUT_RATE = 0.85;
 
@@ -595,7 +592,7 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
 
   const orderNumber = await generateOrderNumber();
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await createStripeCheckoutSession({
     payment_method_types: ['card'],
     mode: 'payment',
     line_items: productIds.map((id) => {
