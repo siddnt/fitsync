@@ -2479,7 +2479,22 @@ export const swaggerUiOptions = {
   },
 };
 
-export const createOpenApiSpec = (baseUrl = "http://localhost:4000") => ({
+const resolveServers = (baseUrl) => {
+  const sameOriginServer = { url: "/", description: "Same-origin server" };
+  const normalizedBaseUrl =
+    typeof baseUrl === "string" ? baseUrl.trim().replace(/\/+$/, "") : "";
+
+  if (!normalizedBaseUrl || normalizedBaseUrl === "/") {
+    return [sameOriginServer];
+  }
+
+  return [
+    sameOriginServer,
+    { url: normalizedBaseUrl, description: "Current server" },
+  ];
+};
+
+export const createOpenApiSpec = (baseUrl = "") => ({
   openapi: "3.0.3",
   info: {
     title: "FitSync API",
@@ -2487,7 +2502,7 @@ export const createOpenApiSpec = (baseUrl = "http://localhost:4000") => ({
     description:
       "Centralized OpenAPI documentation for the FitSync Express backend. Authenticated endpoints accept either a Bearer token or the access-token cookie unless noted otherwise.",
   },
-  servers: [{ url: baseUrl, description: "Current server" }],
+  servers: resolveServers(baseUrl),
   tags: [
     { name: "Auth" },
     { name: "Gyms" },

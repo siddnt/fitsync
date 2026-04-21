@@ -20,6 +20,9 @@ dotenv.config();
 // Create Express app
 const app = express();
 
+// Render and other reverse proxies forward proto/host headers.
+app.set("trust proxy", 1);
+
 // Set up __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -49,6 +52,24 @@ app.use(morgan("dev"));
 
 const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173,http://localhost:4173").split(",").map((origin) => origin.trim());
 
+const resolvePublicBaseUrl = (req) => {
+    const explicitBaseUrl = process.env.PUBLIC_BASE_URL?.trim();
+    if (explicitBaseUrl) {
+        return explicitBaseUrl.replace(/\/+$/, "");
+    }
+
+    const forwardedProto = req.get("x-forwarded-proto")?.split(",")?.[0]?.trim();
+    const forwardedHost = req.get("x-forwarded-host")?.split(",")?.[0]?.trim();
+    const protocol = forwardedProto || req.protocol || "http";
+    const host = forwardedHost || req.get("host");
+
+    if (!host) {
+        return undefined;
+    }
+
+    return `${protocol}://${host}`;
+};
+
 app.use(
     cors({
         origin: (origin, callback) => {
@@ -76,7 +97,7 @@ app.use(express.static(path.join(rootDir, "public")));
 app.use("/uploads", express.static(path.join(rootDir, "src/storage/uploads")));
 
 app.get("/api/docs.json", (req, res) => {
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = resolvePublicBaseUrl(req);
     return res.status(200).json(createOpenApiSpec(baseUrl));
 });
 
