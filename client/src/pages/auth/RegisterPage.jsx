@@ -13,11 +13,11 @@ const genderOptions = ['male', 'female', 'others'];
 const baseSchema = {
   firstName: yup
     .string()
-    .matches(/^[A-Za-z]+$/, 'First name must contain only letters')
+    .matches(/^[A-Za-z\s\-']+$/, 'First name can only contain letters, spaces, hyphens, and apostrophes')
     .required('First name is required'),
   lastName: yup
     .string()
-    .matches(/^[A-Za-z]+$/, 'Last name must contain only letters')
+    .matches(/^[A-Za-z\s\-']+$/, 'Last name can only contain letters, spaces, hyphens, and apostrophes')
     .required('Last name is required'),
   age: yup
     .number()
