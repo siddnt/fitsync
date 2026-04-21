@@ -17,7 +17,7 @@ import { cacheMiddleware } from '../../middlewares/cache.middleware.js';
 
 const router = Router();
 
-router.get('/products', cacheMiddleware('marketplace', 10), listMarketplaceCatalogue);
+router.get('/products', cacheMiddleware('marketplace', 5), listMarketplaceCatalogue);
 router.get('/products/:productId', cacheMiddleware('marketplace-product', 180), getMarketplaceProduct);
 router.post('/orders', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceOrder);
 router.post('/products/:productId/reviews', verifyJWT, authorizeRoles('user', 'trainee'), createMarketplaceProductReview);
