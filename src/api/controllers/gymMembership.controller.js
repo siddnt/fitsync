@@ -8,7 +8,10 @@ import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
-import { createStripeCheckoutSession } from '../../services/stripe.service.js';
+import {
+  buildFrontendUrl,
+  createStripeCheckoutSession,
+} from '../../services/stripe.service.js';
 
 const isObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -318,8 +321,8 @@ export const joinGym = asyncHandler(async (req, res) => {
       },
       quantity: 1,
     }],
-    success_url: `http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `http://localhost:5173/gyms/${gym._id}`,
+    success_url: buildFrontendUrl('/payment/success?session_id={CHECKOUT_SESSION_ID}'),
+    cancel_url: buildFrontendUrl(`/gyms/${gym._id}`),
     metadata: { type: 'gym_membership', gymId: String(gym._id) }
   });
 

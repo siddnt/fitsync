@@ -7,6 +7,10 @@ let stripeClient = null;
 
 const isTestEnvironment = () => process.env.NODE_ENV === 'test';
 
+const normalizeUrl = (value) => value.trim().replace(/\/+$/, '');
+
+const isHttpUrl = (value) => /^https?:\/\//i.test(value);
+
 const getStripeSecretKey = () => {
   const key = process.env.STRIPE_SECRET_KEY;
   return typeof key === 'string' ? key.trim() : '';
@@ -27,6 +31,42 @@ const ensureStripeClient = () => {
 
   stripeClient = new Stripe(stripeSecretKey, { apiVersion: STRIPE_API_VERSION });
   return stripeClient;
+};
+
+const resolveFrontendBaseUrl = () => {
+  const candidateOrigins = [
+    process.env.CLIENT_APP_URL,
+    process.env.FRONTEND_URL,
+    process.env.PUBLIC_CLIENT_URL,
+    process.env.CLIENT_URL,
+    process.env.CORS_ORIGIN?.split(',')?.[0],
+    'http://localhost:5173',
+  ];
+
+  for (const origin of candidateOrigins) {
+    if (typeof origin !== 'string') {
+      continue;
+    }
+
+    const trimmedOrigin = origin.trim();
+    if (!trimmedOrigin || !isHttpUrl(trimmedOrigin)) {
+      continue;
+    }
+
+    return normalizeUrl(trimmedOrigin);
+  }
+
+  return 'http://localhost:5173';
+};
+
+export const buildFrontendUrl = (path = '') => {
+  const baseUrl = resolveFrontendBaseUrl();
+  if (!path) {
+    return baseUrl;
+  }
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
 };
 
 const createMockCheckoutSession = () => {

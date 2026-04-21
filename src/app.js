@@ -50,7 +50,23 @@ const accessLogStream = fs.createWriteStream(path.join(logsDir, "access.log"), {
 app.use(morgan("combined", { stream: accessLogStream }));
 app.use(morgan("dev"));
 
-const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173,http://localhost:4173").split(",").map((origin) => origin.trim());
+const normalizeOrigin = (origin) => origin?.trim().replace(/\/+$/, "");
+
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173,http://localhost:4173")
+    .split(",")
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+const inferredCorsOrigins = [
+    normalizeOrigin(process.env.CLIENT_APP_URL),
+    normalizeOrigin(process.env.PUBLIC_BASE_URL),
+    normalizeOrigin(process.env.RENDER_EXTERNAL_URL),
+    process.env.RENDER_EXTERNAL_HOSTNAME
+        ? `https://${normalizeOrigin(process.env.RENDER_EXTERNAL_HOSTNAME)}`
+        : undefined,
+].filter(Boolean);
+
+const allowedCorsOrigins = new Set([...corsOrigins, ...inferredCorsOrigins]);
 
 const resolvePublicBaseUrl = (req) => {
     const explicitBaseUrl = process.env.PUBLIC_BASE_URL?.trim();
@@ -73,10 +89,17 @@ const resolvePublicBaseUrl = (req) => {
 app.use(
     cors({
         origin: (origin, callback) => {
-            if (!origin || corsOrigins.includes(origin)) {
-                return callback(null, origin);
+            if (!origin) {
+                return callback(null, true);
             }
-            return callback(new Error("Not allowed by CORS"));
+
+            const normalizedOrigin = normalizeOrigin(origin);
+            if (normalizedOrigin && allowedCorsOrigins.has(normalizedOrigin)) {
+                return callback(null, true);
+            }
+
+            // Disallow unknown origins without crashing requests with a 500.
+            return callback(null, false);
         },
         credentials: true
     })

@@ -11,7 +11,10 @@ import { uploadOnCloudinary } from '../../utils/fileUpload.js';
 import { resolveListingPlan } from '../../config/monetisation.config.js';
 import { invalidatePrefix } from '../../services/redis.service.js';
 import { indexGymDocument, isSolrReady, searchGymIds } from '../../services/solr.service.js';
-import { createStripeCheckoutSession } from '../../services/stripe.service.js';
+import {
+  buildFrontendUrl,
+  createStripeCheckoutSession,
+} from '../../services/stripe.service.js';
 
 const normalizeLocationInput = (location) => {
   if (!location) {
@@ -477,8 +480,8 @@ export const createGym = asyncHandler(async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: 'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'http://localhost:5173/dashboard/gym-owner/gyms',
+      success_url: buildFrontendUrl('/payment/success?session_id={CHECKOUT_SESSION_ID}'),
+      cancel_url: buildFrontendUrl('/dashboard/gym-owner/gyms'),
       metadata: {
         type: 'listing_subscription',
         planCode: plan.planCode,

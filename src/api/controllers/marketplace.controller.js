@@ -16,7 +16,10 @@ import {
   removeProductDocument,
   searchProductIds,
 } from '../../services/solr.service.js';
-import { createStripeCheckoutSession } from '../../services/stripe.service.js';
+import {
+  buildFrontendUrl,
+  createStripeCheckoutSession,
+} from '../../services/stripe.service.js';
 
 const SELLER_PAYOUT_RATE = 0.85;
 
@@ -606,8 +609,8 @@ export const createMarketplaceOrder = asyncHandler(async (req, res) => {
         quantity: item.quantity,
       };
     }),
-    success_url: `http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `http://localhost:5173/marketplace/cart`,
+    success_url: buildFrontendUrl('/payment/success?session_id={CHECKOUT_SESSION_ID}'),
+    cancel_url: buildFrontendUrl('/marketplace/cart'),
     metadata: { type: 'marketplace' },
   });
 

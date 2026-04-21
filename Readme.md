@@ -41,9 +41,16 @@ REFRESH_TOKEN_SECRET=dev-refresh-secret
 STRIPE_PUBLISHABLE_KEY=pk_test_dummy
 STRIPE_SECRET_KEY=sk_test_dummy
 STRIPE_WEBHOOK_SECRET=whsec_dummy
+CLIENT_APP_URL=http://localhost:5173
 PUBLIC_BASE_URL=http://localhost:4000
 SOLR_URL=http://localhost:8983/solr/fitsync
 CLOUDINARY_URL= # or CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET
+```
+- Production example (Render):
+```
+CLIENT_APP_URL=https://<your-frontend>.onrender.com
+PUBLIC_BASE_URL=https://<your-backend>.onrender.com
+CORS_ORIGIN=https://<your-frontend>.onrender.com,https://<your-backend>.onrender.com
 ```
 - Client: copy `.env.example` inside `client/` to `.env` and adjust as needed (default proxies `/api` to `http://localhost:4000`).
 
